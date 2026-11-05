@@ -212,6 +212,10 @@ class ReplayMisreads(unittest.TestCase):
         got = wrong_relations('$12600 \\times 7000 = 882 \\times 10^6$.')
         self.assertEqual(got[0][2], '88.2 \\times 10^{6}')   # not `88 \times 10^6`, which is not the value either
 
+    def test_a_fraction_in_work_mod_m_is_an_inverse(self):
+        self.assertEqual(wrong_relations('$1/2 = 3$.', {5}), [])            # 2^{-1} = 3 mod 5
+        self.assertTrue(wrong_relations('$1/2 = 3$.'))                       # with no modulus it is a slip
+
     def test_a_slip_on_such_lines_is_still_caught(self):
         self.assertEqual(wrong_relations('$s^2 = 528 / (2-1) = 264.5$.'), [('528 / (2-1)', '264.5', '528')])
         self.assertEqual(wrong_relations('The parity is $1 + 2 = 0$ (even).'), [('1 + 2', '0', '3')])

@@ -660,7 +660,9 @@ def wrong_relations(line, moduli=()):
             # one column of a written sum or difference: `0-4=6` borrows, `7+5=2` carries; a digit that is the value mod 10 (#306)
             column = right.denominator == 1 and value.denominator == 1 and 0 <= value <= 9 and (right - value) % 10 == 0 \
                 and re.fullmatch(r'\s*\d{1,2}\s*[-+−]\s*\d\s*', base[0]) is not None
-            modular = modular or column
+            # in work mod m a fraction is a product by an inverse: `$1/2 = 3$` is 2^{-1} = 3 mod 5 (stdmath-d6e306c4, found by sim_replay)
+            inverse = bool(moduli) and right.denominator != 1 and simple_quotient(base[0]) and re.fullmatch(r'-?\d+', text.strip()) is not None
+            modular = modular or column or inverse
             # a chain that rounds as it goes: `= 91.26 + 9.56 - 101 = 100.82 - 101`, each link within its places of the last (#306)
             stepped = prev is not None and _decimals_slack(text, rough) and abs(prev[1] - value) <= tolerance
             # `360^{\circ} \approx 6.28`: degrees turned into radians (#306)
