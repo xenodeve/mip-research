@@ -1050,11 +1050,11 @@ def all_pairs_shortest(edges, directed=True):
     return {'dist': {u: {v: _clean(d[u][v]) for v in sorted(d[u], key=_nkey)} for u in nodes}, 'negative_cycle': False}
 
 
-@op('search.max_flow', kind='graph', bound='<= 20000 edges (Edmonds-Karp)')
+@op('search.max_flow', kind='graph', bound='<= 20000 edges (Dinic on capacities scaled to integers); 3e7 arc visits')
 def max_flow(edges, source, sink, directed=True):
-    """Maximum flow from source to sink (Edmonds-Karp over exact capacities). edges: (u, v, capacity). Returns {'value': flow, 'flow': [flow on each input edge,
+    """Maximum flow from source to sink (Dinic over exact capacities). edges: (u, v, capacity). Returns {'value': flow, 'flow': [flow on each input edge,
     in the input order; for an undirected edge, positive when it runs u -> v], 'cut': {'source_side': nodes, 'edges': indices of the edges of a minimum cut}}.
-    max_flow([(1, 2, 3), (1, 3, 2), (2, 4, 2), (3, 4, 3)], 1, 4) -> value 4"""
+    The cut is the source side of the residual graph, the same set for every maximum flow. max_flow([(1, 2, 3), (1, 3, 2), (2, 4, 2), (3, 4, 3)], 1, 4) -> value 4"""
     es = _edges(edges, directed)
     if any(w < 0 for _, _, w in es):
         raise BadInput('capacities must be non-negative')
@@ -1062,48 +1062,81 @@ def max_flow(edges, source, sink, directed=True):
         raise BadInput('source equals sink')
     nodes = _nodes_of(es, [source, sink])
     idx = {u: i for i, u in enumerate(nodes)}
+    # 2026-11-06: Edmonds-Karp over Fractions took 6.9 s on 4000 fractional s-a-t paths (one BFS of the whole graph per path, a Fraction compare per arc);
+    # capacities are scaled to integers by the lcm of their denominators, and Dinic saturates all shortest paths of a level graph per BFS
+    L = 1
+    for _, _, w in es:
+        L = L * w.denominator // gcd(L, w.denominator)
     to, cap, adj = [], [], [[] for _ in nodes]
     for u, v, w in es:
+        c = w.numerator * (L // w.denominator)
         adj[idx[u]].append(len(to))
         to.append(idx[v])
-        cap.append(w)
+        cap.append(c)
         adj[idx[v]].append(len(to))
         to.append(idx[u])
-        cap.append(w if not directed else Fraction(0))
+        cap.append(0 if directed else c)
     s, t = idx[source], idx[sink]
-    value = Fraction(0)
-    max_aug_steps = max(2000, len(nodes) * len(es) + 20)
-    aug_steps = 0
+    V = len(nodes)
+    bud = _Budget(30_000_000, 'max flow: past 3e7 arc visits')
+    value = 0
     while True:
-        aug_steps += 1
-        if aug_steps > max_aug_steps:
-            raise NotCovered('max flow augmentation step budget exceeded')
-        par = {s: None}
+        level = [-1] * V                       # BFS level graph over arcs with capacity left
+        level[s] = 0
         q = deque([s])
-        while q and t not in par:
+        while q:
             u = q.popleft()
+            bud.tick(len(adj[u]))
             for a in adj[u]:
-                if cap[a] > 0 and to[a] not in par:
-                    par[to[a]] = a
+                if cap[a] > 0 and level[to[a]] < 0:
+                    level[to[a]] = level[u] + 1
                     q.append(to[a])
-        if t not in par:
+        if level[t] < 0:
             break
-        path, z, push = [], t, None
-        while z != s:
-            a = par[z]
-            path.append(a)
-            push = cap[a] if push is None else min(push, cap[a])
-            z = to[a ^ 1]
-        for a in path:
-            cap[a] -= push
-            cap[a ^ 1] += push
-        value += push
-    side = set(par)
+        it = [0] * V                           # current-arc pointers: a dead arc is never tried again in this phase
+        path, u = [], s
+        while True:
+            if u == t:
+                push = min(cap[a] for a in path)
+                for a in path:
+                    cap[a] -= push
+                    cap[a ^ 1] += push
+                value += push
+                path, u = [], s
+                continue
+            au = adj[u]
+            i = it[u]
+            while i < len(au):
+                a = au[i]
+                if cap[a] > 0 and level[to[a]] == level[u] + 1:
+                    break
+                i += 1
+            bud.tick(i - it[u] + 1)
+            it[u] = i
+            if i == len(au):                   # dead end: drop u from this phase and step back
+                level[u] = -1
+                if not path:
+                    break
+                a = path.pop()
+                u = to[a ^ 1]
+                it[u] += 1
+                continue
+            path.append(au[i])
+            u = to[au[i]]
+    side = set()                               # the residual source side: reachable from s over arcs with capacity left
+    q = deque([s])
+    side.add(s)
+    while q:
+        u = q.popleft()
+        for a in adj[u]:
+            if cap[a] > 0 and to[a] not in side:
+                side.add(to[a])
+                q.append(to[a])
     flow = []
     for k, (u, v, w) in enumerate(es):
-        flow.append(_clean(w - cap[2 * k]))
+        flow.append(_clean(Fraction(w.numerator * (L // w.denominator) - cap[2 * k], L)))
     cutedges = [k for k, (u, v, w) in enumerate(es) if (idx[u] in side) != (idx[v] in side) and (not directed or idx[u] in side)]
-    return {'value': _clean(value), 'flow': flow, 'cut': {'source_side': [nodes[i] for i in sorted(side)], 'edges': cutedges}}
+    return {'value': _clean(Fraction(value, L)), 'flow': flow, 'cut': {'source_side': [nodes[i] for i in sorted(side)], 'edges': cutedges}}
 
 
 @op('search.mst', kind='graph', bound='<= 20000 edges (Kruskal)')

@@ -17,6 +17,38 @@ class SurdTests(unittest.TestCase):
         self.assertEqual(Surd.sqrt(Fraction(8, 9)), Surd(0, Fraction(2, 3), 2))
         self.assertEqual(Surd.sqrt(16), Surd(4))
 
+    def test_squarefree_fast_cached_and_same_as_trial_division(self):
+        # 2026-11-06: a 14-digit prime radicand took 0.6 s by trial division to its square root, paid again by every Surd on it
+        import random
+        import time
+        from tools.igc.mathbackend import _squarefree
+
+        def slow(d):
+            s, r, p = 1, d, 2
+            while p * p <= r:
+                while r % (p * p) == 0:
+                    r //= p * p
+                    s *= p
+                p += 1 if p == 2 else 2
+            return s, r
+        rs = random.Random(2)
+        for d in list(range(1, 3000)) + [rs.randint(1, 10 ** 9) for _ in range(500)] + [rs.randint(1, 3000) ** 2 * rs.randint(1, 3000) for _ in range(300)]:
+            self.assertEqual(_squarefree(d), slow(d), d)
+        _squarefree.cache_clear()
+        t = time.perf_counter()
+        self.assertEqual(_squarefree(99999999999973), (1, 99999999999973))          # a 14-digit prime
+        self.assertEqual(Surd(0, 1, 4 * 99999999999973), Surd(0, 2, 99999999999973))
+        self.assertEqual(_squarefree(1000003 ** 3), (1000003, 1000003))             # past the trial bound: Pollard rho
+        self.assertEqual(_squarefree(9999991 ** 2 * 9999973 * 1000003), (9999991, 9999973 * 1000003))
+        self.assertLess(time.perf_counter() - t, 1)
+        hits = _squarefree.cache_info().hits
+        Surd(0, 3, 99999999999973)
+        self.assertEqual(_squarefree.cache_info().hits, hits + 1)                     # the second Surd on it does not factor again
+        t = time.perf_counter()
+        with self.assertRaises(NotCovered):
+            _squarefree((10 ** 12 + 39) * (10 ** 12 + 61) * (10 ** 12 + 63))        # three 13-digit primes: rho past its budget
+        self.assertLess(time.perf_counter() - t, 2)
+
     def test_arithmetic(self):
         a, b = Surd(1, 2, 3), Surd(3, -1, 3)
         self.assertEqual(a + b, Surd(4, 1, 3))

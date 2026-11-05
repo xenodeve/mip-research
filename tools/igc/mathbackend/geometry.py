@@ -1637,20 +1637,26 @@ def regular_ngon_chord_angle(n, chord1, chord2):
     return min(diff, 180 - diff)
 
 
-@op('geometry.regular_ngon_vertices_numeric', kind='regular polygons', bound='3 <= n <= 10^4; digits <= 2000')
+@op('geometry.regular_ngon_vertices_numeric', kind='regular polygons', bound='3 <= n <= 10^4; digits <= 2000; n * digits <= 5 * 10^6')
 def regular_ngon_vertices_numeric(n, digits=20, radius=1):
     """Vertices (R cos(2 pi k/n), R sin(2 pi k/n)), k = 0..n-1, as Decimal pairs rounded to `digits` places (numeric). regular_ngon_vertices_numeric(4, 3)[1] -> (Decimal('0.000'), Decimal('1.000'))"""
     n = _int(n, 3, 10 ** 4)
     digits = _digits(digits)
+    if n * digits > 5 * 10 ** 6:        # the output alone is 2 n numbers of `digits` digits: n = 10^4 at 2000 digits took 4.6 s (2026-11-06)
+        raise NotCovered('n * digits past 5 * 10^6 (the vertex list would be too large)')
     rad = _q(radius)
     out = []
     with localcontext() as ctx:
+        # one sin/cos of 2 pi / n, then each vertex is the one before rotated by it: a rotation keeps its error growing linearly, so after k <= 10^4
+        # steps it is < 4 * 10^4 ulp, covered by the 30 guard digits. A Taylor series per vertex took 52 s at n = 500, 2000 digits (2026-11-06).
         ctx.prec = digits + 30
         pi = _pi(ctx.prec + 5)
         r = _dec(rad)
+        s1, c1 = _sincos(2 * pi / n)
+        s, c = Decimal(0), Decimal(1)
         for k in range(n):
-            s, c = _sincos(2 * pi * k / n)
             out.append((_round(r * c, digits), _round(r * s, digits)))
+            s, c = s * c1 + c * s1, c * c1 - s * s1
     return out
 
 

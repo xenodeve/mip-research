@@ -148,11 +148,19 @@ def _iprim(a):
     return [c // g for c in a] if g > 1 else list(a)
 
 
-def _iprem(a, b):
+def _prs_charge(work, r):
+    """Charge one pseudo-division step of a remainder sequence to `work`: the step multiplies and takes the gcd of len(r) numbers of S bits."""
+    if work is not None and r:
+        S = max(abs(v).bit_length() for v in r) + 64
+        work.charge(PRS_WEIGHT * len(r) * S * S)
+
+
+def _iprem(a, b, work=None):
     """Pseudo-remainder of integer lists (a times a power of lc(b), reduced mod b), kept small by removing the content at every step."""
     r = list(a)
     db, lb = len(b), b[0]
     while len(r) >= db and r:
+        _prs_charge(work, r)
         c = r[0]
         r = [lb * v for v in r]
         for j in range(db):
@@ -166,7 +174,7 @@ def _iprem(a, b):
     return r
 
 
-def _gcd(p, q):
+def _gcd(p, q, work=None):
     """Monic gcd by the primitive remainder sequence over Z (no coefficient swell); [] when both are zero."""
     if not p:
         return _monic(q)
@@ -176,7 +184,7 @@ def _gcd(p, q):
     if len(a) < len(b):
         a, b = b, a
     while True:
-        r = _iprem(a, b)
+        r = _iprem(a, b, work)
         if not r:
             break
         a, b = b, _iprim(r)
@@ -251,18 +259,18 @@ def _clear(p):
     return c, pr
 
 
-def _sqf_decomp(p):
+def _sqf_decomp(p, work=None):
     """Yun: list of (monic square-free g_i, i) with p = lc * prod g_i^i. p non-constant."""
     if len(p) <= 1:
         return []
     dp = _deriv(p)
-    g = _gcd(p, dp)
+    g = _gcd(p, dp, work)
     b = _divmod(p, g)[0]
     c = _divmod(dp, g)[0]
     d = _sub(c, _deriv(b))
     i, out = 1, []
     while len(b) > 1:
-        a = _gcd(b, d)
+        a = _gcd(b, d, work)
         if len(a) > 1:
             out.append((a, i))
         b = _divmod(b, a)[0]
@@ -1145,8 +1153,9 @@ def is_irreducible_z(p):
 
 # ---------------------------------------------------------------- rational and real roots
 
-def _rational_roots(p):
-    """[(root, multiplicity)] sorted, p a trimmed non-zero Fraction list."""
+def _rational_roots(p, sqfree=False):
+    """[(root, multiplicity)] sorted, p a trimmed non-zero Fraction list. sqfree=True: p is known square-free, so its square-free split (a gcd of
+    p and p', a third of a degree-200 isolation) is not computed again."""
     out = []
     p = list(p)
     z = 0
@@ -1157,16 +1166,20 @@ def _rational_roots(p):
         out.append((Fraction(0), z))
     if len(p) <= 1:
         return out
-    for g, mult in _sqf_decomp(p):
+    for g, mult in ([(p, 1)] if sqfree else _sqf_decomp(p)):
         _, gi = _clear(g)
         n = len(gi) - 1
         if n == 1:
             out.append((Fraction(-gi[1], gi[0]), mult))
             continue
         try:
-            d0, dn = _divisors(abs(gi[-1])), _divisors(gi[0])
-            if len(d0) * len(dn) > 40000:
+            f0, fn = _factor_int(abs(gi[-1])), _factor_int(gi[0])
+            count = 1
+            for e in list(f0.values()) + list(fn.values()):
+                count *= e + 1
+            if count > 40000:       # counted before the lists are built: 60! has 4e9 divisors and building them ran for minutes (2026-11-06)
                 raise NotCovered('many candidates')
+            d0, dn = _divisors(abs(gi[-1])), _divisors(gi[0])
             cands = [Fraction(u, v) for u in d0 for v in dn if gcd(u, v) == 1]
             for r in cands:
                 for s in (r, -r):
@@ -1193,24 +1206,103 @@ def _pos_prim(p):
     return [Fraction(a) for a in pr] if pr else []
 
 
-def _sturm(g):
-    seq = [_pos_prim(g), _pos_prim(_deriv(g))]
+def _iprem_signed(a, b, work=None):
+    """(r, s): r = (positive number) * s * rem(a, b) for integer lists a, b, by the pseudo-remainder of _iprem (content removed at each step by a
+    positive gcd); s = sign(lc(b))^(number of multiplications by lc(b))."""
+    r = list(a)
+    db, lb = len(b), b[0]
+    flips = 0
+    while len(r) >= db and r:
+        _prs_charge(work, r)
+        c = r[0]
+        r = [lb * v for v in r]
+        flips += 1
+        for j in range(db):
+            r[j] -= c * b[j]
+        i = 0
+        while i < len(r) and r[i] == 0:
+            i += 1
+        r = r[i:]
+        if r:
+            r = _iprim(r)
+    return r, (-1 if lb < 0 and flips % 2 else 1)
+
+
+def _sturm(g, work=None):
+    """The Sturm sequence, each member a primitive integer polynomial (as Fractions) and a positive multiple of the textbook member. The remainders
+    are integer pseudo-remainders with the sign tracked, not Fraction divisions: degree 200 with 20-bit coefficients went from 8.0 s to
+    4.1 s on 2026-11-06, with the same members."""
+    a = [int(c) for c in _pos_prim(g)]
+    b = [int(c) for c in _pos_prim(_deriv(g))]
+    seq = [a, b]
     while True:
-        r = _divmod(seq[-2], seq[-1])[1]
+        r, s = _iprem_signed(seq[-2], seq[-1], work)
         if not r:
             break
-        seq.append(_pos_prim(_neg(r)))
-    return seq
+        seq.append(_iprim([-s * c for c in r]))
+    return [[Fraction(c) for c in m] for m in seq]
 
 
 def _sgn(x):
     return (x > 0) - (x < 0)
 
 
-def _variations(seq, x):
+ISOLATE_WORK = 3 * 10 ** 12      # work units one real-root call may spend (_Work): about 1.5 s at the ~2e12 units/s measured 2026-11-06
+PRS_WEIGHT = 4                   # units per (number * bit^2) of a remainder-sequence step: those ran at 4-6e11 per s, the bisection units at ~2e12
+
+
+class _Work:
+    """The work budget of one real-root call (isolate_real_roots, real_roots, complex_roots), in units of about 0.5 ns on the 2026-11-06 PC.
+    - Bisection: an evaluation of a degree-m Sturm member with b-bit coefficients at a point of x bits is charged (m + 1) * (b + m * x) * x
+      (_sgn_at). Depth is the root separation in bits: a Mignotte x^20 - 2(a x - 1)^2 needs ~ 22 log2(a), and a = 10^40 took 7.1 s before the
+      integer evaluation (0.32 s after), a = 10^100 would have run for minutes.
+    - Remainder sequences (square-free split, Sturm): each pseudo-division step over r numbers of S bits is charged PRS_WEIGHT * r * S^2
+      (_prs_charge). Dense degree 200 at 20-bit coefficients needs ~5.5 s and is refused; degree 100 at 20 bits takes 0.4 s.
+    Measured units/s, unbounded: Mignotte degree 20-200 1.8-3.0e12; dense random degree 40-200 0.4-0.6e12 before the weight of 4.
+    Past the budget the call is NotCovered rather than slow."""
+    __slots__ = ('left',)
+
+    def __init__(self, limit=None):
+        self.left = ISOLATE_WORK if limit is None else limit
+
+    def charge(self, units):
+        self.left -= units
+        if self.left < 0:
+            raise NotCovered('real root isolation past its work budget (roots too close for the coefficient size)')
+
+
+def _sgn_at(p, x, work=None):
+    """The sign of p(x) for a rational x. A Sturm member has integer coefficients (_pos_prim), so p(n/d) * d^deg is evaluated in integers by a
+    homogeneous Horner scheme: no Fraction gcd per step. A Mignotte x^20 - 2(10^40 x - 1)^2 spent 3.9 of its 7.1 s in those gcds (2026-11-06)."""
+    if not p:
+        return 0
+    x = Fraction(x)
+    n, d = x.numerator, x.denominator
+    if any(c.denominator != 1 for c in p if isinstance(c, Fraction)):
+        return _sgn(_eval(p, x))
+    ints = [int(c) for c in p]
+    if work is not None:
+        xb = max(n.bit_length(), d.bit_length(), 1)
+        cb = max(abs(c).bit_length() for c in ints)
+        work.charge(len(ints) * (cb + (len(ints) - 1) * xb) * xb)
+    acc = ints[0]
+    if d & (d - 1) == 0:                    # a bisection point m / 2^k: the powers of d are shifts
+        k, sh = d.bit_length() - 1, 0
+        for c in ints[1:]:
+            sh += k
+            acc = acc * n + (c << sh)
+        return _sgn(acc)
+    dp = 1
+    for c in ints[1:]:
+        dp *= d
+        acc = acc * n + c * dp
+    return _sgn(acc)
+
+
+def _variations(seq, x, work=None):
     prev, v = 0, 0
     for p in seq:
-        s = _sgn(_eval(p, x))
+        s = _sgn_at(p, x, work)
         if s == 0:
             continue
         if prev and s != prev:
@@ -1229,10 +1321,10 @@ def _variations_inf(seq, sign):
     return v
 
 
-def _count(seq, a, b):
+def _count(seq, a, b, work=None):
     """Distinct real roots of the square-free polynomial the Sturm sequence belongs to, in (a, b]; None = infinity."""
-    va = _variations_inf(seq, -1) if a is None else _variations(seq, a)
-    vb = _variations_inf(seq, 1) if b is None else _variations(seq, b)
+    va = _variations_inf(seq, -1) if a is None else _variations(seq, a, work)
+    vb = _variations_inf(seq, 1) if b is None else _variations(seq, b, work)
     return va - vb
 
 
@@ -1274,52 +1366,67 @@ def count_real_roots(p, a=None, b=None, with_multiplicity=False):
     return total
 
 
-def _cauchy(g):
-    return 2 + max((abs(c / g[0]) for c in g[1:]), default=Fraction(0))
+def _pow2_bound(g):
+    """A power of two B with every root of g strictly inside (-B, B): Fujiwara's 2 * max |a_i / a_0|^(1/i), each term rounded up to a power of two.
+    Tighter than Cauchy's 1 + max |a_i / a_0| (2 * 10^80 against 2^135 for x^20 - 2(10^40 x - 1)^2), and dyadic, so every bisection point is m / 2^k."""
+    e = 0
+    for i, c in enumerate(g[1:], 1):
+        if c == 0:
+            continue
+        r = abs(Fraction(c) / g[0])
+        ub = r.numerator.bit_length() - r.denominator.bit_length() + 1      # r < 2^ub
+        e = max(e, -((-ub) // i))                                           # r^(1/i) < 2^ceil(ub / i)
+    return Fraction(2) ** (e + 1)
 
 
-def _isolate(g, seq):
-    B = _cauchy(g)
-    stack = [(-B, B, _count(seq, -B, B))]
+def _isolate(g, seq, work=None):
+    """Disjoint intervals (lo, hi) each holding one root of the square-free g (lo == hi: hi is a root), by bisection with the Sturm count of (lo, hi].
+    The variation count at each point is computed once and carried with the interval."""
+    B = _pow2_bound(g)
+    stack = [(-B, B, _variations(seq, -B, work), _variations(seq, B, work))]
     out = []
     while stack:
-        lo, hi, c = stack.pop()
+        lo, hi, va, vb = stack.pop()
+        c = va - vb
         if c == 0:
             continue
         if c == 1:
-            out.append((hi, hi) if _eval(g, hi) == 0 else (lo, hi))
+            out.append((hi, hi) if _sgn_at(seq[0], hi, work) == 0 else (lo, hi))
             continue
         mid = (lo + hi) / 2
-        cl = _count(seq, lo, mid)
-        stack.append((lo, mid, cl))
-        stack.append((mid, hi, c - cl))
+        vm = _variations(seq, mid, work)
+        stack.append((lo, mid, va, vm))
+        stack.append((mid, hi, vm, vb))
     out.sort()
     return out
 
 
-def _refine(g, seq, lo, hi, eps):
+def _refine(g, seq, lo, hi, eps, work=None):
+    """Halve (lo, hi) around its one root until it is at most eps wide. Signs come from seq[0], the primitive integer multiple of g (same roots,
+    positive scale), and the sign at lo is carried, not recomputed."""
+    p0 = seq[0]
+    slo = _sgn_at(p0, lo, work)
     while hi - lo > eps:
         mid = (lo + hi) / 2
-        gm = _eval(g, mid)
-        if gm == 0:
+        sm = _sgn_at(p0, mid, work)
+        if sm == 0:
             return mid, mid
-        glo = _eval(g, lo)
-        if glo != 0:
-            if _sgn(glo) != _sgn(gm):
+        if slo != 0:
+            if slo != sm:
                 hi = mid
             else:
-                lo = mid
-        elif _count(seq, lo, mid) == 1:
+                lo, slo = mid, sm
+        elif _count(seq, lo, mid, work) == 1:
             hi = mid
         else:
-            lo = mid
+            lo, slo = mid, sm
     return lo, hi
 
 
 def _split_rational(g):
     """(rational roots of the square-free g, g divided by them). A search that cannot finish is skipped: the root then shows as a tiny interval."""
     try:
-        rats = [r for r, _ in _rational_roots(g)]
+        rats = [r for r, _ in _rational_roots(g, sqfree=True)]
     except NotCovered:
         return [], g
     cof = g
@@ -1328,25 +1435,25 @@ def _split_rational(g):
     return rats, cof
 
 
-def _roots_sqfree(g):
+def _roots_sqfree(g, work=None):
     """All distinct real roots of the monic square-free g, sorted: (lo, hi, poly, sturm) with lo == hi for an exact rational root (poly, sturm None)."""
     rats, cof = _split_rational(g)
     out = [(r, r, None, None) for r in rats]
     if len(cof) > 1:
-        seq = _sturm(cof)
-        for lo, hi in _isolate(cof, seq):
+        seq = _sturm(cof, work)
+        for lo, hi in _isolate(cof, seq, work):
             while any(lo <= r <= hi for r in rats):        # an interval must hold no rational root already reported
-                lo, hi = _refine(cof, seq, lo, hi, (hi - lo) / 2)
+                lo, hi = _refine(cof, seq, lo, hi, (hi - lo) / 2, work)
             out.append((lo, hi, cof, seq))
     out.sort(key=lambda t: (t[0], t[1]))
     return out
 
 
-def _all_roots(p):
+def _all_roots(p, work=None):
     """Every distinct real root of p as [lo, hi, multiplicity, poly, sturm]; the intervals are pairwise disjoint and hold no exact root of another entry."""
     items = []
-    for g, mult in _sqf_decomp(p):
-        for lo, hi, gg, seq in _roots_sqfree(g):
+    for g, mult in _sqf_decomp(p, work):
+        for lo, hi, gg, seq in _roots_sqfree(g, work):
             items.append([lo, hi, mult, gg, seq])
     step_budget = 2000
     while True:
@@ -1371,20 +1478,26 @@ def _all_roots(p):
             continue
         for it in clash:
             if it[0] != it[1]:
-                it[0], it[1] = _refine(it[3], it[4], it[0], it[1], (it[1] - it[0]) / 2)
+                it[0], it[1] = _refine(it[3], it[4], it[0], it[1], (it[1] - it[0]) / 2, work)
     items.sort(key=lambda t: (t[0], t[1]))
     return items
 
 
-@op('algebra.isolate_real_roots', kind='roots', bound='degree <= 200 (Sturm with exact Fractions)')
+def _degree_gate(p):
+    """Degree past 200 is NotCovered; the time inside the bound is held by the work budget (_Work), not by the degree."""
+    if len(p) > 201:
+        raise NotCovered('degree past 200')
+
+
+@op('algebra.isolate_real_roots', kind='roots',
+    bound='degree <= 200; work <= 3e12 units (_Work: about 1.5 s; remainder sequences and bisection both charged)')
 def isolate_real_roots(p):
     """Disjoint exact rational intervals (lo, hi, multiplicity), each holding exactly one distinct real root in its open interval; lo == hi is an exact
     rational root. Sorted. isolate_real_roots([1, 0, -2]) -> [(-3/2.., ..), ...] two intervals around -sqrt2 and sqrt2"""
     p = _poly(p)
     _nonzero(p)
-    if len(p) > 201:
-        raise NotCovered('degree past 200')
-    return [(lo, hi, mult) for lo, hi, mult, _, _ in _all_roots(p)]
+    _degree_gate(p)
+    return [(lo, hi, mult) for lo, hi, mult, _, _ in _all_roots(p, _Work())]
 
 
 def _dec(x, digits):
@@ -1399,20 +1512,20 @@ def _check_digits(digits):
         raise BadInput(f'digits must be an integer from 1 to {MAX_DIGITS}')
 
 
-@op('algebra.real_roots', kind='roots', bound='degree <= 200, digits <= 200')
+@op('algebra.real_roots', kind='roots', bound='digits <= 200; the degree and work bounds of isolate_real_roots')
 def real_roots(p, digits=15):
     """Every distinct real root: {'root': Fraction (exact) or Decimal with `digits` places after the point (error < 10^-digits), 'exact': bool,
     'numeric': bool, 'multiplicity': m, 'interval': (lo, hi) exact rationals holding it}. real_roots([1, 0, -2], 5) -> roots -1.41421 and 1.41421"""
     _check_digits(digits)
     p = _poly(p)
     _nonzero(p)
-    if len(p) > 201:
-        raise NotCovered('degree past 200')
+    _degree_gate(p)
     eps = Fraction(1, 10 ** (digits + 3))
     out = []
-    for lo, hi, mult, g, seq in _all_roots(p):
+    work = _Work()
+    for lo, hi, mult, g, seq in _all_roots(p, work):
         if lo != hi:
-            lo, hi = _refine(g, seq, lo, hi, eps)
+            lo, hi = _refine(g, seq, lo, hi, eps, work)
         if lo == hi:
             out.append(dict(root=lo, exact=True, numeric=False, multiplicity=mult, interval=(lo, hi)))
         else:
@@ -1471,16 +1584,17 @@ def complex_roots(p, digits=15):
     if len(p) > 41:
         raise NotCovered('degree past 40')
     res = []
+    work = _Work()
     zero = Decimal(0).quantize(Decimal(1).scaleb(-digits))
     prec = digits + 12
     unit = Decimal(1).scaleb(-digits)
-    for g, mult in _sqf_decomp(p):
+    for g, mult in _sqf_decomp(p, work):
         n = len(g) - 1
         eps = Fraction(1, 10 ** (digits + 3))
         reals = []
-        for lo, hi, gg, seq in _roots_sqfree(g):
+        for lo, hi, gg, seq in _roots_sqfree(g, work):
             if lo != hi:
-                lo, hi = _refine(gg, seq, lo, hi, eps)
+                lo, hi = _refine(gg, seq, lo, hi, eps, work)
             reals.append(_dec((lo + hi) / 2, digits))
         k = len(reals)
         nonreal = n - k
@@ -1968,7 +2082,14 @@ def _nullspace(M):
     return basis
 
 
-def _det(M):
+DET_WORK = 12 * 10 ** 10    # n^3 * (n * entry bits)^1.5 one determinant may cost, about 1-1.7 s; see _det
+
+
+def _det(M, bounded=False):
+    """Bareiss on the matrix with each row scaled to integers. bounded=True (mat_det) refuses first when the work is past DET_WORK: Bareiss does
+    ~n^3 / 3 products of numbers growing to ~n * B bits (B the largest scaled entry). Measured 2026-11-06, random integer matrices, no bound:
+    60x60 at 22 digits 0.42 s, at 30 digits 0.72 s, at 100 digits 5.8 s, at 1000 digits > 60 s; 20x20 at 600 digits 0.73 s, at 1200 digits 2.6 s;
+    time is about n^3 * (n * B)^1.5 / (0.7-1.4e11) s. The bound lets 60x60 through to ~113-bit entries (~33 digits) and 20x20 to ~3000 bits."""
     n = len(M)
     scale = Fraction(1)
     I = []
@@ -1978,6 +2099,10 @@ def _det(M):
             den = den * c.denominator // gcd(den, c.denominator)
         scale *= den
         I.append([int(c * den) for c in r])
+    if bounded:
+        B = max(max(abs(c).bit_length() for c in r) for r in I) + 1
+        if float(n) ** 3 * float(n * B) ** 1.5 > DET_WORK:
+            raise NotCovered(f'determinant of a {n}x{n} matrix with {B}-bit entries is past the work bound')
     sign, prev = 1, 1
     for k in range(n - 1):
         if I[k][k] == 0:
@@ -2019,10 +2144,11 @@ def mat_trace(A):
     return sum((A[i][i] for i in range(len(A))), Fraction(0))
 
 
-@op('algebra.mat_det', kind='matrices over Q', bound=f'square, sides <= {MAX_DIM}; Bareiss on integers')
+@op('algebra.mat_det', kind='matrices over Q',
+    bound=f'square, sides <= {MAX_DIM}; Bareiss on integers; n^3 * (n * entry bits)^1.5 <= 1.2e11 (60x60 to ~33 digits, 20x20 to ~900)')
 def mat_det(A):
     """Determinant (Bareiss, fraction-free). mat_det([[1, 2], [3, 4]]) -> -2"""
-    return _det(_mat(A, rect=False))
+    return _det(_mat(A, rect=False), bounded=True)
 
 
 @op('algebra.mat_inverse', kind='matrices over Q', bound=f'square, sides <= {MAX_DIM}')
@@ -2579,6 +2705,17 @@ def _segment_intersection_2d(p1, p2, p3, p4):
     x4, y4 = p4
     dx1, dy1 = x2 - x1, y2 - y1
     dx2, dy2 = x4 - x3, y4 - y3
+
+    def on(p, a, b):        # p on the closed segment a b (b - a not zero)
+        return ((p[0] - a[0]) * (b[1] - a[1]) - (p[1] - a[1]) * (b[0] - a[0]) == 0
+                and min(a[0], b[0]) <= p[0] <= max(a[0], b[0]) and min(a[1], b[1]) <= p[1] <= max(a[1], b[1]))
+    # A repeated vertex is a segment of length 0. It passed the collinearity test below with zero direction, so [(5,5), (5,5), (6,6)] met
+    # [(0,0), (10,0)] in (5, 5), a point of neither line (2026-11-06, the sim's first generator for this op).
+    if p1 == p2 or p3 == p4:
+        if p1 == p2 and p3 == p4:
+            return p1 if p1 == p3 else None
+        pt, a, b = (p1, p3, p4) if p1 == p2 else (p3, p1, p2)
+        return pt if on(pt, a, b) else None
     denom = dx1 * dy2 - dy1 * dx2
     if denom == 0:
         # Parallel. Collinear segments that touch at an end meet in that point; ones that overlap meet in a whole segment, which is

@@ -79,7 +79,7 @@ def _(add):
     add((F(3), F(4), F(5)), sy(F(3), F(4), F(5)), 'boundary', 'right triangle: area 6, R = 5/2, r = 1')
     add((F(10 ** 6), F(10 ** 6), F(1)), sy(F(10 ** 6), F(10 ** 6), F(1)), 'boundary', 'a needle: two long sides, one short')
     add((F(1, 2), F(1, 3), F(1, 4)), sy(F(1, 2), F(1, 3), F(1, 4)), 'boundary', 'fractions')
-    add((F(10 ** 9 + 7), F(10 ** 9 + 7), F(10 ** 9 + 7)), REFUSE, 'past-bound', 'an equilateral triangle on a prime side beyond 10^7: the square-free part of 3 a^4 / 16 needs trial division past 10^7')
+    add((F(10 ** 9 + 7), F(10 ** 9 + 7), F(10 ** 9 + 7)), sy(F(10 ** 9 + 7), F(10 ** 9 + 7), F(10 ** 9 + 7)), 'boundary', 'an equilateral triangle on a prime side beyond 10^7 (answered since 2026-11-06: _squarefree factors past its 10^6 trial division by Pollard rho and Miller-Rabin; was a refusal)')
     add((F(1), F(1), 'x'), BADIN, 'bad-input', 'a non-numeric side')
     add((1.5, F(1), F(1)), BADIN, 'bad-input', 'a float')
 
@@ -130,7 +130,7 @@ def _(add):
     add((P(0, 0), P(2, 0), P(1, 1)), sy(P(0, 0), P(2, 0), P(1, 1)), 'boundary', 'right isosceles: R = 1')
     add((P(0, 0), P(10, 0), P(5, 1)), sy(P(0, 0), P(10, 0), P(5, 1)), 'boundary', 'R^2 = 169: R = 13')
     add((P(0, 0), P(1, 0), P(F(1, 2), 3)), sy(P(0, 0), P(1, 0), P(F(1, 2), 3)), 'boundary', 'an isosceles needle with fractions')
-    add((P(0, 0), P(10 ** 8, 0), P(0, 10 ** 8 + 1)), REFUSE, 'past-bound', 'R^2 has a prime factor of size 10^16 beyond the trial division')
+    add((P(0, 0), P(10 ** 8, 0), P(0, 10 ** 8 + 1)), sy(P(0, 0), P(10 ** 8, 0), P(0, 10 ** 8 + 1)), 'boundary', 'R^2 has a prime factor of size 10^16 (answered since 2026-11-06: _squarefree factors past its 10^6 trial division by Pollard rho and Miller-Rabin; was a refusal)')
     add((P(0, 0, 0), P(1, 0, 0), P(0, 1, 0)), (str(sp.N(sp.sqrt(sp.Rational(1, 2)), 55)), F(1, 2)), 'boundary', '3D right isosceles with legs 1: R = sqrt(2)/2')
 
 
@@ -151,7 +151,7 @@ def _(add):
     add2((P(0, 0), P(1, 1), P(3, 0)), 'degenerate', 'sides sqrt2, sqrt5, 3: two radicals, the exact form is refused')
     add2((P(0, 0), P(2, 1), P(1, 3)), 'degenerate', 'sides sqrt5, sqrt5, sqrt10: two radicals')
     add2((P(F(1, 2), 0), P(F(5, 2), 0), P(F(1, 2), F(3, 2))), 'boundary', 'a right triangle with fractions (2 x 3/2 x 5/2)')
-    add((P(0, 0), P(10 ** 8, 0), P(0, 10 ** 8 + 1)), REFUSE, 'past-bound', 'the sides need radicals beyond the 10^7 trial division')
+    add2((P(0, 0), P(10 ** 8, 0), P(0, 10 ** 8 + 1)), 'boundary', 'sides 10^8, 10^8 + 1 and one radical (answered since 2026-11-06: _squarefree factors past its 10^6 trial division by Pollard rho and Miller-Rabin; was a refusal)')
     add((P(0, 0), P(1, 0), P(0, 1, 0)), BADIN, 'bad-input', 'mixed dimensions')
 
 
@@ -189,7 +189,7 @@ def _(add):
                       ((P(0, 0), P(2, 1), P(1, 3)), 'degenerate', 'two radicals: refused'), ((P(-5, -5), P(-1, -5), P(-5, -2)), 'boundary', 'a 3-4-5 triangle far from the origin'),
                       ((P(F(1, 2), 0), P(F(5, 2), 0), P(F(1, 2), F(3, 2))), 'boundary', 'a right triangle with fractions')]:
         add(t, orc(*t), tag, 'sympy Triangle.incenter at 55 digits: ' + d)
-    add((P(0, 0), P(10 ** 8, 0), P(0, 10 ** 8 + 1)), REFUSE, 'past-bound', 'the sides need radicals beyond the 10^7 trial division')
+    add((P(0, 0), P(10 ** 8, 0), P(0, 10 ** 8 + 1)), orc(P(0, 0), P(10 ** 8, 0), P(0, 10 ** 8 + 1)), 'boundary', 'sympy Triangle.incenter at 55 digits: sides 10^8, 10^8 + 1 and one radical (answered since 2026-11-06: _squarefree factors past its 10^6 trial division by Pollard rho and Miller-Rabin; was a refusal)')
     add((P(0, 0, 0), P(1, 0, 0), P(0, 1, 0)), BADIN, 'bad-input', '3D points: the incentre is for the plane')
 
 
@@ -270,7 +270,7 @@ def _(add):
         add((u, v), cos_orc(u, v), 'boundary', 'mpmath dot / (|u||v|): ' + d)
     add((P(1, 0), (0, 0.5)), BADIN, 'bad-input', 'a float')
     add((P(1, 0), P(0, 1, 0)), BADIN, 'bad-input', 'mixed dimensions')
-    add((P(10 ** 9, 1), P(10 ** 9 + 2, 1)), REFUSE, 'past-bound', '|u|^2 |v|^2 is a product of two large primes beyond the 10^7 trial division')
+    add((P(10 ** 9, 1), P(10 ** 9 + 2, 1)), cos_orc(P(10 ** 9, 1), P(10 ** 9 + 2, 1)), 'boundary', '|u|^2 |v|^2 is a product of two large primes (answered since 2026-11-06: _squarefree factors past its 10^6 trial division by Pollard rho and Miller-Rabin; was a refusal)')
 
 
 @case('angle_degrees_exact')

@@ -10,10 +10,11 @@ See docs/plans/2026-11-05-mip-math-backend-coverage.md for the contract. Standar
 
     run('numbers.gcd', 12, 18)      # 6
 """
+import functools
 import importlib
 from decimal import Decimal, localcontext
 from fractions import Fraction
-from math import isqrt
+from math import gcd, isqrt
 
 
 class NotCovered(Exception):
@@ -61,21 +62,124 @@ def run(name, *args, **kw):
     return _REG[name]['fn'](*args, **kw)
 
 
+SQUAREFREE_TRIAL = 10 ** 6      # largest trial divisor _squarefree tries (~5e5 divisions, ~60 ms)
+
+
+def _is_prime_small(m):
+    """Deterministic Miller-Rabin for m < 3.3 * 10^24 (the first 13 prime bases); None above that (unknown)."""
+    if m < 2:
+        return False
+    bases = (2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, 41)
+    for b in bases:
+        if m % b == 0:
+            return m == b
+    if m >= 3317044064679887385961981:
+        return None
+    d, s = m - 1, 0
+    while d % 2 == 0:
+        d //= 2
+        s += 1
+    for b in bases:
+        x = pow(b, d, m)
+        if x in (1, m - 1):
+            continue
+        for _ in range(s - 1):
+            x = x * x % m
+            if x == m - 1:
+                break
+        else:
+            return False
+    return True
+
+
+def _rho_factor(m, budget=200000):
+    """The prime factors of m (with repeats) by Pollard-Brent rho and Miller-Rabin, or None when a part cannot be split within the budget of rho
+    steps and is not proved prime (Miller-Rabin is exact below 3.3e24 only). Used only past SQUAREFREE_TRIAL, where every prime factor is > 10^6."""
+    out, stack = [], [m]
+    while stack:
+        n = stack.pop()
+        if n == 1:
+            continue
+        pr = _is_prime_small(n)
+        if pr:
+            out.append(n)
+            continue
+        q = isqrt(n)
+        if q * q == n:
+            stack += [q, q]
+            continue
+        f = None
+        for c in range(1, 20):
+            y, r, g, x, ys = 2, 1, 1, 2, 2
+            while g == 1:
+                x = y
+                for _ in range(r):
+                    y = (y * y + c) % n
+                k = 0
+                while k < r and g == 1:
+                    ys = y
+                    prod = 1
+                    for _ in range(min(128, r - k)):
+                        y = (y * y + c) % n
+                        prod = prod * abs(x - y) % n
+                    budget -= min(128, r - k)
+                    if budget < 0:
+                        return None
+                    g = gcd(prod, n)
+                    k += 128
+                r *= 2
+            if g == n:
+                g = 1
+                while g == 1:
+                    ys = (ys * ys + c) % n
+                    g = gcd(abs(x - ys), n)
+            if g != n:
+                f = g
+                break
+        if f is None:       # no split found: n is prime past the proved range, or its factors are too large for the budget
+            return None
+        stack += [f, n // f]
+    return out
+
+
+@functools.lru_cache(maxsize=4096)
 def _squarefree(d):
-    """(s, r) with d = s*s*r and r square-free, by trial division (d is small in practice)."""
+    """(s, r) with d = s*s*r and r square-free. Trial division only up to the cube root of what is left: once every prime below p is divided out
+    and p^3 > m, the rest m has at most two prime factors, so it is 1, a prime, a product of two distinct primes (all square-free) or a prime squared
+    (isqrt tells). A 14-digit prime took 0.6 s by the old trial division to its square root, paid again by every Surd built on it; now 2 ms and cached (2026-11-06).
+    Past SQUAREFREE_TRIAL with m still >= p^3, m is answered only when it is a prime (Miller-Rabin, exact below 3.3e24) or a square; else NotCovered."""
     if d < 0:
         raise BadInput('negative radicand')
     if d == 0:
         return 0, 0
-    s, r, p = 1, d, 2
-    while p * p <= r:
-        if p > 10 ** 7:
-            raise NotCovered('radicand too large to make square-free')
-        while r % (p * p) == 0:
-            r //= p * p
-            s *= p
+    s, out, m, p = 1, 1, d, 2
+    while p * p * p <= m:
+        if p > SQUAREFREE_TRIAL:
+            fs = _rho_factor(m)
+            if fs is None:
+                raise NotCovered('radicand too large to make square-free')
+            for q in set(fs):
+                e = fs.count(q)
+                s *= q ** (e // 2)
+                if e % 2:
+                    out *= q
+            return s, out
+        if m % p == 0:
+            e = 0
+            while m % p == 0:
+                m //= p
+                e += 1
+            s *= p ** (e // 2)
+            if e % 2:
+                out *= p
         p += 1 if p == 2 else 2
-    return s, r
+    if m > 1:
+        q = isqrt(m)
+        if q * q == m:
+            s *= q
+        else:
+            out *= m
+    return s, out
 
 
 class Surd:

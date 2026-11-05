@@ -977,7 +977,8 @@ def num_divisors(n):
 
 @op('numbers.sigma', kind='number theory', bound='as factorint; k in 0..1000')
 def sigma(n, k=1):
-    """The sum of the k-th powers of the divisors of n >= 1 (k = 1 the sum of divisors). sigma(28) -> 56; sigma(6, 2) -> 50."""
+    """The sum of the k-th powers of the divisors of n >= 1 (k = 1 the sum of divisors). The number comes first: sigma_k(n) is sigma(n, k), and
+    sigma(n, 0) is the number of divisors. sigma(28) -> 56; sigma(6, 2) -> 1 + 4 + 9 + 36 = 50; sigma(2, 6) -> 1 + 64 = 65."""
     n, k = _int(n), _int(k, 'k')
     _nonneg(k, 'k')
     _small(k, 1000, 'k')
@@ -1179,7 +1180,9 @@ def rising_factorial(x, n):
 
 @op('numbers.falling_factorial', kind='combinatorial numbers', bound='n up to 100,000')
 def falling_factorial(x, n):
-    """x (x-1) ... (x-n+1) for a rational x and integer n >= 0. falling_factorial(10, 3) -> 720."""
+    """x (x-1) ... (x-n+1) for a rational x and integer n >= 0 (the empty product 1 for n = 0). For integers 0 <= n <= x it is the number of
+    arrangements P(x, n) = x! / (x-n)!; for an integer 0 <= x < n the product holds the factor 0, so it is 0 (no way to arrange 7 of 5:
+    falling_factorial(5, 7) -> 0). falling_factorial(10, 3) -> 720."""
     x, n = _rat(x), _int(n)
     _nonneg(n, 'n')
     _small(n, 100_000, 'n')
@@ -1261,8 +1264,9 @@ def bell(n):
 
 @op('numbers.stirling1', kind='combinatorial numbers', bound='n up to 1500')
 def stirling1(n, k, signed=False):
-    """Stirling number of the first kind: unsigned c(n, k), the permutations of n with k cycles (signed=True gives s(n, k) = (-1)^(n-k) c(n, k)).
-    stirling1(4, 2) -> 11."""
+    """Stirling number of the first kind. Unsigned by default: c(n, k), the permutations of n with k cycles; signed=True gives
+    s(n, k) = (-1)^(n-k) c(n, k), the coefficients of x(x-1)...(x-n+1). stirling1(4, 2) -> 11; stirling1(4, 2, signed=True) -> 11;
+    stirling1(4, 1, signed=True) -> -6."""
     n, k = _int(n), _int(k)
     _nonneg(n, 'n')
     _nonneg(k, 'k')

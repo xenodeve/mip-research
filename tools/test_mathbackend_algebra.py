@@ -98,6 +98,50 @@ class RootTests(unittest.TestCase):
         self.assertEqual([(d['root'], d['exact']) for d in exact], [(1, True), (2, True)])
         self.assertEqual(r('real_roots', [1, 0, 0])[0]['multiplicity'], 2)
 
+    def test_isolation_is_bounded_in_time(self):
+        # 2026-11-06: x^20 - 2(a x - 1)^2 had no budget (a = 10^40: 7.1 s; a = 10^100 would run for minutes), and x(x-1)...(x-60) built
+        # the 4e9 divisors of 60! before its 40000-candidate check (> 120 s). Now: answered fast, or NotCovered fast.
+        import time
+
+        def mig(n, a):
+            p = [0] * (n + 1)
+            p[0], p[n - 2], p[n - 1], p[n] = 1, -2 * a * a, 4 * a, -2
+            return p
+
+        def wilk(n):
+            p = [1]
+            for i in range(1, n + 1):
+                p = [a - i * b for a, b in zip(p + [0], [0] + p)]
+            return p
+        for p, want in [(mig(20, 10), 4), (mig(20, 10 ** 24), 4), (wilk(60), 60)]:
+            t = time.perf_counter()
+            iv = r('isolate_real_roots', p)
+            self.assertEqual(len(iv), want)
+            self.assertLess(time.perf_counter() - t, 5)
+        for lo, hi, _ in r('isolate_real_roots', mig(20, 10 ** 24)):
+            self.assertTrue(lo == hi or A._eval(A._poly(mig(20, 10 ** 24)), F(lo)) * A._eval(A._poly(mig(20, 10 ** 24)), F(hi)) < 0)
+        for fn in ('isolate_real_roots', 'real_roots'):
+            t = time.perf_counter()
+            with self.assertRaises(NotCovered):
+                r(fn, mig(20, 10 ** 100))
+            self.assertLess(time.perf_counter() - t, 5)
+
+    def test_integer_sturm_matches_the_fraction_sequence(self):
+        # the Sturm members now come from integer pseudo-remainders with the sign tracked; each must still be the primitive positive multiple
+        # of -rem(previous two) (the sim's certificate), checked here against Fraction division
+        import random
+        rs = random.Random(3)
+        for _ in range(40):
+            p = A._poly([rs.randint(-30, 30) or 1 for _ in range(rs.randint(2, 12))])
+            g = A._divmod(p, A._gcd(p, A._deriv(p)))[0]
+            if len(g) < 2:
+                continue
+            seq = A._sturm(g)
+            self.assertEqual(seq[0], A._pos_prim(g))
+            self.assertEqual(seq[1], A._pos_prim(A._deriv(g)))
+            for i in range(2, len(seq)):
+                self.assertEqual(seq[i], A._pos_prim(A._neg(A._divmod(seq[i - 2], seq[i - 1])[1])))
+
     def test_complex_roots(self):
         zs = r('complex_roots', [1, 0, 1], 10)
         self.assertEqual([(str(a), str(b)) for a, b in zs], [('0E-10', '-1.0000000000'), ('0E-10', '1.0000000000')])
@@ -186,6 +230,34 @@ class ModTests(unittest.TestCase):
 
 class MatrixTests(unittest.TestCase):
     A = [[1, 2], [3, 4]]
+
+    def test_det_work_is_bounded(self):
+        # 2026-11-06: no bound on the entries' size; 60x60 at 1000 digits ran > 60 s. Now refused before Bareiss starts.
+        import random
+        import time
+        rs = random.Random(5)
+        for n, d in [(60, 1000), (20, 3000), (60, 100)]:
+            M = [[rs.randint(-10 ** d, 10 ** d) for _ in range(n)] for _ in range(n)]
+            t = time.perf_counter()
+            with self.assertRaises(NotCovered):
+                r('mat_det', M)
+            self.assertLess(time.perf_counter() - t, 2)
+        # small entries still answer at every allowed size: a 20x20 of 2-digit and a 60x60 of 6-digit cells, checked against Fraction elimination
+        for n, d in [(20, 2), (20, 20), (60, 6)]:
+            M = [[rs.randint(-10 ** d, 10 ** d) for _ in range(n)] for _ in range(n)]
+            R = [[F(c) for c in row] for row in M]
+            want = F(1)
+            for k in range(n):
+                p = next(i for i in range(k, n) if R[i][k] != 0)
+                if p != k:
+                    R[k], R[p] = R[p], R[k]
+                    want = -want
+                want *= R[k][k]
+                for i in range(k + 1, n):
+                    f = R[i][k] / R[k][k]
+                    R[i] = [a - f * b for a, b in zip(R[i], R[k])]
+            self.assertEqual(r('mat_det', M), want)
+        self.assertEqual(r('mat_det', [[F(1, 3), 2], [F(10 ** 40, 7), 1]]), F(1, 3) - F(2 * 10 ** 40, 7))
 
     def test_basic(self):
         self.assertEqual(r('mat_mul', self.A, [[0, 1], [1, 0]]), [[2, 1], [4, 3]])
@@ -350,6 +422,16 @@ class AtomicAlgebraTests(unittest.TestCase):
         with self.assertRaises(NotCovered):
             r('piecewise_linear_intersections', [(0, 0), (2, 0)], [(1, 0), (3, 0)])
         self.assertEqual(r('piecewise_linear_intersections', [(0, 0), (0, 1)], [(0, 1), (0, 3)])['count'], 1)
+
+    def test_repeated_vertex_is_a_point_not_a_line(self):
+        # 2026-11-06 (found by the sim generator): a zero-length segment passed the collinearity test, so [(5,5),(5,5),(6,6)] met y = 0 in (5, 5)
+        pli = lambda a, b: r('piecewise_linear_intersections', a, b)['intersections']
+        self.assertEqual(pli([(5, 5), (5, 5), (6, 6)], [(0, 0), (10, 0)]), [])
+        self.assertEqual(pli([(1, 1), (1, 1)], [(2, 1), (2, 1)]), [])
+        self.assertEqual(pli([(1, 1), (1, 1)], [(1, 1), (1, 1)]), [(F(1), F(1))])
+        self.assertEqual(pli([(0, 0), (10, 0)], [(3, 0), (3, 0)]), [(F(3), F(0))])
+        self.assertEqual(pli([(0, 0), (10, 10)], [(4, 4), (4, 4), (4, 9)]), [(F(4), F(4))])
+        self.assertEqual(pli([(0, 0), (10, 10)], [(4, 5), (4, 5)]), [])
 
     def test_poly_derivative_k(self):
         self.assertEqual(r('poly_derivative', [1, 0, 0, 1], 10 ** 30), [])

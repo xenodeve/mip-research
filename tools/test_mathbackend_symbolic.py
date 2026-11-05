@@ -49,6 +49,25 @@ class ParserTests(unittest.TestCase):
             with self.assertRaises(BadInput, msg=t):
                 run('symbolic.canon', t)
 
+    def test_letter_against_a_bracket_is_a_function_not_a_product(self):
+        # 2026-11-06: canon('f(x)') gave 'f*x'
+        for t in ['f(x)', 'g(2)', 'h(x+1)', 'f(x) + 1', 'a(b)', 'x(2)', 'x(-1)', 'f_1(t)', 'f\\left(x\\right)', '2 + y(z)']:
+            with self.assertRaises(NotCovered, msg=t):
+                run('symbolic.canon', t)
+        self.assertEqual(run('symbolic.canon', 'x(x+1)'), 'x^2 + x')
+        self.assertEqual(run('symbolic.canon', '2(x+1)'), '2*x + 2')
+        self.assertEqual(run('symbolic.canon', '2x(y+1)'), '2*x*y + 2*x')
+        self.assertEqual(run('symbolic.canon', 'a (b)'), 'a*b')                      # a space: a product
+        self.assertEqual(run('symbolic.canon', 'x^2(x+1)'), 'x^3 + x^2')
+        self.assertEqual(run('symbolic.canon', 'pi(2)'), '2*pi')
+        self.assertEqual(run('symbolic.canon', 'sin(x)'), 'sin(x)')
+
+    def test_lone_backslash_is_bad_input(self):
+        # a text ending in a backslash, or a backslash before a newline, raised AttributeError out of the tokenizer (2026-11-06)
+        for t in ['x + \\', '\\', 'x\\\n+1', '2*\\']:
+            with self.assertRaises(BadInput, msg=repr(t)):
+                run('symbolic.canon', t)
+
     def test_roundtrip_of_random_trees(self):
         rs = random.Random(7)
 
@@ -139,6 +158,17 @@ class CalculusTests(unittest.TestCase):
         self.assertTrue(run('symbolic.equal', run('symbolic.diff', 'exp(2x)*x', 'x', 2), '4*x*exp(2*x)+4*exp(2*x)'))
         with self.assertRaises(NotCovered):
             run('symbolic.diff', 'floor(x)', 'x')
+
+    def test_abs_derivative_is_undefined_at_its_kink(self):
+        # the convention (diff docstring): no side note; the text abs(u)*u'/u is itself undefined where u = 0, as d|u| is
+        d = run('symbolic.diff', 'abs(x)', 'x')
+        self.assertEqual(d, 'abs(x)/x')
+        with self.assertRaises(BadInput):
+            run('symbolic.evaluate', d, {'x': '0'})
+        self.assertEqual((run('symbolic.evaluate', d, {'x': '2'}), run('symbolic.evaluate', d, {'x': '-3'})), (1, -1))
+        with self.assertRaises(BadInput):
+            run('symbolic.evaluate', run('symbolic.diff', 'abs(x - 1)*x', 'x'), {'x': '1'})
+        self.assertEqual(run('symbolic.evaluate', run('symbolic.diff', 'x*abs(x)', 'x'), {'x': '0'}), 0)   # x|x| is differentiable at 0
 
     def test_log_derivative_divides_by_the_atom(self):
         # bug caught in development: d(log u) was returned as u'/u * log(u) because the atom itself was not divided out
@@ -320,6 +350,26 @@ class SolveTests(unittest.TestCase):
         self.check('x^6 = 64', ['-2', '2'])
         self.check('x^3 - 2 = 0', ['2^(1/3)'])
         self.check('x^4 + x^2 + 1 = 0', [])
+
+    def test_radical_with_the_same_power_of_x_outside(self):
+        # 2026-11-06: sqrt(x) = x - 2 took 10.6 s and refused: the x outside the root went to the radical side as sqrt(x)*sqrt(x)
+        import time
+        t = time.perf_counter()
+        self.check('sqrt(x) = x - 2', ['4'])                                          # x = 1 is added by squaring and removed again
+        self.assertLess(time.perf_counter() - t, 1)
+        self.check('x + sqrt(x) = 6', ['4'])
+        self.check('x*sqrt(x) = 8', ['4'])
+        self.check('x^(3/2) = x', ['0', '1'])
+        self.check('sqrt(2x+3) = x', ['3'])
+        self.check('sqrt(x^2+9) = x + 1', ['4'])
+
+    def test_variable_not_in_the_equation_is_bad_input(self):
+        # 2026-11-06: solve('x^2 = 2', 'y') returned [] ("no solution")
+        with self.assertRaises(BadInput):
+            run('symbolic.solve', 'x^2 = 2', 'y')
+        self.assertEqual(run('symbolic.solve', '1 = 2', 'y'), [])                     # a false statement with no unknown: no solution
+        with self.assertRaises(NotCovered):
+            run('symbolic.solve', 'x = x', 'y')                                       # an identity: every value
 
     def test_roots_satisfy_the_equation(self):
         for eq in ['x^2 - 2*x - 7 = 0', '2*x^2 + 3*x - 5 = 0', 'x^2 - 3|x| + 1 = 0']:

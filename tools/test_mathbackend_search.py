@@ -176,6 +176,28 @@ class Graphs(unittest.TestCase):
         self.assertEqual(run('search.max_flow', [(1, 2, 2), (2, 3, 2)], 3, 1, directed=False)['value'], 2)
         self.assertEqual(run('search.max_flow', [(1, 2, 2)], 2, 1)['value'], 0)
 
+    def test_max_flow_many_fractional_paths_is_fast_and_exact(self):
+        # 2026-11-06: Edmonds-Karp over Fractions took 6.9 s on 4000 s-a-t paths with fractional capacities (one whole-graph BFS per path)
+        import random
+        import time
+        rs = random.Random(1)
+        es = []
+        for i in range(4000):
+            es += [('s', f'a{i}', Fraction(rs.randint(1, 9), rs.randint(1, 9))), (f'a{i}', 't', Fraction(rs.randint(1, 9), rs.randint(1, 9)))]
+        es += [('s', 'b', Fraction(1, 10 ** 30 + 7)), ('b', 't', Fraction(1, 3))]        # a huge denominator in the lcm
+        t0 = time.perf_counter()
+        r = run('search.max_flow', es, 's', 't')
+        self.assertLess(time.perf_counter() - t0, 2)
+        want = sum(min(es[2 * i][2], es[2 * i + 1][2]) for i in range(4001))
+        self.assertEqual(r['value'], want)
+        self.assertEqual(r['flow'][2 * 4000], Fraction(1, 10 ** 30 + 7))
+        self.assertTrue(all(isinstance(f, (int, Fraction)) for f in r['flow']))
+        cut = sum(es[k][2] for k in r['cut']['edges'])
+        self.assertEqual(cut, want)
+        # an undirected edge carries flow both ways: the sign says the direction
+        r = run('search.max_flow', [(1, 2, Fraction(3, 2)), (3, 2, Fraction(1, 3)), (3, 4, 5)], 1, 4, directed=False)
+        self.assertEqual((r['value'], r['flow']), (Fraction(1, 3), [Fraction(1, 3), Fraction(-1, 3), Fraction(1, 3)]))
+
     def test_mst(self):
         r = run('search.mst', [(1, 2, 1), (2, 3, 2), (1, 3, 3), (3, 4, 1)])
         self.assertEqual((r['weight'], r['edges'], r['connected']), (4, [0, 1, 3], True))

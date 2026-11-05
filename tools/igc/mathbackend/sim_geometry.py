@@ -1562,6 +1562,114 @@ def c_rcos(args, res, orc):
 
 # --- 3D
 
+def _cm_det(d12, d13, d14, d23, d24, d34):
+    """The 5x5 Cayley-Menger determinant by SymPy (= 288 V^2 for a real tetrahedron)."""
+    return sp.Matrix([[0, 1, 1, 1, 1], [1, 0, S(d12), S(d13), S(d14)], [1, S(d12), 0, S(d23), S(d24)],
+                      [1, S(d13), S(d23), 0, S(d34)], [1, S(d14), S(d24), S(d34), 0]]).det()
+
+
+def _is_triangle(x, y, z):
+    """Strict triangle inequality on the side lengths sqrt(x), sqrt(y), sqrt(z), decided by SymPy on the radicals themselves."""
+    a, b, c = sorted((sp.sqrt(S(x)), sp.sqrt(S(y)), sp.sqrt(S(z))), key=lambda v: float(v))
+    return bool(sp.simplify(a + b - c) > 0)
+
+
+def _d2(p, q):
+    return sum((a - b) ** 2 for a, b in zip(p, q))
+
+
+@gen('tetrahedron_volume_from_edges_sq')
+def g_tves(rng, k):
+    """From random rational points (the oracle volume is |det(p2 - p1, p3 - p1, p4 - p1)| / 6, not Cayley-Menger), from random sextuples of edge
+    squares (SymPy Cayley-Menger plus the triangle inequality on the radicals: a sextuple with a face that is no triangle, or with no real tetrahedron,
+    is BadInput), and coplanar points (volume 0: BadInput)."""
+    out = []
+    while len(out) < k:
+        u = rng.random()
+        if u < 0.5:
+            pts = [rp(rng, 3, -6, 6) for _ in range(4)]
+            m = sp.Matrix([[S(pts[i][c] - pts[0][c]) for c in range(3)] for i in range(1, 4)])
+            v6 = abs(m.det())
+            ed = (_d2(pts[0], pts[1]), _d2(pts[0], pts[2]), _d2(pts[0], pts[3]), _d2(pts[1], pts[2]), _d2(pts[1], pts[3]), _d2(pts[2], pts[3]))
+            if v6 == 0:
+                continue
+            if any(e == 0 for e in ed):
+                continue
+            out.append((ed, Fr((v6 / 6) ** 2), 'sympy Matrix.det of the edge vectors / 6, squared'))
+        elif u < 0.65:                  # coplanar: a fourth point in the plane of the first three
+            pts = [rp(rng, 3, -6, 6) for _ in range(3)]
+            a, b = Fraction(rng.randint(-3, 3), 2), Fraction(rng.randint(-3, 3), 3)
+            pts.append(tuple(pts[0][c] + a * (pts[1][c] - pts[0][c]) + b * (pts[2][c] - pts[0][c]) for c in range(3)))
+            ed = (_d2(pts[0], pts[1]), _d2(pts[0], pts[2]), _d2(pts[0], pts[3]), _d2(pts[1], pts[2]), _d2(pts[1], pts[3]), _d2(pts[2], pts[3]))
+            if any(e == 0 for e in ed):
+                continue
+            out.append((ed, BADIN, 'coplanar points: volume 0, no tetrahedron'))
+        else:
+            ed = tuple(Fraction(rng.randint(1, 40), rng.choice((1, 1, 2))) for _ in range(6))
+            d12, d13, d14, d23, d24, d34 = ed
+            faces = ((d12, d13, d23), (d12, d14, d24), (d13, d14, d34), (d23, d24, d34))
+            det = _cm_det(*ed)
+            if all(_is_triangle(*f) for f in faces) and det > 0:
+                out.append((ed, Fr(det / 288), 'sympy Cayley-Menger determinant / 288, every face a triangle'))
+            else:
+                out.append((ed, BADIN, 'sympy: a face is no triangle, or the Cayley-Menger determinant is not positive (no real tetrahedron)'))
+    out.append(((9, 1, 3, 3, 27, 8), BADIN, 'scrutiny 2026-11-05: a face 3, sqrt 3, sqrt 27 is no triangle, the CM determinant is positive'))
+    out.append(((1, 1, 1, 1, 1, 1), Fraction(1, 72), 'regular tetrahedron of edge 1: V = 1/(6 sqrt 2)'))
+    out.append(((1, 1, 4, 1, 1, 1), BADIN, 'a face with sides 1, 1, 2: degenerate'))
+    out.append(((0, 1, 1, 1, 1, 1), BADIN, 'a zero edge'))
+    return out
+
+
+@check('tetrahedron_volume_from_edges_sq')
+def c_tves(args, res, orc):
+    return (res['volume_sq'] == orc and res['cayley_menger_det'] == 288 * orc and isinstance(res['volume_surd'], Surd)
+            and close(SM(res['volume_surd']), mp.sqrt(MF(orc))))
+
+
+@gen('disphenoid_inradius_from_edges_sq')
+def g_dir(rng, k):
+    """A disphenoid is the tetrahedron of alternate corners of a box p x q x r: edges^2 a^2 = q^2 + r^2, b^2 = p^2 + r^2, c^2 = p^2 + q^2, volume pqr / 3
+    (the box less four corner pieces of pqr / 6). The inradius oracle is r = 3V / S with S = 4 * Heron(a, b, c) on the radicals (SymPy), compared
+    exactly and as m sqrt(n) / p. Random edge squares that admit no disphenoid (an obtuse or right face: SymPy Cayley-Menger determinant <= 0) are BadInput."""
+    out = []
+    while len(out) < k:
+        if rng.random() < 0.7:
+            p, q, r = (Fraction(rng.randint(1, 12), rng.choice((1, 1, 2, 3))) for _ in range(3))
+            a2, b2, c2 = q * q + r * r, p * p + r * r, p * p + q * q
+            V = S(p * q * r) / 3
+        else:
+            a2, b2, c2 = (Fraction(rng.randint(1, 60), rng.choice((1, 1, 2))) for _ in range(3))
+            det = _cm_det(a2, b2, c2, c2, b2, a2)
+            if det <= 0:
+                out.append(((a2, b2, c2), BADIN, 'sympy Cayley-Menger determinant <= 0: no disphenoid with these faces'))
+                continue
+            V = sp.sqrt(det / 288)
+        a, b, c = (sp.sqrt(S(v)) for v in (a2, b2, c2))
+        s = (a + b + c) / 2
+        area = sp.sqrt(sp.expand(s * (s - a) * (s - b) * (s - c)))
+        rin = sp.nsimplify(sp.simplify(3 * V / (4 * area)))
+        out.append(((a2, b2, c2), (sp.simplify(V ** 2), rin), 'box of alternate corners (V = pqr/3) or sympy Cayley-Menger; r = 3V / (4 Heron) by sympy'))
+    out.append(((41, 80, 89), (sp.Rational(160, 3) ** 2 / 1, sp.Rational(20, 63) * sp.sqrt(21)), 'AIME 2024 I/14: r = 20 sqrt 21 / 63, sum 104'))
+    out.append(((24, 24, 24), (sp.Rational(24 ** 3, 72) / 1, sp.Integer(1)), 'regular tetrahedron with edge^2 24: r = 1 (a rational inradius)'))
+    out.append(((5, 4, 1), BADIN, 'a right-angled face 1 + 4 = 5: degenerate'))
+    out.append(((10, 4, 1), BADIN, 'an obtuse face'))
+    out.append(((0, 1, 1), BADIN, 'a zero edge'))
+    return out
+
+
+@check('disphenoid_inradius_from_edges_sq')
+def c_dir(args, res, orc):
+    vsq, rin = orc
+    m, n, p = res['m'], res['n'], res['p']
+    sqf = n >= 1 and all(n % (f * f) for f in range(2, int(n ** 0.5) + 1))
+    from math import gcd
+    exact = sp.simplify(sp.Integer(m) * sp.sqrt(n) / p - rin) == 0
+    return (sp.Rational(res['volume_sq'].numerator, res['volume_sq'].denominator) == sp.nsimplify(vsq)
+            and isinstance(res['inradius_surd'], Surd) and close(SM(res['inradius_surd']), N50(rin))
+            and exact and sqf and gcd(m, p) == 1 and res['m_plus_n_plus_p'] == m + n + p
+            and sp.Rational(res['inradius_sq'].numerator, res['inradius_sq'].denominator) == sp.nsimplify(sp.expand(rin ** 2)))
+
+
 @gen('tetrahedron_volume')
 def g_tv(rng, k):
     out = []

@@ -973,7 +973,7 @@ _SPACING = re.compile(r'\\[,;:! ]|~')
 
 def _tokenize(text):
     s = _SPACING.sub(' ', text)
-    toks = []
+    toks, applied = [], []
     i, n = 0, len(s)
     while i < n:
         c = s[i]
@@ -989,6 +989,8 @@ def _tokenize(text):
             continue
         if c == '\\':
             m = re.match(r'\\(?:[A-Za-z]+|.)', s[i:])
+            if m is None:       # a lone backslash at the end, or before a newline ('.' does not match it): was an AttributeError
+                raise BadInput('a backslash with no command after it')
             word = m.group()[1:]
             i += len(m.group())
             if word in _CMD_SKIP:
@@ -1057,13 +1059,34 @@ def _tokenize(text):
             i += 1
             continue
         if c in '+-*/^()[]{}|=,!':
+            if c == '(' and toks and toks[-1][0] == 'id' and toks[-1][1] not in _NOT_FUNCTION_NAMES and i > 0 and not s[i - 1].isspace():
+                applied.append(len(toks))
             toks.append(('op', c))
             i += 1
             continue
         raise BadInput(f'unexpected character {c!r}')
     if len(toks) > MAX_TOKENS:
         raise NotCovered('too large')
+    _refuse_applications(toks, applied)
     return toks
+
+
+_NOT_FUNCTION_NAMES = ('pi', 'oo')
+_FUNCTION_LETTERS = ('f', 'g', 'h')
+
+
+def _refuse_applications(toks, applied):
+    """A letter written directly against '(' reads as a function applied, not a product, when the letter is f, g or h (any content) or the bracket
+    holds one variable or one number: f(x), g(t + 1), a(b), x(2). The product reading gave canon('f(x)') = f*x (2026-11-06). x(x + 1), 2(x + 1),
+    a (b) with a space, and the known functions sin(x), ... are unchanged."""
+    for j in applied:
+        name = toks[j - 1][1]
+        k = j + 1
+        if k < len(toks) and toks[k] in (('op', '-'), ('op', '+')) and k + 1 < len(toks) and toks[k + 1][0] == 'num':
+            k += 1                                  # a signed number: x(-1)
+        lone = k + 1 < len(toks) and toks[k][0] in ('id', 'num') and toks[k + 1] == ('op', ')')
+        if name.split('_')[0] in _FUNCTION_LETTERS or lone:
+            raise NotCovered(f'{name}(...) reads as a function applied to an argument, not a product: write {name}*(...) for a product')
 
 
 class _Parser:
@@ -3370,13 +3393,18 @@ def _solve_radical(F, var):
     A, B = ZERO, ZERO
     for mono, c in F.t.items():
         ex = next((x for aa, x in mono if aa == a), None)
-        rest = Expr({tuple((aa, x) for aa, x in mono if aa != a): c})
-        if ex is None:
-            A = A + rest
+        if ex is None or ex.denominator == 1:
+            # an integer power of the same atom (the x of sqrt(x) = x - 2) is rational and belongs to A. It went to B as x^(1/2) * x^(1/2), so
+            # A^2 - B^2 x still held sqrt(x), and the squaring recursed 12 levels in 10.6 s to 'too large' (2026-11-06)
+            A = A + Expr({mono: c})
         else:
+            rest = Expr({tuple((aa, x) for aa, x in mono if aa != a): c})
             B = B + rest * _pow(base, ex - Fraction(1, 2))
+    G = A * A - B * B * base
+    if any(x.denominator != 1 and aa.has(var) for mono in G.t for aa, x in mono):
+        raise NotCovered('the squared equation still holds a radical of the unknown')
     keep = []
-    for r in _solve_equation_expr(A * A - B * B * base, var):
+    for r in _solve_equation_expr(G, var):
         try:
             bv = subs(base, var, r)
             if not bv.is_zero() and _const_sign(bv) < 0:
@@ -3413,6 +3441,8 @@ def solve_expr(lhs, rhs, var):
     if not F.has(var):
         if F.is_zero():
             raise NotCovered('an identity: every value solves it')
+        if F.symbols():         # solve('x^2 = 2', 'y') returned [] ("no solution") for an equation that is not in y at all (2026-11-06)
+            raise BadInput(f'{var} does not occur in the equation')
         return []
     roots = _solve_equation_expr(F, var)
     keep = []
@@ -3625,8 +3655,11 @@ def equal(a, b, e_is_euler=False):
 
 @_sop('symbolic.diff', 'as symbolic.canon; order up to 20')
 def derivative(expr, var, order=1, e_is_euler=False):
-    """Derivative with respect to var (abs and floor: NotCovered where undefined).
-    diff('x^3*sin(x)', 'x') -> 'x^3*cos(x) + 3*x^2*sin(x)'"""
+    """Derivative with respect to var, one text, no side notes. Points where it is undefined are carried by the text itself: abs(u) differentiates to
+    abs(u)*u'/u, which is undefined (division by zero) where u = 0, so diff('abs(x)', 'x') = 'abs(x)/x' and evaluating it at x = 0 is BadInput.
+    This is a convention of the text, not a proof of the domain: the text can be undefined where the derivative exists (abs(x)^3 -> 3*abs(x)^3/x
+    at 0), and canonical simplification can drop a point (abs(x)/x, itself undefined at 0, -> '0'). floor (no derivative at the integers, 0
+    elsewhere) is NotCovered. diff('x^3*sin(x)', 'x') -> 'x^3*cos(x) + 3*x^2*sin(x)'"""
     if not isinstance(order, int) or not 0 <= order <= 20:
         raise BadInput('order must be 0..20')
     return to_text(diff(_expr(expr, e_is_euler), _var(var), order))

@@ -27,7 +27,7 @@ def _(add):
     add((P(0, 1), P(0, 0), P(1, 1)), o_dpl(P(0, 1), P(0, 0), P(1, 1)), 'boundary', 'sqrt(2)/2')
     add((P(0, 3), P(0, 0), P(1, 0)), o_dpl(P(0, 3), P(0, 0), P(1, 0)), 'boundary', 'a rational distance (3)')
     add((P(1, 2, 3), P(0, 0, 0), P(1, 1, 1)), o_dpl(P(1, 2, 3), P(0, 0, 0), P(1, 1, 1)), 'boundary', '3D, sqrt(2)')
-    add((P(0, 10 ** 8), P(0, 0), P(10 ** 8 + 1, 1)), REFUSE, 'past-bound', 'the squared distance has a prime-size factor beyond the 10^7 trial division')
+    add((P(0, 10 ** 8), P(0, 0), P(10 ** 8 + 1, 1)), o_dpl(P(0, 10 ** 8), P(0, 0), P(10 ** 8 + 1, 1)), 'boundary', 'the squared distance has a prime-size factor (answered since 2026-11-06: _squarefree factors past its 10^6 trial division by Pollard rho and Miller-Rabin; was a refusal)')
     add(((0, 0.5), P(1, 1), P(2, 3)), BADIN, 'bad-input', 'a float')
 
 
@@ -69,7 +69,7 @@ def _(add):
     add((P(0, 0), F(-1), P(0, 0), P(1, 0)), BADIN, 'bad-input', 'a negative squared radius')
     add((P(0, 0, 0), F(1), P(0, 0), P(1, 0)), BADIN, 'bad-input', 'a 3D centre')
     add((P(0, 0), F(10 ** 14 + 2), P(0, 1), P(1, 1)), sy(P(0, 0), F(10 ** 14 + 2), P(0, 1), P(1, 1)), 'past-bound', 'the radicand is 10^14 + 1: inside the trial-division bound')
-    add((P(0, 0), F(10 ** 16 + 2), P(0, 1), P(1, 1)), REFUSE, 'past-bound', 'the radicand is 10^16 + 1: past the trial-division bound')
+    add((P(0, 0), F(10 ** 16 + 2), P(0, 1), P(1, 1)), sy(P(0, 0), F(10 ** 16 + 2), P(0, 1), P(1, 1)), 'boundary', 'the radicand is 10^16 + 1 (answered since 2026-11-06: _squarefree factors past its 10^6 trial division by Pollard rho and Miller-Rabin; was a refusal)')
 
 
 @case('circle_circle_intersection')
@@ -89,7 +89,7 @@ def _(add):
     add((P(0, 0), F(0), P(3, 4), F(25)), ([(N50(S(0)), N50(S(0)))], P(0, 0), F(0), P(3, 4), F(25)), 'degenerate', 'radius 0 on the circumference of the other circle: that point (definition)')
     add((P(0, 0), F(-1), P(3, 4), F(25)), BADIN, 'bad-input', 'a negative squared radius')
     add((P(0, 0, 0), F(1), P(1, 0), F(1)), BADIN, 'bad-input', 'a 3D centre')
-    add((P(0, 0), F(10 ** 16 + 2), P(0, 2), F(10 ** 16 + 2)), REFUSE, 'past-bound', 'the intersection radicand is about 10^16: past the trial-division bound')
+    add((P(0, 0), F(10 ** 16 + 2), P(0, 2), F(10 ** 16 + 2)), sy(P(0, 0), F(10 ** 16 + 2), P(0, 2), F(10 ** 16 + 2)), 'boundary', 'the intersection radicand is about 10^16 (answered since 2026-11-06: _squarefree factors past its 10^6 trial division by Pollard rho and Miller-Rabin; was a refusal)')
 
 
 @case('circle_circle_relation')
@@ -155,7 +155,7 @@ def _(add):
     add((P(3, 0), P(0, 0), F(1)), sy(P(3, 0), P(0, 0), F(1)), 'boundary', '2 sqrt(2)')
     add((P(5, 0), P(0, 0), F(0)), sy(P(5, 0), P(0, 0), F(0)), 'degenerate', 'a zero circle: the tangent length is the distance')
     add((P(F(7, 2), F(1, 3)), P(F(1, 5), F(1, 7)), F(1, 3)), sy(P(F(7, 2), F(1, 3)), P(F(1, 5), F(1, 7)), F(1, 3)), 'boundary', 'fractions')
-    add((P(10 ** 8, 2), P(0, 0), F(3)), REFUSE, 'past-bound', 'the power is 10^16 + 1: past the trial-division bound')
+    add((P(10 ** 8, 2), P(0, 0), F(3)), sy(P(10 ** 8, 2), P(0, 0), F(3)), 'boundary', 'the power is 10^16 + 1 (answered since 2026-11-06: _squarefree factors past its 10^6 trial division by Pollard rho and Miller-Rabin; was a refusal)')
     add((P(3, 4), P(0, 0, 0), F(1)), BADIN, 'bad-input', 'a 3D centre')
 
 

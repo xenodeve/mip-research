@@ -462,6 +462,24 @@ class RegularNgon(unittest.TestCase):
         with self.assertRaises(BadInput):
             r('regular_ngon_basic', 2)
 
+    def test_ngon_vertices_fast_or_refused(self):
+        # 2026-11-06: one Taylor series per vertex, (500, 2000 digits) took 52 s; now one sin/cos and a rotation per vertex, n * digits <= 5e6
+        import time
+        t = time.perf_counter()
+        v = r('regular_ngon_vertices_numeric', 500, 2000)
+        self.assertLess(time.perf_counter() - t, 5)
+        self.assertEqual(len(v), 500)
+        self.assertTrue(v[125][0] == 0 and v[125][1] == 1 and v[250][0] == -1 and v[250][1] == 0)      # k = n/4 and n/2 after 125 / 250 rotations
+        self.assertEqual(v[1][1].as_tuple().exponent, -2000)
+        # vertex 1 against the half-angle series: sin x = 2 sin(x/2) cos(x/2)
+        from decimal import localcontext
+        with localcontext() as ctx:
+            ctx.prec = 2040
+            s, c = G._sincos(G._pi(2050) / 500)
+            self.assertLess(abs(2 * s * c - v[1][1]), Decimal(10) ** -1999)
+        with self.assertRaises(NotCovered):
+            r('regular_ngon_vertices_numeric', 10000, 2000)
+
     def test_cyclotomic_zero_test(self):
         z = G._cyclo
         self.assertTrue(z({0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1}, 6)[0])              # sum of all sixth roots of unity

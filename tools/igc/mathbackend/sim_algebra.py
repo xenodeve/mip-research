@@ -1478,6 +1478,151 @@ def shortest_recurrence_order(s):
     return len(s)
 
 
+
+# ------------------------------------------------------------------ the three single-purpose polynomial / curve operations (2026-11-06)
+
+def g_match_polynomial_square(rng, n):
+    """P(x) - (m x + b) = (x^2 + s1 x + s0)^2: the four unknowns solved by SymPy from the coefficient equations (not the backend's closed form)."""
+    s1, s0, m, b = sympy.symbols('s1 s0 m b')
+    out = []
+    while len(out) < n:
+        if rng.random() < 0.5:          # built from a known square plus a line: the oracle must give these back
+            q1, q0, mm, bb = (Fraction(rint(rng, -40, 40), rng.choice([1, 1, 2, 3])) for _ in range(4))
+            p = co(sympy.expand((x ** 2 + sy(q1) * x + sy(q0)) ** 2 + sy(mm) * x + sy(bb)))
+        else:
+            p = [Fraction(1)] + [Fraction(rint(rng, -60, 60), rng.choice([1, 1, 1, 2, 5])) for _ in range(4)]
+        diff = sympy.Poly(expr(p) - (m * x + b) - (x ** 2 + s1 * x + s0) ** 2, x)
+        sol = sympy.solve(diff.all_coeffs(), [s1, s0, m, b], dict=True)
+        if len(sol) != 1:
+            continue
+        sv = {k: fr(v) for k, v in sol[0].items()}
+        want = {'q': [Fraction(1), sv[s1], sv[s0]], 'tangent_slope': sv[m], 'tangent_intercept': sv[b],
+                'discriminant_q': fr(sympy.discriminant(x ** 2 + sy(sv[s1]) * x + sy(sv[s0]), x))}
+        out.append(((p,), want, 'SymPy solve of the coefficient equations of P - (m x + b) - (x^2 + s1 x + s0)^2; SymPy discriminant'))
+    out.append((([2, 0, 0, 0, 1],), Raises(BadInput), 'not monic'))
+    out.append((([1, 0, 0, 1],), Raises(BadInput), 'a cubic'))
+    out.append((([1, 2, 3, 4, 5, 6],), Raises(BadInput), 'a quintic'))
+    return out
+
+
+def _pli_oracle(c1, c2):
+    """All common points of two polylines by SymPy Segment.intersection (a repeated vertex is a Point); a common Segment is an overlap: NotCovered."""
+    from sympy.geometry import Point, Segment
+
+    def pieces(c):
+        out = []
+        for a, b in zip(c, c[1:]):
+            pa, pb = Point(sy(a[0]), sy(a[1])), Point(sy(b[0]), sy(b[1]))
+            out.append(pa if pa == pb else Segment(pa, pb))
+        return out
+    pts = set()
+    for s in pieces(c1):
+        for t in pieces(c2):
+            if isinstance(s, Point) and isinstance(t, Point):
+                hit = [s] if s == t else []
+            elif isinstance(s, Point):
+                hit = [s] if t.contains(s) else []
+            elif isinstance(t, Point):
+                hit = [t] if s.contains(t) else []
+            else:
+                hit = s.intersection(t)
+            for h in hit:
+                if isinstance(h, Segment):
+                    return None
+                pts.add((fr(h.x), fr(h.y)))
+    return sorted(pts)
+
+
+def g_piecewise_linear_intersections(rng, n):
+    out = []
+    while len(out) < n:
+        style = rng.random()
+        if style < 0.55:                # random polylines on a small grid: touches, crossings, shared vertices, overlaps and repeated vertices all occur
+            c1 = [(rint(rng, -4, 4), rint(rng, -4, 4)) for _ in range(rng.randint(2, 6))]
+            c2 = [(rint(rng, -4, 4), rint(rng, -4, 4)) for _ in range(rng.randint(2, 6))]
+        elif style < 0.75:              # collinear pieces on one line: end-to-end touch (a point) or overlap (NotCovered)
+            a, b = rint(rng, -3, 3), rint(rng, -3, 3)
+            lo = rint(rng, -4, 2)
+            k = rng.randint(1, 3)
+            p = lambda t: (Fraction(t), a * Fraction(t) + b)
+            c1 = [p(lo), p(lo + k)]
+            c2 = [p(lo + k + rng.choice([-1, 0, 0, 1])), p(lo + k + rng.randint(1, 3))]
+            if rng.random() < 0.5:
+                c1, c2 = c2[::-1], c1
+        else:                           # fractional vertices
+            c1 = [(Fraction(rint(rng, -9, 9), rng.choice([1, 2, 3])), Fraction(rint(rng, -9, 9), rng.choice([1, 2, 5]))) for _ in range(rng.randint(2, 5))]
+            c2 = [(Fraction(rint(rng, -9, 9), rng.choice([1, 2, 3])), Fraction(rint(rng, -9, 9), rng.choice([1, 2, 5]))) for _ in range(rng.randint(2, 5))]
+        if rng.random() < 0.15:         # a repeated vertex
+            i = rng.randrange(len(c1))
+            c1 = c1[:i + 1] + [c1[i]] + c1[i + 1:]
+        want = _pli_oracle(c1, c2)
+        if want is None:
+            out.append(((c1, c2), Raises(NotCovered), 'SymPy Segment.intersection: the curves overlap in a segment (infinitely many points)'))
+        else:
+            out.append(((c1, c2), {'intersections': want, 'count': len(want)}, 'SymPy Segment.intersection over every pair of pieces'))
+    out.append((([(0, 0), (1, 0)], [(1, 0), (2, 0)]), {'intersections': [(Fraction(1), Fraction(0))], 'count': 1}, 'hand: collinear, touching at an end'))
+    out.append((([(0, 0), (2, 0)], [(1, 0), (3, 0)]), Raises(NotCovered), 'hand: collinear overlap'))
+    out.append((([(5, 5), (5, 5), (6, 6)], [(0, 0), (10, 0)]), {'intersections': [], 'count': 0}, 'hand: a repeated vertex off the other line'))
+    out.append((([(0, 0)], [(0, 0), (1, 1)]), Raises(BadInput), 'one vertex is no curve'))
+    return out
+
+
+def _qdt_oracle(r1, r2, r3):
+    """f(x) = (x - r1)(x - r2)(x - r3)(x - k) / x has its minimum at exactly two positive x iff (x - r1)...(x - k) - m x = (x^2 - S x + P)^2 with both
+    roots of x^2 - S x + P positive and distinct (then f - m = (x^2 - S x + P)^2 / x >= 0 on x > 0). S, P, m are solved by SymPy from the x^3, x^2, x
+    coefficients, the x^0 coefficient leaves an equation in k, and its real positive roots are filtered by S > 0, P > 0, S^2 > 4P.
+    Returns (all positive real roots rational, valid k sorted, rational roots of the k-equation sorted)."""
+    k, m, Sx, Px = sympy.symbols('k m S P')
+    rr = [sy(r) for r in (r1, r2, r3)]
+    ident = sympy.Poly(sympy.expand((x - rr[0]) * (x - rr[1]) * (x - rr[2]) * (x - k) - m * x - (x ** 2 - Sx * x + Px) ** 2), x)
+    c = [ident.coeff_monomial(x ** e) for e in (4, 3, 2, 1, 0)]       # x^4 cancels
+    sol = sympy.solve([c[1], c[2], c[3]], [Sx, Px, m], dict=True)[0]
+    keq = sympy.Poly(sympy.numer(sympy.together(c[4].subs(sol))), k)
+    reals = keq.real_roots()
+    pos = sorted(set(r for r in reals if r > 0), key=lambda r: float(r))
+    rational = all(r.is_rational for r in pos)
+    valid = []
+    for r in pos:
+        if not r.is_rational:
+            continue
+        Sv, Pv = sol[Sx].subs(k, r), sol[Px].subs(k, r)
+        if Sv > 0 and Pv > 0 and Sv ** 2 - 4 * Pv > 0:
+            valid.append(fr(r))
+    rats = sorted(set(fr(r) for r in reals if r.is_rational))
+    return rational, sorted(valid), rats
+
+
+def g_quartic_double_tangent_k(rng, n):
+    out = []
+    while len(out) < n:
+        u = rng.random()
+        if u < 0.55:                    # r_i = d * s_i^2 gives a k-equation with rational roots only (found by a SymPy search of all triples <= 40)
+            s = sorted(rng.sample(range(1, 9), 3))
+            d = Fraction(rng.choice([1, 1, 2, 3, 5, 7]), rng.choice([1, 1, 2, 3]))
+            r = [d * v * v for v in s]
+        elif u < 0.9:                   # random positive triples: mostly an irrational k (NotCovered, never a partial sum)
+            r = [Fraction(rng.randint(1, 60), rng.choice([1, 1, 2])) for _ in range(3)]
+        else:                           # two negative roots: C > 0, outside the problem's story but the identity still holds
+            s = sorted(rng.sample(range(1, 7), 3))
+            r = [-Fraction(s[0] ** 2), -Fraction(s[1] ** 2), Fraction(s[2] ** 2)]
+        rational, valid, rats = _qdt_oracle(*r)
+        if not rational:
+            out.append((tuple(r), Raises(NotCovered), 'SymPy real_roots of the k-equation: a positive root is irrational'))
+            continue
+        B, A2, C = r[0] + r[1] + r[2], r[0] * r[1] + r[0] * r[2] + r[1] * r[2], r[0] * r[1] * r[2]
+
+        def cert(res, valid=valid, rats=rats, B=B, A2=A2, C=C):
+            return (same(res['valid_k'], valid) and same(res['sum_k'], sum(valid, Fraction(0))) and same(sorted(set(res['all_roots'])), rats)
+                    and same([res['A'], res['B'], res['C']], [A2, B, C]))
+        out.append((tuple(r), cert, 'SymPy: S, P, m from the coefficients of (x-r1)(x-r2)(x-r3)(x-k) - m x = (x^2 - S x + P)^2, k from the constant term, '
+                                    'kept when S > 0, P > 0, S^2 > 4P'))
+    out.append(((18, 72, 98), (lambda res: same(res['valid_k'], [8, 32, 200]) and same(res['sum_k'], 240)), 'hand: the row the op was written for, sum 8 + 32 + 200 = 240'))
+    out.append(((1, 2, 3), Raises(NotCovered), 'scrutiny 2026-11-05: three irrational positive k'))
+    out.append(((0, 1, 2), Raises(BadInput), 'a zero root: C = 0'))
+    out.append(((-1, 2, 3), Raises(BadInput), 'C < 0'))
+    return out
+
+
 GENS = {
     'poly_from_str': g_poly_from_str, 'poly_to_str': g_poly_to_str, 'poly_add': g_poly_add, 'poly_sub': g_poly_sub, 'poly_mul': g_poly_mul, 'poly_pow': g_poly_pow,
     'poly_divmod': g_poly_divmod, 'poly_gcd': g_poly_gcd, 'poly_lcm': g_poly_lcm, 'poly_gcdex': g_poly_gcdex, 'poly_compose': g_poly_compose,
@@ -1496,6 +1641,8 @@ GENS = {
     'mat_pow': g_mat_pow, 'mat_lu': g_mat_lu, 'solve_linear_str': g_solve_linear_str,
     'recurrence_char_poly': g_recurrence_char_poly, 'recurrence_nth': g_recurrence_nth, 'recurrence_closed_form': g_recurrence_closed_form,
     'recurrence_guess': g_recurrence_guess,
+    'match_polynomial_square': g_match_polynomial_square, 'piecewise_linear_intersections': g_piecewise_linear_intersections,
+    'quartic_double_tangent_k': g_quartic_double_tangent_k,
 }
 
 
