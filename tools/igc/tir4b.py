@@ -212,13 +212,19 @@ def inline_found(before, whole=False, use_mathbackend=False):
 def _reduces(expr, before=''):
     """An integer over an integer with a common factor: its lowest terms are news. Not in a long division or a divisibility test, which
     want a digit or a decimal: `$70 / 6 = 11$ rem 4` after `Let's check $70308 / 6$`, `1302 / 9 = 144.66` after `divisible by` (ctrl traces
-    of a100_262k: 50 reductions the model wrote, 8 places it wanted the quotient)."""
+    of a100_262k: 50 reductions the model wrote, 8 places it wanted the quotient). Not with `\\div` (`68 \\div 58 = 1`, a long division in
+    dm div_big), nor where the recent text works in decimals: over seven control arms the model wrote the fraction 497 times and a
+    decimal 197, and with no decimal in the 600 characters before, 382 against 89."""
+    if re.search(r'\\div|÷', expr):
+        return False
     nums = [int(x) for x in re.findall(r'\d+', expr)]
     if len(nums) != 2 or math.gcd(*nums) == 1:
         return False
     a, b = nums
     recent = before[-400:]
     if re.search(r'\brem\b|remainder|long division|divisib|divides|\bdigit', recent, re.I):
+        return False
+    if re.search(r'(?<![\d.])\d+\.\d+', before[-600:]):
         return False
     return not re.search(rf'(?<!\d){a}\d+\s*(?:/|\\div|÷)\s*{b}(?!\d)', recent)   # the first piece of a long division of a{digits} by b
 

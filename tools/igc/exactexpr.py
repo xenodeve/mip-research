@@ -370,6 +370,8 @@ def _tokens(text):
             continue
         if c == '\\':
             m = re.match(r'\\(?:[A-Za-z]+|.)', s[i:])
+            if m is None:
+                raise NotExact('a backslash at the end of a line')
             word = m.group()
             if word not in _COMMANDS:
                 raise NotExact(word)
@@ -396,8 +398,8 @@ def _tokens(text):
 
 
 class _Parser:
-    def __init__(self, tokens):
-        self.t, self.i = tokens, 0
+    def __init__(self, tokens, functions=()):
+        self.t, self.i, self.functions = tokens, 0, functions
 
     def peek(self, k=0):
         j = self.i + k
@@ -635,7 +637,10 @@ class _Parser:
             if self.at('^'):   # \sin^2 x
                 self.take()
                 power = self.exponent()
+            bracketed = self.at('(', '(') or self.at('(', 'g') or self.at('(', '[')
             arg = self.argument()
+            if not bracketed and (self.at('op', '/') or self.at('^')):
+                raise NotExact('\\cos \\pi/4 reads two ways')
             return ('trig', tok[1], power, arg)
         if kind == 'log':
             self.take()
@@ -664,14 +669,17 @@ class _Parser:
             return ('big', tok[1], var, lo, hi, body)
         if kind == 'var':
             self.take()
-            if self.at('(', '(') and not self.peek()[-1]:   # f(3): a call when the text defined f, a product otherwise
-                return ('call?', tok[1])
+            if tok[1] in self.functions and self.at('(', '(') and not self.peek()[-1]:   # f(3), when the text defined f
+                self.take()
+                arg = self.expr()
+                self.take(')', '(')
+                return ('call', tok[1], arg)
             return ('var', tok[1])
         raise NotExact('expected a value, got ' + str(kind))
 
 
-def _parse(text):
-    p = _Parser(_tokens(text))
+def _parse(text, functions=()):
+    p = _Parser(_tokens(text), functions)
     if not p.t:
         raise NotExact('empty')
     node = p.expr()
@@ -704,8 +712,6 @@ class _Eval:
             if node[1] in env:
                 return env[node[1]]
             raise NotExact('a symbol: ' + node[1])
-        if k == 'call?':
-            raise NotExact('a call with its argument unread')
         if k == 'call':
             param, tree = self.functions[node[1]]
             arg = self.ev(node[2], env, pi)
@@ -832,26 +838,11 @@ def _has(node, kind):
     return any(_has(x, kind) for x in node[1:] if isinstance(x, tuple))
 
 
-def _bind_calls(node, functions):
-    """('call?', f) followed by its bracket was read as a product f * (arg): a call when the text defined f."""
-    if not isinstance(node, tuple):
-        return node
-    if node[0] == '*' and isinstance(node[1], tuple) and node[1][0] == 'call?':
-        name = node[1][1]
-        if name in functions:
-            return ('call', name, _bind_calls(node[2], functions))
-        return ('*', ('var', name), _bind_calls(node[2], functions))   # k(k + 1): a product, of value only where k is bound
-    if node[0] == '*' and isinstance(node[1], tuple) and node[1][0] == '*':
-        inner = _bind_calls(node[1], functions)
-        return ('*', inner, _bind_calls(node[2], functions))
-    return tuple(_bind_calls(x, functions) if isinstance(x, tuple) else x for x in node)
-
-
 def evaluate(text, functions=None, degrees=False):
     """The exact value of the whole text, or None. `degrees`: an angle with no unit is in degrees (`\\tan(45)`, `\\cot 135` in a text that
     works in degrees); without it only 0 has a unit-free value."""
     try:
-        tree = _bind_calls(_parse(text), functions or {})
+        tree = _parse(text, functions or {})
         e = _Eval(functions, degrees)
         value = e.ev(tree, {})
         if e.decimal and value.rational() is None:
@@ -888,7 +879,7 @@ def definitions(text):
             out.pop(name, None)   # a later definition we cannot read voids the earlier one: never call an old f
             continue
         names = _vars(tree)
-        if names != {param} or _has(tree, 'call?'):
+        if names != {param} or tree == ('var', param):   # `the roots of $g(y) = y$`: a fixed point to solve (stdmath-48fd3105)
             out.pop(name, None)
             continue
         out[name] = (param, tree)

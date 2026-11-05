@@ -61,6 +61,8 @@ def _tokens(text):
             continue
         if c == '\\':
             m = re.match(r'\\(?:[A-Za-z]+|.)', s[i:])
+            if m is None:   # a backslash before a line end or at the end: `\=` crashed the reader with AttributeError (2026-11-06)
+                raise _NotExact('a backslash at the end of a line')
             word = m.group()
             if word not in _WORDS:
                 raise _NotExact(word)   # \pi, \text, \cdots: not arithmetic

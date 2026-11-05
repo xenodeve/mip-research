@@ -97,6 +97,7 @@ class Definitions(unittest.TestCase):
         self.assertEqual(val('f(3)', fs), '17')
         self.assertEqual(val('f(2) + g(5)', fs), '19')
         self.assertIsNone(val('h(1)', fs))
+        self.assertEqual(x.definitions(r'Let $g(y) = y^3 - 3y + 1$. The roots of $g(y) = y$ are'), {})   # a fixed point voids g
 
     def test_one_piece_of_a_function_is_not_the_function(self):
         # livebench-652451e2 wrote `F(u) = 1-4u` for one interval and read F(1) = 1 from another; the bridge put in -3 there
@@ -148,6 +149,16 @@ class Bridge(unittest.TestCase):
 
     def test_two_values_in_two_math_spans(self):
         self.assertIsNone(self.found(r'$2$ and $\sqrt{8}$ $'))
+
+    def test_out_of_sample_misreads(self):
+        # seven other control arms (2026-11-06): each of these put in a value the model did not mean
+        self.assertIsNone(self.found(r'$\cos \pi/4'))                   # cos(pi)/4 by the grammar, cos(pi/4) by the writer
+        self.assertIsNone(self.found(r'$68 \div 58'))                   # dm div_big: a long division wants the digit 1
+        self.assertIsNone(self.found('the mean is 8.33 and\n$100/12'))  # a text in decimals wants 8.33
+        self.assertIsNone(self.found(r'$-192 + 6\sqrt{5}'))             # the same terms in another order
+        fs = 'Let $f(x) = x + 2$.\n'
+        self.assertEqual(self.found(fs + '$f(1)^2')[1], '9')            # (f(1))^2, not f(1^2)
+        self.assertEqual(self.found(fs + '$2f(1)')[1], '6')
 
     def test_a_function_call_needs_its_definition(self):
         text = 'We have $f(y) = 9y^4 - 18y^3 - 143y^2 - 84y + 96$.\n$f(2)'

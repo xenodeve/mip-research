@@ -34,10 +34,12 @@ Implements the two core safeguards of `docs/plans/2026-11-05-mip-unified-detecti
      Stirling/Catalan/Bell/derangements, a modular inverse, one determinant; `C(n,k)`, `P(n,k)`, `\sigma`, `\tau`, `\phi`, `\mu` only
      where the text before names them) and with `exactexpr.py`: square roots kept as roots, trig at exact angles, logs that come out,
      sums and products over a range, `a^b mod m`, a product with no sign, and a one-variable function the text defined.
-   - Over the 48 control traces of a100_262k (27,627 `=`), it puts a value at 6,043; mathexpr alone at 5,197, and none of those is
-     lost. Of the 846 new values 755 are the value the model wrote next, 80 are followed by no value to compare, 11 differ: 4 slips of
-     the model (the software's value is right), 6 another form of the same value or a decimal the model wanted, 1 wrong (`w(0)`, a
-     function whose domain the text gave elsewhere) (2026-11-06).
+   - Measured against what the model wrote next (2026-11-06). The 48 control traces of a100_262k, where the rules were made (27,627
+     `=`): a value at 6,032 against mathexpr's 5,197, none of those lost; of the 835 new, 746 are the model's next value, 78 have no
+     value after, 11 differ (4 slips of the model the value corrects, 6 another form or a decimal it wanted, 1 wrong). Six control arms
+     it was not made on (dm-base, base, pc4-base, lb1-base, a100 ctrlb, pc5-ctrl; 129,964 `=`): 32,464 against 28,202; of the 4,262 new,
+     3,896 agree, 252 have no value after, 114 differ: decimals the model rounded or wanted, slips of the model, and a function the
+     text had redefined or defined by pieces.
 """
 from __future__ import annotations
 
@@ -369,11 +371,42 @@ _EXACT_HINT = re.compile(r'\\sqrt|√|\bsqrt\b|\\(?:sin|cos|tan|cot|sec|csc|log|
 _SPELL_SKIP = re.compile(r'\s|\\left|\\right|[{}()]|\\cdot|\*|\\,')
 
 
-def _same_spelling(expr: str, said: str) -> bool:
-    """The value spelled is what the text already wrote: `3\\sqrt{186} =` has nothing new to put in."""
+def _same_spelling(expr: str, said: str, value=None) -> bool:
+    """The value spelled is what the text already wrote: `3\\sqrt{186} =` has nothing new to put in, nor `-192 + 6\\sqrt{5} =` spelled
+    `6\\sqrt{5} - 192` (the same terms in another order, stdmath-3352b778)."""
     a = _SPELL_SKIP.sub('', expr.replace('\\dfrac', '\\frac').replace('\\tfrac', '\\frac'))
     b = _SPELL_SKIP.sub('', said)
-    return a == b
+    if a == b:
+        return True
+    if not isinstance(value, exactexpr.Value) or len(value.t) < 2:
+        return False
+    have = sorted(_SPELL_SKIP.sub('', t) for t in _top_terms(expr))
+    want = sorted(_SPELL_SKIP.sub('', t) for t in _value_terms(value))
+    return have == want
+
+
+def _top_terms(expr: str) -> List[str]:
+    """`-192 + 6\\sqrt{5}` -> ['-192', '+6\\sqrt{5}']: the signed terms outside every bracket, a leading `+` added where none is."""
+    out, cur, depth = [], '', 0
+    for j, ch in enumerate(expr):
+        if ch in '({[':
+            depth += 1
+        elif ch in ')}]':
+            depth -= 1
+        if ch in '+-' and depth == 0 and cur.strip() and not re.search(r'(?:[*/^]|\\cdot|\\times)\s*$', cur):
+            out.append(cur)
+            cur = ''
+        cur += ch
+    out.append(cur)
+    return [t.strip() if t.strip()[:1] in '+-' else '+' + t.strip() for t in out if t.strip()]
+
+
+def _value_terms(value) -> List[str]:
+    out = []
+    for r, c in sorted(value.t.items()):
+        t = exactexpr.spell(exactexpr.Value({r: c}))
+        out.append(t if t.startswith('-') else '+' + t)
+    return out
 
 
 def _start_refused(line: str, i: int) -> bool:
@@ -440,7 +473,7 @@ def expression_before_exact(text: str):
             return (cand, v) if not _same_spelling(cand, said) else None
         latex = '\\' in cand or ('sqrt' not in cand and '$' in line)
         said = exactexpr.spell(v, latex=latex)
-        return None if _same_spelling(cand, said) else (cand, said)
+        return None if _same_spelling(cand, said, v) else (cand, said)
     return got
 
 
