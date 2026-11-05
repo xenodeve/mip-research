@@ -22,7 +22,7 @@ from decimal import Decimal, ROUND_HALF_EVEN, getcontext, localcontext
 from fractions import Fraction
 from math import comb, gcd, isqrt
 
-from tools.igc.mathbackend import BadInput, NotCovered, Surd, op
+from tools.igc.mathbackend import BadInput, NotCovered, Surd, op, run
 
 # Operations that are deliberately not registered, each with the reason and what would cover it (read by the report and the tests).
 NOT_COVERED = {
@@ -1855,3 +1855,125 @@ def regular_ngon_rectangles_on_lines(n):
                         if _cyclo(_padd(x, y, -1), m)[0] or _cyclo(_padd(x, y, 1), m)[0]:
                             squares += 1
     return {'rectangles': rect, 'squares': squares}
+
+
+# ----------------------------------------------------------------------------------------------------------------------------- metric space geometry & polar chains
+
+@op('geometry.disphenoid_inradius_from_edges_sq', kind='space geometry', bound='any size rational edge squares')
+def disphenoid_inradius_from_edges_sq(a_sq, b_sq, c_sq):
+    """Inradius and volume of a disphenoid (isosceles tetrahedron with congruent opposite edges a, b, c) from squared edge lengths.
+    Computes V^2 = (b^2+c^2-a^2)(a^2+c^2-b^2)(a^2+b^2-c^2) / 72, surface area S = 4 * Heron(a, b, c), and inradius r = 3V/S as an exact Surd m*sqrt(n)/p.
+    Returns dict(volume_sq, surface_area_sq, inradius_sq, inradius_surd, m, n, p, m_plus_n_plus_p).
+    disphenoid_inradius_from_edges_sq(41, 80, 89) -> m=20, n=21, p=63, sum=104"""
+    a2, b2, c2 = _q(a_sq), _q(b_sq), _q(c_sq)
+    if a2 <= 0 or b2 <= 0 or c2 <= 0:
+        raise BadInput('edge squares must be positive')
+    x = b2 + c2 - a2
+    y = a2 + c2 - b2
+    z = a2 + b2 - c2
+    if x <= 0 or y <= 0 or z <= 0:
+        raise BadInput('edges do not form a non-degenerate disphenoid')
+    v_sq = (x * y * z) / Fraction(72)
+    t16_sq = 4 * a2 * b2 - z * z
+    if t16_sq <= 0:
+        raise BadInput('face triangle is degenerate')
+    s_sq = t16_sq
+    r_sq = 9 * v_sq / s_sq
+    surd_r = Surd.sqrt(r_sq)
+    m = int(surd_r.q.numerator)
+    p = int(surd_r.q.denominator)
+    n = int(surd_r.d)
+    return {
+        'volume_sq': v_sq,
+        'surface_area_sq': s_sq,
+        'inradius_sq': r_sq,
+        'inradius_surd': surd_r,
+        'm': m,
+        'n': n,
+        'p': p,
+        'm_plus_n_plus_p': m + n + p,
+    }
+
+
+@op('geometry.tetrahedron_volume_from_edges_sq', kind='space geometry', bound='any size rational edge squares')
+def tetrahedron_volume_from_edges_sq(d12_sq, d13_sq, d14_sq, d23_sq, d24_sq, d34_sq):
+    """Volume of an arbitrary 3D tetrahedron from 6 squared edge lengths using the 5x5 Cayley-Menger determinant.
+    CM det = 288 * V^2. Returns dict(cayley_menger_det, volume_sq, volume_surd)."""
+    d12, d13, d14 = _q(d12_sq), _q(d13_sq), _q(d14_sq)
+    d23, d24, d34 = _q(d23_sq), _q(d24_sq), _q(d34_sq)
+    for d in (d12, d13, d14, d23, d24, d34):
+        if d <= 0:
+            raise BadInput('edge squares must be positive')
+    cm = [
+        [Fraction(0), Fraction(1), Fraction(1), Fraction(1), Fraction(1)],
+        [Fraction(1), Fraction(0), d12, d13, d14],
+        [Fraction(1), d12, Fraction(0), d23, d24],
+        [Fraction(1), d13, d23, Fraction(0), d34],
+        [Fraction(1), d14, d24, d34, Fraction(0)],
+    ]
+    det = run('algebra.mat_det', cm)
+    if det <= 0:
+        raise BadInput('Cayley-Menger determinant must be positive')
+    v_sq = Fraction(det, 288)
+    return {
+        'cayley_menger_det': det,
+        'volume_sq': v_sq,
+        'volume_surd': Surd.sqrt(v_sq),
+    }
+
+
+@op('geometry.polar_triangle_chain', kind='polar geometry', bound='any size rational parameters')
+def polar_triangle_chain(area, cos_angle, n_triangles, perimeter):
+    """Solves a polar triangle chain recurrence where n adjacent triangles sharing a common vertex A1 have constant area
+    T = (1/2) r_i r_{i+1} sin(theta) and constant angle cosine cos(theta).
+    Law of cosines gives d^2 = S^2 - 2K(1+c) for alternating radius sum S = r_first + r_last and K = 2T/sin(theta).
+    Solves S + N*d = P for S = (m*sqrt(n) - p)/q. Returns dict(k_product, edge_sq_constant, m, n, p, q, m_plus_n_plus_p_plus_q).
+    polar_triangle_chain(1, 12/13, 9, 20) -> m=9, n=5, p=1, q=4, sum=19"""
+    T = _q(area)
+    c = _q(cos_angle)
+    if isinstance(n_triangles, Fraction):
+        if n_triangles.denominator != 1:
+            raise BadInput('n_triangles must be an integer')
+        n_triangles = int(n_triangles)
+    N = _int(n_triangles, 1, 10000, 'n_triangles')
+    P = _q(perimeter)
+    if T <= 0 or P <= 0:
+        raise BadInput('area and perimeter must be positive')
+    if abs(c) >= 1:
+        raise BadInput('cos_angle must be strictly between -1 and 1')
+    sin_sq = Fraction(1) - c * c
+    sin_surd = Surd.sqrt(sin_sq)
+    if sin_surd.d != 1:
+        raise NotCovered('sine is irrational surd; only rational sine currently covered')
+    sin_val = sin_surd.p
+    K = Fraction(2 * T, sin_val)
+    c_term = Fraction(2 * K * (Fraction(1) + c))
+
+    A_q = Fraction(N * N - 1)
+    B_q = Fraction(2 * P)
+    C_q = - (P * P + Fraction(N * N) * c_term)
+    disc = B_q * B_q - Fraction(4) * A_q * C_q
+    if disc <= 0:
+        raise BadInput('discriminant non-positive')
+
+    disc_surd = Surd.sqrt(disc)
+    num_q = disc_surd.q / 2
+    l = num_q.denominator * P.denominator // gcd(num_q.denominator, P.denominator)
+    m_raw = int(num_q.numerator * (l // num_q.denominator))
+    p_raw = int(P.numerator * (l // P.denominator))
+    q_raw = int(A_q * l)
+    g = gcd(gcd(abs(m_raw), abs(p_raw)), abs(q_raw))
+    m = m_raw // g
+    p = p_raw // g
+    q = q_raw // g
+    n = int(disc_surd.d)
+    return {
+        'k_product': K,
+        'edge_sq_constant': c_term,
+        'm': m,
+        'n': n,
+        'p': p,
+        'q': q,
+        'm_plus_n_plus_p_plus_q': m + n + p + q,
+    }
+

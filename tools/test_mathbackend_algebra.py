@@ -294,5 +294,57 @@ class RegistryTests(unittest.TestCase):
         self.assertTrue(mods <= set(sys.stdlib_module_names) | {'tools'}, mods)
 
 
+class AtomicAlgebraTests(unittest.TestCase):
+    def test_quartic_double_tangent_k(self):
+        res = r('quartic_double_tangent_k', 18, 72, 98)
+        self.assertEqual(res['valid_k'], [F(8), F(32), F(200)])
+        self.assertEqual(res['sum_k'], F(240))
+        self.assertEqual(res['all_roots'], [F(8), F(32), F(200), F(512)])
+        self.assertEqual(res['A'], F(10116))
+        self.assertEqual(res['B'], F(188))
+        self.assertEqual(res['C'], F(127008))
+
+        with self.assertRaises(BadInput):
+            r('quartic_double_tangent_k', 0, 1, 2)
+
+    def test_match_polynomial_square(self):
+        # (x^2 - 98x + 1008)^2 + 50x
+        s1, s0 = -98, 1008
+        c4 = 1
+        c3 = 2 * s1
+        c2 = s1 * s1 + 2 * s0
+        c1 = 2 * s1 * s0 + 50
+        c0 = s0 * s0
+        res = r('match_polynomial_square', [c4, c3, c2, c1, c0])
+        self.assertEqual(res['q'], [F(1), F(-98), F(1008)])
+        self.assertEqual(res['tangent_slope'], F(50))
+        self.assertEqual(res['tangent_intercept'], F(0))
+        self.assertEqual(res['discriminant_q'], F(5572))
+
+    def test_piecewise_linear_intersections(self):
+        # X-shape intersection: (0,0)->(1,1) and (0,1)->(1,0)
+        c1 = [(0, 0), (1, 1)]
+        c2 = [(0, 1), (1, 0)]
+        res = r('piecewise_linear_intersections', c1, c2)
+        self.assertEqual(res['count'], 1)
+        self.assertEqual(res['intersections'], [(F(1, 2), F(1, 2))])
+
+        # Parallel non-intersecting
+        c3 = [(0, 0), (1, 0)]
+        c4 = [(0, 1), (1, 1)]
+        res_p = r('piecewise_linear_intersections', c3, c4)
+        self.assertEqual(res_p['count'], 0)
+
+    def test_triangle_wave_intersections(self):
+        # 16 swings x 24 swings with 1 boundary intersection => 385
+        res = r('triangle_wave_intersections', 16, 24, boundary_count=1)
+        self.assertEqual(res['interior_crossings'], 384)
+        self.assertEqual(res['boundary_intersections'], 1)
+        self.assertEqual(res['total_intersections'], 385)
+
+        with self.assertRaises(BadInput):
+            r('triangle_wave_intersections', 0, 5)
+
+
 if __name__ == '__main__':
     unittest.main()

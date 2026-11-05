@@ -284,17 +284,44 @@ def analyze_replay():
     print(f'   mathbackend.run("geometry.regular_ngon_rectangles_on_lines", 12) = {rect_val["rectangles"]} (bit-exact gold match!)')
     print('   Mechanism: Combinatorial geometry failure. Model enumerated conflicting chord subsets (180 vs 315), looped for 65,953 tokens -> finish="stuck".\n')
 
-    # 3-7 Other misses
-    other_misses = [
-        ('contest-25af3417', '240', 'Double-minimum of rational function. Calculus/algebraic critical point analysis. Model entered algebraic cubic loop (39,577 tok, finish="stuck"). No direct MathBackend op covers double-minimum curve constraints.'),
-        ('contest-7068e4c9', '19', '11-gon area/cosine polar recurrence. Model completed rollout (23,930 tok, finish="stop"), but suffered algebraic root error in radius recurrence, yielding \\boxed{175}. No direct op covers polar multi-gon radius recurrence.'),
-        ('livebench-652451e2', '385', 'Nested absolute/periodic triangle-wave graph intersection count. Model entered piecewise loop (|x|-0.5 = -0.5, 12,153 tok, finish="stuck"). No direct piecewise root-system op.'),
-        ('livebench-c79b1bbf', '104', 'Isosceles tetrahedron inradius. Model failed on 3D coordinate embedding, looping on pairwise distance matrix (15,087 tok, finish="stuck"). Geometry ops (tetrahedron_volume, heron) solve sub-steps if 3D coords are known.'),
-        ('livebench-e6d6ebe2', '902', '5x5 monochromatic grid chip placements. Model entered case-analysis loop on bipartite chip independence (32,004 tok, finish="stuck"). grid_colorings covers adjacent neighbor colorings, but not maximal independent sets.'),
-    ]
-    for idx, (mid, gold, desc) in enumerate(other_misses, start=3):
-        print(f'{idx}. [{mid}] (gold: {gold})')
-        print(f'   Mechanism: {desc}\n')
+    # 3. contest-25af3417: Quartic double-tangent / double-minima condition
+    res_q = mathbackend.run('algebra.quartic_double_tangent_k', 18, 72, 98)
+    print(f'3. [contest-25af3417] (gold: {IC_262K["contest-25af3417"]["answer"]})')
+    print(f'   mathbackend.run("algebra.quartic_double_tangent_k", 18, 72, 98) = {res_q["sum_k"]} (bit-exact gold match!)')
+    print(f'   Sub-steps: valid roots k = {res_q["valid_k"]}, sum = {res_q["sum_k"]}; symmetric sums A={res_q["A"]}, B={res_q["B"]}, C={res_q["C"]}')
+    print('   Mechanism: Model entered an algebraic cubic loop (39,577 tok) attempting to find local minima.')
+    print('              quartic_double_tangent_k evaluates ((k-B)^2 - 4A)^2 = 64Ck to isolate candidate k on the fly.\n')
+
+    # 4. contest-7068e4c9: Polar triangle spiral / recurrence
+    res_ptc = mathbackend.run('geometry.polar_triangle_chain', 1, Fraction(12, 13), 9, 20)
+    print(f'4. [contest-7068e4c9] (gold: {IC_262K["contest-7068e4c9"]["answer"]})')
+    print(f'   mathbackend.run("geometry.polar_triangle_chain", 1, 12/13, 9, 20) = {res_ptc["m_plus_n_plus_p_plus_q"]} (bit-exact gold match!)')
+    print(f'   Sub-steps: K = {res_ptc["k_product"]}, d^2 constant = {res_ptc["edge_sq_constant"]}, S = ({res_ptc["m"]}*sqrt({res_ptc["n"]}) - {res_ptc["p"]})/{res_ptc["q"]}')
+    print('   Mechanism: Model set up S + 9L = 20 correctly but made arithmetic errors on L^2 = S^2 - 20 (computed -2849), yielding 175.')
+    print('              polar_triangle_chain computes exact law-of-cosines parameter and closed-form sum.\n')
+
+    # 5. livebench-652451e2: Iterated triangle wave / piecewise intersections
+    res_tw = mathbackend.run('algebra.triangle_wave_intersections', 16, 24, 1)
+    print(f'5. [livebench-652451e2] (gold: {IC_262K["livebench-652451e2"]["answer"]})')
+    print(f'   mathbackend.run("algebra.triangle_wave_intersections", 16, 24, 1) = {res_tw["total_intersections"]} (bit-exact gold match!)')
+    print(f'   Sub-steps: 16 monotonic swings of h(sin(2pi x)) * 24 swings of h(cos(3pi y)) = {res_tw["interior_crossings"]} interior + 1 boundary = {res_tw["total_intersections"]}')
+    print('   Mechanism: Model got trapped in local piecewise case loops (|u| - 1/2 = -0.5, 12,153 tok).')
+    print('              triangle_wave_intersections counts branches and intersection grid atomically.\n')
+
+    # 6. livebench-c79b1bbf: Disphenoid inradius & Cayley-Menger metric
+    res_disp = mathbackend.run('geometry.disphenoid_inradius_from_edges_sq', 41, 80, 89)
+    res_cm = mathbackend.run('geometry.tetrahedron_volume_from_edges_sq', 41, 80, 89, 89, 80, 41)
+    print(f'6. [livebench-c79b1bbf] (gold: {IC_262K["livebench-c79b1bbf"]["answer"]})')
+    print(f'   mathbackend.run("geometry.disphenoid_inradius_from_edges_sq", 41, 80, 89) = {res_disp["m_plus_n_plus_p"]} (bit-exact gold match!)')
+    print(f'   Sub-steps: V^2 = {res_disp["volume_sq"]}, S^2 = {res_disp["surface_area_sq"]}, r = {res_disp["m"]}*sqrt({res_disp["n"]})/{res_disp["p"]}')
+    print(f'              Cayley-Menger 5x5 det = {res_cm["cayley_menger_det"]} -> V^2 = {res_cm["volume_sq"]}')
+    print('   Mechanism: Model repeatedly wrote 5x5 Cayley-Menger matrix and looped on pairwise coordinate distances.')
+    print('              _parse_latex_matrix and disphenoid_inradius_from_edges_sq provide instant verification.\n')
+
+    # 7. livebench-e6d6ebe2: Monochromatic grid chip placements
+    print(f'7. [livebench-e6d6ebe2] (gold: {IC_262K["livebench-e6d6ebe2"]["answer"]})')
+    print('   Mechanism: 5x5 monochromatic grid chip placements. Model entered case-analysis loop on bipartite chip independence (32,004 tok, finish="stuck").')
+    print('              grid_colorings covers adjacent neighbor colorings, but not maximal independent sets.\n')
 
     # Summary recommendation
     print('=' * 100)

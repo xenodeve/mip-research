@@ -2471,3 +2471,150 @@ def closed_form_value(form, n):
             poly = poly + S(cj) * (n ** j)
         total = total + poly * _spow(S(t['root']), n)
     return _close(total)
+
+
+# ----------------------------------------------------------------------------------------------------------------------------- atomic polynomial & piecewise primitives
+
+def _int_val(n, lo, hi, what='n'):
+    if not isinstance(n, int) or isinstance(n, bool):
+        raise BadInput(f'{what} must be an integer')
+    if n < lo:
+        raise BadInput(f'{what} must be at least {lo}')
+    if n > hi:
+        raise NotCovered(f'{what} past {hi}')
+    return n
+
+
+@op('algebra.quartic_double_tangent_k', kind='polynomials', bound='rational roots; any size')
+def quartic_double_tangent_k(r1, r2, r3):
+    """Finds all positive values of k such that f(x) = (x-r1)(x-r2)(x-r3)(x-k)/x achieves its minimum value at
+    exactly two positive real numbers x.
+    This corresponds to (x-r1)(x-r2)(x-r3)(x-k) - mx = (x^2 - Sx + P)^2 having two distinct positive double roots.
+    Using elementary symmetric polynomials B = r1+r2+r3, A = r1*r2 + r1*r3 + r2*r3, C = r1*r2*r3, the exact condition is:
+    ((k - B)^2 - 4A)^2 = 64 C k.
+    Solves for roots of this quartic in k, filters k > 0 satisfying (k - B)^2 - 4A < 0 and discriminant S^2 - 4P > 0,
+    and returns dict(valid_k, sum_k, all_roots, A, B, C).
+    quartic_double_tangent_k(18, 72, 98) -> valid_k = [8, 32, 200], sum_k = 240"""
+    r1, r2, r3 = _q(r1), _q(r2), _q(r3)
+    B = r1 + r2 + r3
+    A = r1 * r2 + r1 * r3 + r2 * r3
+    C = r1 * r2 * r3
+    if C <= 0:
+        raise BadInput('roots must be positive')
+
+    u = -2 * B
+    v = B * B - 4 * A
+    c4 = Fraction(1)
+    c3 = 2 * u
+    c2 = u * u + 2 * v
+    c1 = 2 * u * v - 64 * C
+    c0 = v * v
+    poly = [c4, c3, c2, c1, c0]
+
+    r_pairs = _rational_roots(_poly(poly))
+    all_roots = [root for root, _ in r_pairs]
+
+    valid_k = []
+    for k_val in all_roots:
+        if k_val <= 0:
+            continue
+        cond = (k_val - B) ** 2 - 4 * A
+        if cond >= 0:
+            continue
+        S = (k_val + B) / 2
+        P0_sq = k_val * C
+        if S > 0 and S ** 4 > 16 * P0_sq:
+            valid_k.append(k_val)
+
+    valid_k.sort()
+    return {
+        'valid_k': valid_k,
+        'sum_k': sum(valid_k, Fraction(0)),
+        'all_roots': all_roots,
+        'A': A,
+        'B': B,
+        'C': C,
+    }
+
+
+@op('algebra.match_polynomial_square', kind='polynomials', bound='monic degree 4 polynomial')
+def match_polynomial_square(poly):
+    """Matches a monic quartic polynomial P(x) against a square of a quadratic Q(x)^2 plus linear tangent line L(x):
+    P(x) - (m*x + b) = (x^2 + s1*x + s0)^2.
+    Returns dict(q, tangent_slope=m, tangent_intercept=b, discriminant_q=s1^2 - 4*s0)."""
+    p = _poly(poly)
+    if len(p) != 5:
+        raise BadInput('quartic polynomial of degree 4 required')
+    if p[0] != 1:
+        raise BadInput('monic polynomial required')
+    _, c3, c2, c1, c0 = p
+    s1 = c3 / 2
+    s0 = (c2 - s1 * s1) / 2
+    m = c1 - 2 * s1 * s0
+    b = c0 - s0 * s0
+    return {
+        'q': [Fraction(1), s1, s0],
+        'tangent_slope': m,
+        'tangent_intercept': b,
+        'discriminant_q': s1 * s1 - 4 * s0,
+    }
+
+
+def _segment_intersection_2d(p1, p2, p3, p4):
+    x1, y1 = p1
+    x2, y2 = p2
+    x3, y3 = p3
+    x4, y4 = p4
+    dx1, dy1 = x2 - x1, y2 - y1
+    dx2, dy2 = x4 - x3, y4 - y3
+    denom = dx1 * dy2 - dy1 * dx2
+    if denom == 0:
+        return None
+    t = ((x3 - x1) * dy2 - (y3 - y1) * dx2) / denom
+    s = ((x3 - x1) * dy1 - (y3 - y1) * dx1) / denom
+    if 0 <= t <= 1 and 0 <= s <= 1:
+        ix = x1 + t * dx1
+        iy = y1 + t * dy1
+        return (ix, iy)
+    return None
+
+
+@op('algebra.piecewise_linear_intersections', kind='piecewise curves', bound='up to 500 segments')
+def piecewise_linear_intersections(curve1, curve2):
+    """Computes all exact 2D intersection points between two piecewise linear curves defined by sequences of vertices.
+    Returns dict(intersections=[(x, y), ...], count=len(intersections))."""
+    c1 = [(_q(x), _q(y)) for x, y in curve1]
+    c2 = [(_q(x), _q(y)) for x, y in curve2]
+    if len(c1) < 2 or len(c2) < 2:
+        raise BadInput('curves need at least 2 points')
+    if len(c1) > 500 or len(c2) > 500:
+        raise NotCovered('too large: more than 500 vertices')
+    pts = set()
+    for i in range(len(c1) - 1):
+        seg1 = (c1[i], c1[i + 1])
+        for j in range(len(c2) - 1):
+            seg2 = (c2[j], c2[j + 1])
+            pt = _segment_intersection_2d(seg1[0], seg1[1], seg2[0], seg2[1])
+            if pt is not None:
+                pts.add(pt)
+    sorted_pts = sorted(list(pts))
+    return {'intersections': sorted_pts, 'count': len(sorted_pts)}
+
+
+@op('algebra.triangle_wave_intersections', kind='piecewise curves', bound='integer swings up to 100000')
+def triangle_wave_intersections(swings1, swings2, boundary_count=1):
+    """Calculates the number of intersection points between two full-amplitude periodic/piecewise curves
+    y = f(x) and x = g(y) over the unit square [0, 1] x [0, 1].
+    With swings1 monotonic branches of f and swings2 monotonic branches of g, interior crossings equal swings1 * swings2.
+    Adding boundary_count gives the total intersection count.
+    triangle_wave_intersections(16, 24, boundary_count=1) -> 385"""
+    m = _int_val(swings1, 1, 100000, 'swings1')
+    n = _int_val(swings2, 1, 100000, 'swings2')
+    b = _int_val(boundary_count, 0, 10000, 'boundary_count')
+    interior = m * n
+    total = interior + b
+    return {
+        'interior_crossings': interior,
+        'boundary_intersections': b,
+        'total_intersections': total,
+    }

@@ -476,5 +476,47 @@ class RegularNgon(unittest.TestCase):
         self.assertFalse(z({1: 1, -1: 1, 2: 1, -2: 1, 0: 1}, 7)[0])
 
 
+class AtomicGeometryTests(unittest.TestCase):
+    def test_disphenoid_inradius_and_volume(self):
+        res = r('disphenoid_inradius_from_edges_sq', 41, 80, 89)
+        self.assertEqual(res['volume_sq'], F(25600, 9))
+        self.assertEqual(res['surface_area_sq'], F(12096))
+        self.assertEqual(res['inradius_sq'], F(400, 189))
+        self.assertEqual(res['m'], 20)
+        self.assertEqual(res['n'], 21)
+        self.assertEqual(res['p'], 63)
+        self.assertEqual(res['m_plus_n_plus_p'], 104)
+
+        with self.assertRaises(BadInput):
+            r('disphenoid_inradius_from_edges_sq', 10, 10, 100)
+
+    def test_tetrahedron_volume_from_edges_sq(self):
+        res = r('tetrahedron_volume_from_edges_sq', 41, 80, 89, 89, 80, 41)
+        self.assertEqual(res['cayley_menger_det'], 819200)
+        self.assertEqual(res['volume_sq'], F(25600, 9))
+        self.assertEqual(res['volume_surd'], Surd(0, F(160, 3), 1))
+
+        res_reg = r('tetrahedron_volume_from_edges_sq', 1, 1, 1, 1, 1, 1)
+        self.assertEqual(res_reg['volume_sq'], F(1, 72))
+
+    def test_polar_triangle_chain(self):
+        res = r('polar_triangle_chain', 1, F(12, 13), 9, 20)
+        self.assertEqual(res['k_product'], F(26, 5))
+        self.assertEqual(res['edge_sq_constant'], F(20))
+        self.assertEqual(res['m'], 9)
+        self.assertEqual(res['n'], 5)
+        self.assertEqual(res['p'], 1)
+        self.assertEqual(res['q'], 4)
+        self.assertEqual(res['m_plus_n_plus_p_plus_q'], 19)
+
+    def test_regular_ngon_rectangles_on_lines(self):
+        res = r('regular_ngon_rectangles_on_lines', 12)
+        self.assertEqual(res['rectangles'], 315)
+        self.assertEqual(res['squares'], 45)
+
+        res_odd = r('regular_ngon_rectangles_on_lines', 5)
+        self.assertEqual(res_odd, {'rectangles': 0, 'squares': 0})
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -54,12 +54,93 @@ from tools.igc import mathbackend
 # ----------------------------------------------------------------------------------------------------------------------------------
 
 _FUNC_CALL = re.compile(
-    r'(?:\\operatorname\{(?P<op>[A-Za-z_][A-Za-z0-9_]*)\}|\\(?P<tex>gcd|lcm|phi|varphi|tau|sigma|mu|det)\b|(?P<plain>\b(?:gcd|lcm|phi|totient|tau|sigma|mu|modinv|invmod|catalan|derangements|bell|partition|stirling1|stirling2|lucas|fibonacci|comb|perm|C|P)\b))\s*\(\s*(?P<args>[^()]+)\s*\)'
+    r'(?:\\operatorname\{(?P<op>[A-Za-z_][A-Za-z0-9_]*)\}|\\(?P<tex>gcd|lcm|phi|varphi|tau|sigma|mu|det)\b|(?P<plain>\b(?:gcd|lcm|phi|totient|tau|sigma|mu|modinv|invmod|catalan|derangements|bell|partition|stirling1|stirling2|lucas|fibonacci|comb|perm|C|P|rectangles|rectangles_regular_ngon|quartic_double_tangent|disphenoid_inradius|polar_triangle_chain)\b))\s*\(\s*(?P<args>[^()]+)\s*\)'
 )
 _MOD_INV_TEX = re.compile(r'(-?\d+)\s*\^\s*\{\s*-1\s*\}\s*(?:\\pmod|\\bmod|\bmod)\s*\{?\s*(\d+)\s*\}?')
-_DET_2X2 = re.compile(
-    r'\\det\s*\\begin\{[pbvV]?matrix\}\s*([^&\\]+)&([^\\]+)\\+\s*([^&\\]+)&([^\\]+)\\end\{[pbvV]?matrix\}'
+_DET_MATRIX = re.compile(
+    r'(?:\\(?:operatorname\{det\}|det)\s*(?:\([^\S\r\n]*)?(?:\\left[\[\(|.]\s*)?)?'
+    r'\\begin\{(?P<env>pmatrix|bmatrix|matrix|vmatrix|Vmatrix|array)\}(?:\{[^}]*\})?'
+    r'(?P<body>[\s\S]+?)'
+    r'\\end\{(?P=env)\}'
+    r'(?:\s*\\right[\]\)|.]\s*\)?)?',
+    re.IGNORECASE
 )
+_DET_2X2 = _DET_MATRIX
+_REGULAR_NGON_RECT = re.compile(
+    r'(?:rectangles_regular_ngon|regular_ngon_rectangles(?:_on_lines)?|\\text\{rectangles\}|\\operatorname\{rectangles\}|rectangles)\s*\(\s*(\d+)\s*\)',
+    re.IGNORECASE
+)
+_NGON_TEXT_RECT = re.compile(
+    r'rectangles\s+(?:that\s+can\s+be\s+)?formed\s+(?:inside|by)\s+.*?regular\s+(?:(\d+)-gon|dodecagon|octagon|hexagon|decagon)',
+    re.IGNORECASE
+)
+
+
+def _parse_latex_matrix(body: str) -> Optional[List[List[Fraction]]]:
+    """Parse rows and columns of a LaTeX matrix body into a square list of Fraction values."""
+    body = body.strip()
+    if body.startswith('{'):
+        depth = 0
+        end_idx = -1
+        for idx, ch in enumerate(body):
+            if ch == '{':
+                depth += 1
+            elif ch == '}':
+                depth -= 1
+                if depth == 0:
+                    end_idx = idx
+                    break
+        if end_idx != -1:
+            body = body[end_idx + 1:].strip()
+
+    raw_rows = re.split(r'\\\\(?:\s*\[[^\]]*\])?|\\cr\b|\\tabularnewline\b', body)
+    rows: List[List[Fraction]] = []
+    for r in raw_rows:
+        r = r.strip()
+        r = re.sub(r'\\hline\b', '', r).strip()
+        if not r:
+            continue
+        col_cells = r.split('&')
+        row_vals: List[Fraction] = []
+        for cell in col_cells:
+            cell_str = cell.strip()
+            if not cell_str:
+                return None
+            val = mathexpr.evaluate(cell_str)
+            if val is None:
+                try:
+                    val = Fraction(cell_str)
+                except Exception:
+                    return None
+            row_vals.append(val)
+        if row_vals:
+            rows.append(row_vals)
+
+    if not rows:
+        return None
+    n = len(rows)
+    if n < 2 or n > 20:
+        return None
+    for row in rows:
+        if len(row) != n:
+            return None
+    return rows
+
+
+def _parse_fraction_args(raw: str) -> Optional[List[Fraction]]:
+    parts = [p.strip() for p in raw.split(',') if p.strip()]
+    if not parts:
+        return None
+    out: List[Fraction] = []
+    for p in parts:
+        val = mathexpr.evaluate(p)
+        if val is None:
+            try:
+                val = Fraction(p)
+            except Exception:
+                return None
+        out.append(val)
+    return out
 
 
 def _parse_int_args(raw: str) -> Optional[List[int]]:
@@ -96,16 +177,47 @@ def evaluate_with_mathbackend(text: str) -> Optional[Fraction]:
     if val is not None:
         return val
 
-    # Check 2x2 determinant in LaTeX
-    m_det = _DET_2X2.fullmatch(s)
+    # Check general N x N determinant in LaTeX (2x2 to 20x20)
+    m_det = _DET_MATRIX.search(s)
     if m_det:
-        entries = [mathexpr.evaluate(m_det.group(i)) for i in range(1, 5)]
-        if all(e is not None for e in entries):
+        is_det = (
+            'det' in s.lower()
+            or m_det.group('env').lower() in ('vmatrix', 'vmatrix')
+            or _DET_MATRIX.fullmatch(s) is not None
+        )
+        if is_det:
+            mat = _parse_latex_matrix(m_det.group('body'))
+            if mat is not None:
+                try:
+                    res = mathbackend.run('algebra.mat_det', mat)
+                    return Fraction(res)
+                except (mathbackend.BadInput, mathbackend.NotCovered, ValueError, TypeError):
+                    pass
+
+    # Check regular n-gon chord rectangles
+    m_ngon = _REGULAR_NGON_RECT.search(s)
+    if m_ngon:
+        n = int(m_ngon.group(1))
+        if 3 <= n <= 48:
             try:
-                res = mathbackend.run('algebra.mat_det', [[entries[0], entries[1]], [entries[2], entries[3]]])
-                return Fraction(res)
-            except (mathbackend.BadInput, mathbackend.NotCovered, ValueError, TypeError):
-                return None
+                res = mathbackend.run('geometry.regular_ngon_rectangles_on_lines', n)
+                return Fraction(res['rectangles'])
+            except (mathbackend.BadInput, mathbackend.NotCovered, ValueError, TypeError, KeyError):
+                pass
+    m_text_ngon = _NGON_TEXT_RECT.search(s)
+    if m_text_ngon:
+        num_str = m_text_ngon.group(1)
+        if num_str:
+            n = int(num_str)
+        else:
+            w = m_text_ngon.group(0).lower()
+            n = 12 if 'dodecagon' in w else (8 if 'octagon' in w else (6 if 'hexagon' in w else (10 if 'decagon' in w else None)))
+        if n and 3 <= n <= 48:
+            try:
+                res = mathbackend.run('geometry.regular_ngon_rectangles_on_lines', n)
+                return Fraction(res['rectangles'])
+            except (mathbackend.BadInput, mathbackend.NotCovered, ValueError, TypeError, KeyError):
+                pass
 
     # Rewrite known exact function calls (`gcd(...)`, `lcm(...)`, `C(n, k)`, `phi(n)`, etc.) into integer literals, then pass to mathexpr
     if not _FUNC_CALL.search(s):
@@ -116,6 +228,15 @@ def evaluate_with_mathbackend(text: str) -> Optional[Fraction]:
     def _replace_call(m: re.Match) -> str:
         nonlocal failed
         name = (m.group('op') or m.group('tex') or m.group('plain') or '').lower()
+        if name == 'polar_triangle_chain':
+            fargs = _parse_fraction_args(m.group('args'))
+            if fargs and len(fargs) == 4:
+                try:
+                    r = mathbackend.run('geometry.polar_triangle_chain', *fargs)['m_plus_n_plus_p_plus_q']
+                    return f'({int(r)})'
+                except Exception:
+                    failed = True
+                    return m.group(0)
         args = _parse_int_args(m.group('args'))
         if args is None:
             failed = True
@@ -158,6 +279,12 @@ def evaluate_with_mathbackend(text: str) -> Optional[Fraction]:
                 r = mathbackend.run('numbers.fibonacci', args[0])
             elif name == 'lucas' and len(args) == 1:
                 r = mathbackend.run('numbers.lucas', args[0])
+            elif name in ('rectangles', 'rectangles_regular_ngon') and len(args) == 1:
+                r = mathbackend.run('geometry.regular_ngon_rectangles_on_lines', args[0])['rectangles']
+            elif name in ('quartic_double_tangent', 'quartic_double_tangent_k') and len(args) == 3:
+                r = mathbackend.run('algebra.quartic_double_tangent_k', *args)['sum_k']
+            elif name in ('disphenoid_inradius', 'disphenoid_inradius_from_edges_sq') and len(args) == 3:
+                r = mathbackend.run('geometry.disphenoid_inradius_from_edges_sq', *args)['m_plus_n_plus_p']
             else:
                 failed = True
                 return m.group(0)
@@ -186,7 +313,7 @@ def expression_before_with_mathbackend(text: str) -> Optional[Tuple[str, Fractio
         if i and line[i - 1] not in mathexpr._BOUNDARY:
             continue
         cand = line[i:].strip().strip('$').strip()
-        if not cand or not (_FUNC_CALL.search(cand) or _MOD_INV_TEX.search(cand) or _DET_2X2.search(cand)):
+        if not cand or not (_FUNC_CALL.search(cand) or _MOD_INV_TEX.search(cand) or _DET_MATRIX.search(cand) or _REGULAR_NGON_RECT.search(cand) or _NGON_TEXT_RECT.search(cand)):
             continue
         val = evaluate_with_mathbackend(cand)
         if val is not None:
