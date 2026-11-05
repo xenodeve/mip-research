@@ -54,7 +54,7 @@ from tools.igc import mathbackend
 # ----------------------------------------------------------------------------------------------------------------------------------
 
 _FUNC_CALL = re.compile(
-    r'(?:\\operatorname\{(?P<op>[A-Za-z_][A-Za-z0-9_]*)\}|\\(?P<tex>gcd|lcm|phi|varphi|tau|sigma|mu|det)\b|(?P<plain>\b(?:gcd|lcm|phi|totient|tau|sigma|mu|modinv|invmod|catalan|derangements|bell|partition|stirling1|stirling2|lucas|fibonacci|comb|perm|C|P|rectangles|rectangles_regular_ngon|quartic_double_tangent|disphenoid_inradius|polar_triangle_chain)\b))\s*\(\s*(?P<args>[^()]+)\s*\)'
+    r'(?:\\operatorname\{(?P<op>[A-Za-z_][A-Za-z0-9_]*)\}|\\(?P<tex>gcd|lcm|phi|varphi|tau|sigma|mu|det)\b|(?P<plain>\b(?:gcd|lcm|phi|totient|tau|sigma|mu|modinv|invmod|catalan|derangements|bell|partition|stirling1|stirling2|lucas|fibonacci|comb|perm)\b))\s*\(\s*(?P<args>[^()]+)\s*\)'
 )
 _MOD_INV_TEX = re.compile(r'(-?\d+)\s*\^\s*\{\s*-1\s*\}\s*(?:\\pmod|\\bmod|\bmod)\s*\{?\s*(\d+)\s*\}?')
 _DET_MATRIX = re.compile(
@@ -65,15 +65,11 @@ _DET_MATRIX = re.compile(
     r'(?:\s*\\right[\]\)|.]\s*\)?)?',
     re.IGNORECASE
 )
-_DET_2X2 = _DET_MATRIX
-_REGULAR_NGON_RECT = re.compile(
-    r'(?:rectangles_regular_ngon|regular_ngon_rectangles(?:_on_lines)?|\\text\{rectangles\}|\\operatorname\{rectangles\}|rectangles)\s*\(\s*(\d+)\s*\)',
-    re.IGNORECASE
-)
-_NGON_TEXT_RECT = re.compile(
-    r'rectangles\s+(?:that\s+can\s+be\s+)?formed\s+(?:inside|by)\s+.*?regular\s+(?:(\d+)-gon|dodecagon|octagon|hexagon|decagon)',
-    re.IGNORECASE
-)
+# Only general primitives reach the inline path. Bare `C(` / `P(` are gone: points are named P and C, and `P(2, 3) =` put in 0 (#302).
+# The ops written from one benchmark question (n-gon rectangles, quartic double tangent, disphenoid inradius, polar triangle chain, triangle
+# wave intersections) are gone from it too: they answer that question, and `rectangles ... regular dodecagon` in the model's restatement of
+# it put in the gold 315. They stay in the backend.
+_DET_WORD = re.compile(r'\\det\b|\\operatorname\{det\}|\bdet\b|\bdeterminant\b', re.I)
 
 
 def _parse_latex_matrix(body: str) -> Optional[List[List[Fraction]]]:
@@ -180,11 +176,9 @@ def evaluate_with_mathbackend(text: str) -> Optional[Fraction]:
     # Check general N x N determinant in LaTeX (2x2 to 20x20)
     m_det = _DET_MATRIX.search(s)
     if m_det:
-        is_det = (
-            'det' in s.lower()
-            or m_det.group('env').lower() in ('vmatrix', 'vmatrix')
-            or _DET_MATRIX.fullmatch(s) is not None
-        )
+        # A matrix is not its determinant: only `\det`, `determinant` or bars (vmatrix) ask for one. A bare pmatrix before `=` got its
+        # determinant put in, and `'det' in s` read `determine` as a request (#302).
+        is_det = bool(_DET_WORD.search(s)) or m_det.group('env').lower() == 'vmatrix'
         if is_det:
             mat = _parse_latex_matrix(m_det.group('body'))
             if mat is not None:
@@ -193,31 +187,6 @@ def evaluate_with_mathbackend(text: str) -> Optional[Fraction]:
                     return Fraction(res)
                 except (mathbackend.BadInput, mathbackend.NotCovered, ValueError, TypeError):
                     pass
-
-    # Check regular n-gon chord rectangles
-    m_ngon = _REGULAR_NGON_RECT.search(s)
-    if m_ngon:
-        n = int(m_ngon.group(1))
-        if 3 <= n <= 48:
-            try:
-                res = mathbackend.run('geometry.regular_ngon_rectangles_on_lines', n)
-                return Fraction(res['rectangles'])
-            except (mathbackend.BadInput, mathbackend.NotCovered, ValueError, TypeError, KeyError):
-                pass
-    m_text_ngon = _NGON_TEXT_RECT.search(s)
-    if m_text_ngon:
-        num_str = m_text_ngon.group(1)
-        if num_str:
-            n = int(num_str)
-        else:
-            w = m_text_ngon.group(0).lower()
-            n = 12 if 'dodecagon' in w else (8 if 'octagon' in w else (6 if 'hexagon' in w else (10 if 'decagon' in w else None)))
-        if n and 3 <= n <= 48:
-            try:
-                res = mathbackend.run('geometry.regular_ngon_rectangles_on_lines', n)
-                return Fraction(res['rectangles'])
-            except (mathbackend.BadInput, mathbackend.NotCovered, ValueError, TypeError, KeyError):
-                pass
 
     # Rewrite known exact function calls (`gcd(...)`, `lcm(...)`, `C(n, k)`, `phi(n)`, etc.) into integer literals, then pass to mathexpr
     if not _FUNC_CALL.search(s):
@@ -228,15 +197,6 @@ def evaluate_with_mathbackend(text: str) -> Optional[Fraction]:
     def _replace_call(m: re.Match) -> str:
         nonlocal failed
         name = (m.group('op') or m.group('tex') or m.group('plain') or '').lower()
-        if name == 'polar_triangle_chain':
-            fargs = _parse_fraction_args(m.group('args'))
-            if fargs and len(fargs) == 4:
-                try:
-                    r = mathbackend.run('geometry.polar_triangle_chain', *fargs)['m_plus_n_plus_p_plus_q']
-                    return f'({int(r)})'
-                except Exception:
-                    failed = True
-                    return m.group(0)
         args = _parse_int_args(m.group('args'))
         if args is None:
             failed = True
@@ -259,9 +219,9 @@ def evaluate_with_mathbackend(text: str) -> Optional[Fraction]:
                 if not isinstance(r, int):
                     failed = True
                     return m.group(0)
-            elif name in ('c', 'comb') and len(args) == 2:
+            elif name == 'comb' and len(args) == 2:
                 r = mathbackend.run('numbers.binomial', args[0], args[1])
-            elif name in ('p', 'perm') and len(args) == 2:
+            elif name == 'perm' and len(args) == 2:
                 r = mathbackend.run('numbers.falling_factorial', args[0], args[1])
             elif name == 'catalan' and len(args) == 1:
                 r = mathbackend.run('counting.catalan', args[0])
@@ -279,14 +239,6 @@ def evaluate_with_mathbackend(text: str) -> Optional[Fraction]:
                 r = mathbackend.run('numbers.fibonacci', args[0])
             elif name == 'lucas' and len(args) == 1:
                 r = mathbackend.run('numbers.lucas', args[0])
-            elif name in ('rectangles', 'rectangles_regular_ngon') and len(args) == 1:
-                r = mathbackend.run('geometry.regular_ngon_rectangles_on_lines', args[0])['rectangles']
-            elif name in ('quartic_double_tangent', 'quartic_double_tangent_k') and len(args) == 3:
-                r = mathbackend.run('algebra.quartic_double_tangent_k', *args)['sum_k']
-            elif name in ('disphenoid_inradius', 'disphenoid_inradius_from_edges_sq') and len(args) == 3:
-                r = mathbackend.run('geometry.disphenoid_inradius_from_edges_sq', *args)['m_plus_n_plus_p']
-            elif name in ('triangle_wave_intersections', 'piecewise_intersections') and len(args) in (2, 3):
-                r = mathbackend.run('algebra.triangle_wave_intersections', *args)['total_intersections']
             else:
                 failed = True
                 return m.group(0)
@@ -305,6 +257,10 @@ def evaluate_with_mathbackend(text: str) -> Optional[Fraction]:
     return mathexpr.evaluate(rewritten)
 
 
+_TAIL_OF_MORE = re.compile(r'(?:[+*/^×÷·⋅]|\\times|\\cdot|\\div)')
+_TAIL_OF_MORE_BEFORE = re.compile(r'(?:[+\-*/^×÷·⋅−)\]}\d]|\\times|\\cdot|\\div)\s*$')
+
+
 def expression_before_with_mathbackend(text: str) -> Optional[Tuple[str, Fraction]]:
     """Like `mathexpr.expression_before(text)`, but also recognizes exact calls to the 6-module `mathbackend`."""
     got = mathexpr.expression_before(text)
@@ -315,7 +271,10 @@ def expression_before_with_mathbackend(text: str) -> Optional[Tuple[str, Fractio
         if i and line[i - 1] not in mathexpr._BOUNDARY:
             continue
         cand = line[i:].strip().strip('$').strip()
-        if not cand or not (_FUNC_CALL.search(cand) or _MOD_INV_TEX.search(cand) or _DET_MATRIX.search(cand) or _REGULAR_NGON_RECT.search(cand) or _NGON_TEXT_RECT.search(cand)):
+        if not cand or not (_FUNC_CALL.search(cand) or _MOD_INV_TEX.search(cand) or _DET_MATRIX.search(cand)):
+            continue
+        if _TAIL_OF_MORE.match(cand) or _TAIL_OF_MORE_BEFORE.search(line[:i]):
+            # The tail of a longer expression has no value of its own: `C(9, 3) + gcd(15, 25)` with C unread put in gcd's 5 for the sum
             continue
         val = evaluate_with_mathbackend(cand)
         if val is not None:
@@ -384,21 +343,20 @@ class CandidateDecision:
     unique_signatures: int = 0
 
 
+# An explicit final conclusion only: `\boxed{v}`, `the (final) answer is v`. A running total (`Total = 3 + 4 = 7.`, `So the total is 12.`)
+# is no answer, and counting one made any intermediate sum a candidate that a loop or a reflection could close on (#303).
 CAND_CONCLUSION_RE = re.compile(
-    r'\\boxed\{([^{}]+)\}|(?:the\s+(?:final\s+)?answer\s+(?:is|should\s+be|would\s+be)|therefore[,\s]+the\s+(?:final\s+)?answer\s+is|so\s+the\s+final\s+answer\s+is)\s*\$?(-?\d+(?:/\d+)?)|(?:total(?:\s+valid\s+ways|\s+number(?:\s+of\s+ways)?)?|so\s+(?:total|the\s+total|\$?\\?det\([A-Z]\)\$?))\s*(?:is|=|should\s+be)(?:[^=\n]*=)?\s*\$?(-?\d+(?:/\d+)?)\s*(?:\.|\$|$)',
+    r'\\boxed\{([^{}]+)\}|(?:the\s+(?:final\s+)?answer\s+(?:is|should\s+be|would\s+be)|therefore[,\s]+the\s+(?:final\s+)?answer\s+is|so\s+the\s+final\s+answer\s+is)\s*\$?(-?\d+(?:/\d+)?)',
     re.I,
 )
+
+# The thinking a candidate close may begin from: the replay that measured the rule read from 1,500 tokens on, and the live call read from 0 (#303).
+CANDIDATE_MIN_TOKENS = 1500
 
 REFLECT_STARTER_RE = re.compile(
     r'^(?:wait\b|hmm+\b|let\s+me\s+(?:double[- ]?check|re-?check|verify|recalculate)|let\'s\s+(?:double[- ]?check|verify))',
     re.I,
 )
-
-METHOD_CHECK_KEYWORDS = (
-    'small case', 'check:', 'verify:', 'verified', 'substitut',
-    'method 2', 'second method', 'another way', 'alternatively'
-)
-
 
 class CandidateAnswerTracker:
     """Tracks candidate final answers across a reasoning rollout and enforces the 3-Tier Assumption-Independence Policy:
@@ -473,6 +431,11 @@ class CandidateAnswerTracker:
         obs = CandidateObservation(value=norm, method=method, signature=sig, source_text=expr_or_code[:200], at_token=at_token)
         self.observations.append(obs)
         return obs
+
+    def has_live_candidate(self) -> bool:
+        """A final candidate that nothing has falsified: what a loop close may answer with. Any observation at all counted before, a falsified
+        one included (#303)."""
+        return any(o.value not in self.falsified_values and o.signature not in self.falsified_signatures for o in self.observations)
 
     def record_falsification(self, wrong_value: Any = None, wrong_expr_or_signature: Optional[str] = None) -> None:
         """Mark a candidate value and/or assumption signature as falsified by small-case check or constraint substitution."""
@@ -590,7 +553,7 @@ def detect_candidate_line(
     full_text: str,
     at_token: int = 0,
     reflect_gate: bool = True,
-    min_tokens: int = 0,
+    min_tokens: int = CANDIDATE_MIN_TOKENS,
 ) -> Optional[CandidateDecision]:
     """Shared rule for live generation (tir4b) and offline replay.
     Records candidates from explicit conclusion patterns in `line`, and if `line` starts
@@ -599,11 +562,11 @@ def detect_candidate_line(
     if not line:
         return None
     for m in CAND_CONCLUSION_RE.finditer(line):
-        cand = (m.group(1) or m.group(2) or (m.group(3) if len(m.groups()) >= 3 else None) or '').strip()
+        cand = (m.group(1) or m.group(2) or '').strip()
         if cand:
-            recent = full_text[-320:].lower()
-            method = METHOD_SMALL_CASE_CHECK if any(k in recent for k in METHOD_CHECK_KEYWORDS) else METHOD_ALGEBRAIC
-            tracker.record_candidate(cand, recent[-160:], method=method, at_token=at_token)
+            # What the model writes is one method, however it words it: a check by a word in the text ('substituting', 'verified')
+            # made two runs of one derivation `CROSS_METHOD_CONFIRMED` (#303). Another method is software's: a program's output (tir4b).
+            tracker.record_candidate(cand, full_text[-160:].lower(), method=METHOD_ALGEBRAIC, at_token=at_token)
     if at_token >= min_tokens and REFLECT_STARTER_RE.match(line):
         dec = tracker.evaluate_candidate(reflect_gate=reflect_gate)
         if dec.should_close and dec.value is not None:

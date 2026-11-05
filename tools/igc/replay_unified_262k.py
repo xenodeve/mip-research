@@ -29,9 +29,7 @@ from tools.igc.unified_detect import (
     detect_candidate_line,
     CAND_CONCLUSION_RE,
     REFLECT_STARTER_RE,
-    METHOD_CHECK_KEYWORDS,
-    METHOD_ALGEBRAIC,
-    METHOD_SMALL_CASE_CHECK,
+    CANDIDATE_MIN_TOKENS,
     STATUS_CROSS_CONFIRMED,
     STATUS_SAME_ASSUMPTION,
 )
@@ -110,7 +108,7 @@ def compute_oracle_upper_bound(dataset: Dict[str, Any], label: str = "") -> Dict
 def replay_dataset(
     dataset: Dict[str, Any],
     variant: str = 'v1',
-    min_tokens: int = 1500,
+    min_tokens: int = CANDIDATE_MIN_TOKENS,
 ) -> Dict[str, Any]:
     """Replay candidate tracking on dataset traces using the shared LIVE rule.
     Variants:
@@ -132,33 +130,21 @@ def replay_dataset(
 
         for idx, ln in enumerate(lines):
             ln_str = ln.strip()
-            # Record candidate
-            for m in CAND_CONCLUSION_RE.finditer(ln_str):
-                cand = (m.group(1) or m.group(2) or (m.group(3) if len(m.groups()) >= 3 else None) or '').strip()
-                if cand:
-                    upto = text[:char_pos + m.end()]
-                    recent = upto[-320:].lower()
-                    method = METHOD_SMALL_CASE_CHECK if any(k in recent for k in METHOD_CHECK_KEYWORDS) else METHOD_ALGEBRAIC
-                    tok_pos = int(total_tokens * ((char_pos + m.end()) / total_chars))
-                    tracker.record_candidate(cand, recent[-160:], method=method, at_token=tok_pos)
-
-            est_tok = int(total_tokens * (char_pos / total_chars))
+            # The live rule itself (detect_candidate_line, as tir4b calls it), not a copy: the copy here had drifted from it (#303)
+            est_tok = int(total_tokens * ((char_pos + len(ln)) / total_chars))
             if REFLECT_STARTER_RE.match(ln_str):
                 reflections_seen += 1
-                if est_tok >= min_tokens:
-                    dec = tracker.evaluate_candidate(reflect_gate=True)
-                    if variant == 'v2' and dec.should_close and reflections_seen < 2:
-                        dec = None
-                    if dec is not None and dec.should_close and dec.value is not None:
-                        close_event = {
-                            'token': est_tok,
-                            'value': dec.value,
-                            'status': dec.status,
-                            'methods': dec.methods_seen,
-                            'sigs': dec.unique_signatures,
-                            'reflections': reflections_seen,
-                        }
-                        break
+            dec = detect_candidate_line(tracker, ln_str, text[:char_pos + len(ln)], at_token=est_tok, min_tokens=min_tokens)
+            if dec is not None and not (variant == 'v2' and reflections_seen < 2):
+                close_event = {
+                    'token': est_tok,
+                    'value': dec.value,
+                    'status': dec.status,
+                    'methods': dec.methods_seen,
+                    'sigs': dec.unique_signatures,
+                    'reflections': reflections_seen,
+                }
+                break
             char_pos += len(ln) + 1
 
         results[rid] = close_event

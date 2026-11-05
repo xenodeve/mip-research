@@ -83,6 +83,16 @@ def kinds(r):
     return [e['kind'] for e in r.events]
 
 
+def _pad():
+    """Thinking past CANDIDATE_MIN_TOKENS (one token a character here) with no cycle, no line back and no `=`."""
+    import random
+    rng = random.Random(7)
+    return ''.join(rng.choice('qwertyuiopasdfghjklzxcvbnm ,') for _ in range(1600)) + '\n'
+
+
+PAD = _pad()
+
+
 class ForcedBlock(unittest.TestCase):
     def test_ids_are_the_tokenizers(self):
         self.assertEqual(IDS.think_close, 5)
@@ -776,29 +786,79 @@ class UnifiedMathBackendAndCandidateClose(unittest.TestCase):
     """--mathbackend and --candidate-close: exact 6-module mathbackend inline evaluation and Assumption-Independent CandidateAnswerTracker."""
     def test_mathbackend_evaluates_exact_number_theory_and_combinatorics(self):
         r = rollout(inline_calc=True, inline_plain=True, mathbackend=True)
-        play(r, 'so \\gcd(84, 126) + C(10, 3) = and \\varphi(36) = done</think>\n\n162<|im_end|>', Kernel([]))
-        self.assertIn('\\gcd(84, 126) + C(10, 3) = 162 and \\varphi(36) = 12 done', r.text())
+        play(r, 'so \\gcd(84, 126) + comb(10, 3) = and \\varphi(36) = done</think>\n\n162<|im_end|>', Kernel([]))
+        self.assertIn('\\gcd(84, 126) + comb(10, 3) = 162 and \\varphi(36) = 12 done', r.text())
 
     def test_same_assumption_repeat_does_not_close_early(self):
         r = rollout(inline_calc=True, inline_plain=True, candidate_close=True)
-        play(r, 'by formula 6 \\times 7 + 2 = so the final answer is 44.\nagain 2 + 7 \\times 6 = so the final answer is 44.\nWait, let me double-check.\nactual answer</think>\n\n44<|im_end|>', Kernel([]))
+        play(r, PAD + 'by formula 6 \\times 7 + 2 = so the final answer is 44.\nagain 2 + 7 \\times 6 = so the final answer is 44.\nWait, let me double-check.\nactual answer</think>\n\n44<|im_end|>', Kernel([]))
         self.assertNotIn('candidate close', kinds(r))
         self.assertIn('actual answer</think>', r.text())
 
-    def test_cross_method_confirmation_closes_on_reflection(self):
+    def test_a_check_in_words_is_no_second_method(self):
+        """#303: the second run of one derivation said `substituting` / `small case check`, and the keyword made it CROSS_METHOD_CONFIRMED."""
         r = rollout(inline_calc=True, inline_plain=True, candidate_close=True)
-        play(r, 'by formula 6 \\times 7 + 2 = so the final answer is 44.\nsmall case check: 40 + 4 = so the final answer is 44.\nWait, let me double-check.\n\\boxed{44}<|im_end|>', Kernel([]))
+        play(r, PAD + 'Using the formula, the final answer is 42.\nNow substituting into the same formula again, small case check: the final answer is 42.\n'
+                'Wait, let me double-check.\nmore work</think>\n\n42<|im_end|>', Kernel([]))
+        self.assertNotIn('candidate close', kinds(r))
+        self.assertIn('more work</think>', r.text())
+
+    def test_a_program_that_prints_the_answer_confirms_it(self):
+        r = rollout(execute=True, candidate_close=True)
+        play(r, PAD + 'so the final answer is 44.\n```python\nprint(40 + 4)\n```\nWait, let me double-check.\n\\boxed{44}<|im_end|>', Kernel([(True, '44\n')]))
         self.assertIn('candidate close', kinds(r))
         ev = [e for e in r.events if e['kind'] == 'candidate close'][0]
         self.assertEqual((ev['value'], ev['status']), ('44', 'CROSS_METHOD_CONFIRMED'))
         self.assertEqual(r.finish, 'stop')
 
-    def test_loop_without_candidate_nudges_instead_of_forcing_answer_phase(self):
+    def test_a_program_that_prints_another_number_falsifies_nothing(self):
+        """#303: any printed line was a `search`, so a helper's intermediate value falsified every other answer."""
+        r = rollout(execute=True, candidate_close=True)
+        play(r, PAD + '```python\nprint(7 * 3)\n```\nso the final answer is 44.\nmore</think>\n\n44<|im_end|>', Kernel([(True, '21\n')]))
+        self.assertTrue(r.tracker.has_live_candidate())
+        self.assertEqual({o.method for o in r.tracker.observations}, {'METHOD_ALGEBRAIC'})
+
+    def test_loop_with_a_cycle_and_no_candidate_is_nudged_then_closed(self):
+        """#304: an exact cycle is cut back and nudged at most LOOP_NUDGES times; then it is closed so the model answers, never `stuck`."""
         r = rollout(execute=True, loop_close=True, candidate_close=True)
-        play(r, 'ab' * 700, Kernel([]))
-        self.assertIn('loop nudge', kinds(r))
-        self.assertEqual(r.phase, 'think')
+        play(r, 'ab' * (tir4b.CHUNK // 2) * (tir4b.LOOP_NUDGES + 1) + '\\boxed{1}<|im_end|>', Kernel([]))   # one loop check a chunk
+        self.assertEqual(kinds(r).count('loop nudge'), tir4b.LOOP_NUDGES)
+        self.assertIn('loop close', kinds(r))
+        self.assertNotEqual(r.finish, 'stuck')
+        self.assertEqual(r.record(lambda row, text: False)['loop_nudges'], tir4b.LOOP_NUDGES)
+
+    def test_a_line_back_loop_with_no_candidate_is_closed_not_nudged(self):
+        """#304: a cut of 64 tokens left the repeated lines in place; line_back fired at the next line end, three nudges, then `stuck`."""
+        import random
+        rng = random.Random(3)
+        same = 'and so the sum must be even here\n'
+        script = ''.join(same + ''.join(rng.choice('qwertyuiopasdfghjklzxcvbnm ') for _ in range(30)) + '\n' for _ in range(16)) + '\\boxed{7}<|im_end|>'
+        r = rollout(execute=True, loop_close=True, candidate_close=True)
+        play(r, script, Kernel([]))
+        self.assertNotIn('loop nudge', kinds(r))
+        self.assertIn('loop close', kinds(r))
+        self.assertNotEqual(r.finish, 'stuck')
+
+
+class RepeatedValues(unittest.TestCase):
+    """#301: an expression used three times anywhere in an answer closed or nudged the thinking as a loop, at the third use in 41 of 48
+    stored inlineclose answers. Only an echo (values back to back, close together) is left to the model; whether it loops is the loop checks'."""
+    def test_one_expression_three_times_in_a_derivation_is_no_loop(self):
+        r = rollout(inline_calc=True, inline_plain=True, loop_close=True, candidate_close=True)
+        filler = ' then the other side of the figure needs its own length worked out, '
+        play(r, 'side 2^2 =' + filler + 'again 2^2 =' + filler + 'and 2^2 =' + filler + 'done</think>\n\n4<|im_end|>', Kernel([]))
+        self.assertEqual(r.text().count('2^2 = 4'), 3)
         self.assertNotIn('loop close', kinds(r))
+        self.assertNotIn('loop nudge', kinds(r))
+        self.assertEqual(r.echo_skips, 0)
+
+    def test_an_echo_is_left_to_the_model_and_closes_nothing(self):
+        r = rollout(inline_calc=True, inline_plain=True, loop_close=True)
+        play(r, '6 \\times 7 = so 6 \\times 7 = so 6 \\times 7 = 42 ok</think>\n\n42<|im_end|>', Kernel([]))
+        self.assertEqual(kinds(r).count('inline value'), 2)
+        self.assertEqual(r.echo_skips, 1)
+        self.assertNotIn('loop close', kinds(r))
+        self.assertIn('42 ok</think>', r.text())
 
 
 if __name__ == '__main__':

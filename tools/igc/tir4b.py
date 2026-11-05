@@ -12,7 +12,7 @@ Not here: MIP's inline arithmetic, which lives in the CUDA engine. Every text th
 tir4b.py run --model M --rows R.jsonl --out DIR [--force-after 512] [--execute] [--close-fit] [--loop-close] [--samples K] [--seed S] [--ids]
 tir4b.py math-train OUT.jsonl --n N [--levels 3,4,5] [--exclude ROWS.jsonl ...]     (on the VM: MATH train, never a test row)
 tir4b.py keep DIR [DIR ...] --out TRAIN.jsonl [--max-len 32768]                      (the trajectory each question trains on)"""
-import argparse, collections, hashlib, json, os, random, re, sys, time
+import argparse, hashlib, json, os, random, re, sys, time
 from concurrent.futures import ThreadPoolExecutor
 from fractions import Fraction
 from pathlib import Path
@@ -77,6 +77,12 @@ _EXPANSION = re.compile(r'-?\d*\.\d{30,}')
 # thinking is cut back to one round and a program opens to test the idea, LOOP_HINTS times; the next loop ends the answer as before.
 LOOP_HINT = 'I keep going around the same idea. Let me test it with python instead.\n```python\n'
 LOOP_HINTS = 3
+# --candidate-close: a loop in the thinking with no final answer yet is cut back to one round and nudged, at most LOOP_NUDGES times (#304)
+LOOP_NUDGE = '\nWait, let me rethink this derivation carefully.\n'
+LOOP_NUDGES = 3
+# --inline-calc: the ECHO_RUN-th value in a row for one expression, each within ECHO_GAP model tokens of the last, is left to the model (#301)
+ECHO_RUN = 3
+ECHO_GAP = 64
 # The words the model should learn to write itself, as START's Hint-RFT keeps its hints in the text it trains on.
 TRAIN_KINDS = ('forced open', 'close after a fitting result', 'hint open', 'trust hint', 'loop hint')
 MASK_KINDS = ('output', 'inline value', 'logit value', 'tool response', 'hand check')   # what the kernel printed and the values software computed: read, never learned
@@ -263,7 +269,10 @@ class Rollout:
         self.plan = None     # --logit-value: the token ids of the value being written, one biased request each
         self.plan_at, self.plan_own, self.plan_event, self.last_lp = 0, [], None, None
         self.window = 0   # --suppress-recheck: steps left in which the re-check words are held down
-        self.injected_exprs = collections.Counter()
+        self.echo = (None, 0, 0)   # (expression, its run of back-to-back values, model_tokens at the last): see echoing()
+        self.loop_floor = 0   # the loop checks of the thinking read from here: a nudge starts them afresh (#304)
+        self.loop_nudges = 0
+        self.echo_skips = 0   # values echoing() left to the model
         if arm.candidate_close:
             from tools.igc.unified_detect import CandidateAnswerTracker
             self.tracker = CandidateAnswerTracker()
@@ -409,14 +418,7 @@ class Rollout:
                 self.start_plan(*found)   # the value is not put in: the model writes it, its prediction of each token raised
             elif found is not None:   # the value the model would have computed, computed: the reasoning goes on from it
                 expr, value = found
-                norm_expr = re.sub(r'[\s()]', '', expr)
-                self.injected_exprs[norm_expr] += 1
-                if self.injected_exprs[norm_expr] >= 3:
-                    # Echo loop detected on identical arithmetic expression; stop repeating injection
-                    if self.phase == 'think' and self.arm.loop_close:
-                        self.on_loop()
-                        return False
-                else:
+                if not self.echoing(re.sub(r'[\s()]', '', expr)):
                     if whole:
                         value = self.question_value(value)
                     self.whole_pending = False
@@ -430,7 +432,7 @@ class Rollout:
                 self.done('length')
             elif len(self.out) - self.checked >= CHUNK:   # a request that ends at `=` skips the checks below: a loop of equations would run on
                 self.checked = len(self.out)
-                if looping(self.out):
+                if self.looping_now():
                     self.on_loop()
             return False
         self.checked = len(self.out)
@@ -507,13 +509,33 @@ class Rollout:
         if self.arm.force_after and not self.forced and self.thought >= self.arm.force_after:
             self.phase = 'seek'
             return False
-        if looping(self.out):
+        if self.looping_now():
             self.on_loop()
         return False
 
+    def echoing(self, expr):
+        """True when software's value for `expr` would be the ECHO_RUN-th back to back (no other value between, each within ECHO_GAP model
+        tokens of the last): `= 15/13 (exact) = 15/13 (exact) = ...`. The value is then left to the model, and whether the thinking loops is
+        for the loop checks to say. A count over the whole answer is no loop: `2^2` three times in a derivation is normal, and that count cut
+        or nudged the thinking at the third use in 41 of 48 stored inlineclose answers (#301)."""
+        last, run, at = self.echo
+        now = self.model_tokens()
+        run = run + 1 if expr == last and now - at <= ECHO_GAP else 1
+        self.echo = (expr, run, now)
+        self.echo_skips += run >= ECHO_RUN
+        return run >= ECHO_RUN
+
+    def looping_now(self):
+        """The loop checks over the thinking since the last nudge (all of it before one): a nudge leaves the lines that looped in the text, and
+        line_back counts lines over the whole history, so read from the start every check after a nudge fired again at once (#304)."""
+        return looping(self.out[self.loop_floor:] if self.phase == 'think' else self.out)
+
     def on_loop(self):
         """A loop in the thinking: a program to test the idea (--loop-hint, at most LOOP_HINTS), else the close (--loop-close), else the
-        bench's guard in every arm, MIP or not: a loop that cannot leave would run to the end of the context alone (external_bench)."""
+        bench's guard in every arm, MIP or not: a loop that cannot leave would run to the end of the context alone (external_bench).
+        With --candidate-close and no final answer yet, a loop with an exact cycle is cut back to one round and nudged (at most LOOP_NUDGES);
+        any other loop, or one past the nudges, is closed so the model still answers: a nudge that cut 64 tokens of a line_back loop left the
+        loop in place and ended the answer `stuck`, with no answer (#304)."""
         if self.phase == 'think' and self.arm.loop_hint and self.loop_hints < LOOP_HINTS:
             floor = self.spans[-1][1] if self.spans else 0
             cut = max(loop_start(self.out) or len(self.out), floor)
@@ -524,23 +546,19 @@ class Rollout:
             self.events[-1].update(cut_tokens=taken)
             self.enter('loop')
         elif self.phase == 'think' and self.arm.loop_close:
-            has_cand = True
-            if self.arm.candidate_close and self.tracker is not None:
-                has_cand = bool(self.tracker.observations)
-            if has_cand:
-                self.inject(LOOP_CLOSE, 'loop close')
-                self.phase = 'answer'
-            else:
-                floor = self.spans[-1][1] if self.spans else 0
-                cut = max(loop_start(self.out) or (len(self.out) - 64), floor)
-                if cut < len(self.out) and getattr(self, '_loop_nudges', 0) < 3:
-                    self._loop_nudges = getattr(self, '_loop_nudges', 0) + 1
-                    taken = len(self.out) - cut
-                    del self.out[cut:]
-                    self.inject('\nWait, let me rethink this derivation carefully.\n', 'loop nudge')
-                    self.events.append(dict(kind='loop nudge', at=len(self.out), cut_tokens=taken))
-                else:
-                    self.done('stuck')
+            if self.tracker is not None and not self.tracker.has_live_candidate() and self.loop_nudges < LOOP_NUDGES:
+                floor = max(self.spans[-1][1] if self.spans else 0, self.loop_floor)
+                start = loop_start(self.out[floor:])
+                if start is not None:
+                    self.loop_nudges += 1
+                    taken = len(self.out) - (floor + start)
+                    del self.out[floor + start:]
+                    self.inject(LOOP_NUDGE, 'loop nudge')
+                    self.events[-1].update(cut_tokens=taken, nudge=self.loop_nudges)
+                    self.loop_floor = len(self.out)
+                    return
+            self.inject(LOOP_CLOSE, 'loop close')
+            self.phase = 'answer'
         else:
             self.done('stuck')
 
@@ -655,8 +673,8 @@ class Rollout:
         for expr, wrote, right in wrong_relations(line, self.moduli):
             self.inject(CORRECTION.format(expr=expr, right=right, wrote=wrote), 'hand check')
             self.events[-1].update(expr=expr[:200], value=right, wrote=wrote)
-            if self.tracker is not None:
-                self.tracker.record_falsification(wrong_value=wrote, wrong_expr_or_signature=expr)
+            # No falsification here: a wrong value of one step says nothing of the final answer, and marking it falsified for the whole
+            # answer kept an answer that happened to equal it from ever closing (#303)
 
     def check_candidate_line(self):
         """--candidate-close: records explicit final-answer conclusions (`\\boxed{v}`, `the final answer is v`) and checks whether the
@@ -667,7 +685,7 @@ class Rollout:
         from tools.igc.unified_detect import detect_candidate_line
         text = self.text()
         line = text.rstrip('\n').rsplit('\n', 1)[-1].strip()
-        dec = detect_candidate_line(self.tracker, line, text, at_token=len(self.out))
+        dec = detect_candidate_line(self.tracker, line, text, at_token=self.model_tokens())
         if dec is not None and dec.should_close and dec.value is not None:
             self.inject(LOOP_CLOSE, 'candidate close')
             self.events[-1].update(value=spelled(dec.value), status=dec.status, methods=list(dec.methods_seen), signatures=dec.unique_signatures)
@@ -755,9 +773,13 @@ class Rollout:
         self.events[-1].update(kind='output', by=self.by, code=code[:20000], code_chars=len(code), shown=(shown or '')[:4096],
                                shown_chars=len(shown or ''), ok=ok, seconds=took, fits=fits, run_at=at, auto_call=self.auto_call)
         if fits and self.tracker is not None:
+            # A program's last printed value confirms a final answer the model already wrote, and only that: any printed line went in
+            # before, so a helper that printed an intermediate number became a "search" that falsified every other answer (#303)
             from tools.igc.unified_detect import METHOD_EXHAUSTIVE_SEARCH
             last_ln = (shown or '').strip().splitlines()[-1].strip()
-            self.tracker.record_candidate(last_ln, code, method=METHOD_EXHAUSTIVE_SEARCH, at_token=len(self.out))
+            value = self.tracker.normalize_candidate(last_ln)
+            if value is not None and any(o.value == value for o in self.tracker.observations):
+                self.tracker.record_candidate(last_ln, code, method=METHOD_EXHAUSTIVE_SEARCH, at_token=self.model_tokens())
         if self.by == 'hint' and fits and self.arm.trust != 'none':
             self.inject(TRUST_LINES[self.arm.trust], 'trust hint')
         if self.arm.close_fit and fits:
@@ -774,7 +796,7 @@ class Rollout:
                     prompt_tokens=len(self.prompt), thinking_tokens=self.thought, seconds=self.seconds, events=self.events,
                     runs=len(runs), runs_by_model=sum(e['by'] == 'model' for e in runs), runs_forced=sum(e['by'] == 'forced' for e in runs),
                     runs_by_tool=sum(e['by'] in ('tool', 'tool in thinking') for e in runs),
-                    inline_values=sum(e['kind'] == 'inline value' for e in self.events),
+                    inline_values=sum(e['kind'] == 'inline value' for e in self.events), loop_nudges=self.loop_nudges, echo_skips=self.echo_skips,
                     first_run_at=runs[0]['model_tokens'] if runs else None, tool_seconds=round(sum(e['seconds'] for e in runs), 3))
 
 
