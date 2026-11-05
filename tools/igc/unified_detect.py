@@ -362,7 +362,8 @@ def evaluate_with_mathbackend(text: str, context: str = '') -> Optional[Fraction
 
 
 _TAIL_OF_MORE = re.compile(r'(?:[+*/^×÷·⋅]|\\times|\\cdot|\\div)')
-_TAIL_OF_MORE_BEFORE = re.compile(r'(?:[+\-*/^×÷·⋅−)\]}\d]|\\times|\\cdot|\\div)\s*$')
+_TAIL_OF_MORE_BEFORE = re.compile(r'(?:[+\-*/^×÷·⋅−±∓)\]}\d|]|\\times|\\cdot|\\div|\\pm|\\mp)\s*$')
+_CONGRUENCE = re.compile(r'\\equiv|≡|\bparity\b', re.I)
 # What exactexpr reads and mathexpr does not: a line with none of these is left to mathexpr alone, so most `=` cost nothing more
 # (`\sum_`, `\log_2`: `_` is a word character, so the command names end at a non-letter, not at \b)
 _EXACT_HINT = re.compile(r'\\sqrt|√|\bsqrt\b|\\(?:sin|cos|tan|cot|sec|csc|log|ln|sum|prod|binom|dbinom|tbinom|pi|bmod|pmod|mod|lfloor|lceil)(?![A-Za-z])'
@@ -438,18 +439,29 @@ _NOT_A_SYMBOL = {'times', 'cdot', 'div', 'ast', 'pm', 'mp', 'le', 'ge', 'leq', '
                  'Big', 'bigg', 'Bigg', 'colon', 'therefore', 'because', 'in', 'notin', 'subset', 'cup', 'cap', 'land', 'lor', 'mid'}
 
 
+def _lone_number(expr: str) -> bool:
+    return re.fullmatch(r'-?\d+(?:\.\d+)?', exactexpr._DEGREE.sub('', expr).replace('°', '').strip('() {}')) is not None
+
+
 def expression_before_exact(text: str):
     """(expression, value) for the longest exact expression that ends `text` on its last line, read by `evaluate_exact`, or None.
     The value is a Fraction, or the spelling of a value with roots in it (`3\\sqrt{186}`, plain `3*sqrt(186)` in a line with no LaTeX).
     None too when that value is already what the text wrote."""
     got = mathexpr.expression_before(text)
     line = text.rsplit('\n', 1)[-1].rstrip()
+    if _CONGRUENCE.search(line):
+        return None   # `The parity is $1 + 1 = 0$`: a line that works mod m wants the residue (contest-ab7dcc84, sim_replay)
+    stop = len(line)
+    if got is not None and _lone_number(got[0]):
+        return None   # `60^\circ =`: mathexpr drops the degree sign and finds 60, but the model was turning it into pi/3 (contest-4d9e52e5)
+    if got is not None:
+        at = line.rfind(got[0])
+        if at >= 0 and _start_refused(line, at):
+            got = None   # mathexpr's tail of a longer expression: `|x| - 1/2` read as -1/2, `\pm 2\sqrt{12}` (sim_replay, a100 ctrlb)
+        else:
+            stop = at if at >= 0 else len(line)   # a longer expression than mathexpr's: `\sqrt{2} \cdot 4 + 1` is not 5
     if not _EXACT_HINT.search(line):
         return got
-    stop = len(line)
-    if got is not None:   # a longer expression than mathexpr's: `\sqrt{2} \cdot 4 + 1` is not 5
-        at = line.rfind(got[0])
-        stop = at if at >= 0 else len(line)
     base = text[:len(text) - len(text.rsplit('\n', 1)[-1])]   # the text before this line
     functions = None
     for i in range(stop):
@@ -468,8 +480,8 @@ def expression_before_exact(text: str):
             continue
         if isinstance(v, Fraction):
             said = mathexpr.spelled(v)
-            if re.fullmatch(r'-?\d+(?:\.\d+)?', cand.strip('() ')):
-                return None   # a lone number, `(3)`
+            if _lone_number(cand):
+                return None   # a lone number, `(3)`, `60^\circ`
             return (cand, v) if not _same_spelling(cand, said) else None
         latex = '\\' in cand or ('sqrt' not in cand and '$' in line)
         said = exactexpr.spell(v, latex=latex)
