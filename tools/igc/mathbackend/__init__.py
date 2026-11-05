@@ -185,7 +185,8 @@ class Surd:
         return (self.p, self.q, self.d if self.q else 1) == (o.p, o.q, o.d if o.q else 1)
 
     def __hash__(self):
-        return hash((self.p, self.q, self.d if self.q else 1))
+        # equal to a rational when q == 0 (Surd(3) == 3), so it hashes as one: {Surd(3), 3} had two members
+        return hash(self.p) if not self.q else hash((self.p, self.q, self.d))
 
     def _cmp(self, o):
         o = self._like(o)

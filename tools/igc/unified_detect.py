@@ -37,6 +37,7 @@ Implements the two core safeguards of `docs/plans/2026-11-05-mip-unified-detecti
 from __future__ import annotations
 
 import ast
+import functools
 from collections import Counter
 from dataclasses import dataclass, field
 from fractions import Fraction
@@ -54,8 +55,14 @@ from tools.igc import mathbackend
 # ----------------------------------------------------------------------------------------------------------------------------------
 
 _FUNC_CALL = re.compile(
-    r'(?:\\operatorname\{(?P<op>[A-Za-z_][A-Za-z0-9_]*)\}|\\(?P<tex>gcd|lcm|phi|varphi|tau|sigma|mu|det)\b|(?P<plain>\b(?:gcd|lcm|phi|totient|tau|sigma|mu|modinv|invmod|catalan|derangements|bell|partition|stirling1|stirling2|lucas|fibonacci|comb|perm)\b))\s*\(\s*(?P<args>[^()]+)\s*\)'
+    r'(?:\\operatorname\{(?P<op>[A-Za-z_][A-Za-z0-9_]*)\}|\\(?P<tex>gcd|lcm|varphi|det)\b|(?P<plain>\b(?:gcd|lcm|totient|modinv|invmod|catalan|derangements|bell|partition|stirling1|stirling2|lucas|fibonacci|comb|perm)\b))\s*\(\s*(?P<args>[^()]+)\s*\)'
 )
+# Greek letters name other things as often as number-theory functions: `\sigma(1)` of a permutation got sigma(1) = 1 put in, `\tau(2)` of a
+# step function 2, and `\mu`, `\phi` the same. Only `\varphi` and `totient` stay for Euler's function.
+# A result past mathexpr.LIMIT is thrown away after it is computed, and `comb(1000000, 500000)` took 74 s on one line before it was: these
+# are the largest arguments whose value can still be under 10^40 (or that cost under a second), refused before computing.
+_MOST_N = dict(catalan=80, derangements=40, bell=60, partition=2000, stirling1=120, stirling2=120, fibonacci=200, lucas=200)
+_LOG10_LIMIT = math.log10(mathexpr.LIMIT) + 1
 _MOD_INV_TEX = re.compile(r'(-?\d+)\s*\^\s*\{\s*-1\s*\}\s*(?:\\pmod|\\bmod|\bmod)\s*\{?\s*(\d+)\s*\}?')
 _DET_MATRIX = re.compile(
     r'(?:\\(?:operatorname\{det\}|det)\s*(?:\([^\S\r\n]*)?(?:\\left[\[\(|.]\s*)?)?'
@@ -140,6 +147,8 @@ def _parse_fraction_args(raw: str) -> Optional[List[Fraction]]:
 
 
 def _parse_int_args(raw: str) -> Optional[List[int]]:
+    if re.search(r'\d,\d{3}(?!\d)', raw):
+        return None   # `gcd(1,000, 25)`: a thousands separator or two arguments, and mathexpr reads 12,510,204 as one number
     parts = [p.strip() for p in raw.split(',') if p.strip()]
     if not parts:
         return None
@@ -150,6 +159,48 @@ def _parse_int_args(raw: str) -> Optional[List[int]]:
             return None
         out.append(int(val.numerator))
     return out
+
+
+_CALLS = {   # name in the text -> (operation, the argument counts it takes)
+    'gcd': ('numbers.gcd', None), 'lcm': ('numbers.lcm', None), 'varphi': ('numbers.totient', (1,)), 'totient': ('numbers.totient', (1,)),
+    'modinv': ('numbers.modinv', (2,)), 'invmod': ('numbers.modinv', (2,)), 'comb': ('numbers.binomial', (2,)),
+    'perm': ('numbers.falling_factorial', (2,)), 'catalan': ('counting.catalan', (1,)), 'derangements': ('counting.derangements', (1,)),
+    'bell': ('numbers.bell', (1,)), 'partition': ('counting.partition_count', (1,)), 'stirling1': ('numbers.stirling1', (2,)),
+    'stirling2': ('numbers.stirling2', (2,)), 'fibonacci': ('numbers.fibonacci', (1,)), 'lucas': ('numbers.lucas', (1,)),
+}
+
+
+def _too_big(name: str, args: Tuple[int, ...]) -> bool:
+    """True when the value cannot be under mathexpr.LIMIT, or costs more than it could give: refused before it is computed."""
+    if name in _MOST_N:
+        return abs(args[0]) > _MOST_N[name]
+    if name in ('comb', 'perm'):
+        n, k = args
+        if k < 0 or k > 10 ** 4:
+            return True
+        if 0 <= k <= n:
+            digits = (math.lgamma(n + 1) - math.lgamma(n - k + 1) - (math.lgamma(k + 1) if name == 'comb' else 0)) / math.log(10)
+            return digits > _LOG10_LIMIT
+        return n < 0 and k * math.log10(abs(n) + k) > _LOG10_LIMIT   # k > n >= 0 is 0; a negative n grows like a rising factorial
+    return False
+
+
+@functools.lru_cache(maxsize=4096)
+def _call(name: str, args: Tuple[int, ...]) -> Optional[int]:
+    """The integer value of one call in the text, or None. Cached: the bridge tries every start of a line, and each start that holds the
+    call ran it again from scratch (13 runs of one call on one line)."""
+    op = _CALLS.get(name)
+    if op is None or (op[1] is not None and len(args) not in op[1]) or (op[1] is None and len(args) < 2) or _too_big(name, args):
+        return None
+    try:
+        r = mathbackend.run(op[0], *args)
+    except (mathbackend.BadInput, mathbackend.NotCovered, ValueError, TypeError):
+        return None
+    if isinstance(r, Fraction) and r.denominator == 1:
+        r = r.numerator   # falling_factorial answers in Fractions
+    if isinstance(r, bool) or not isinstance(r, int) or abs(r) > mathexpr.LIMIT:
+        return None   # modinv with no inverse returns (), and a value past the limit is no step of a calculation
+    return r
 
 
 def evaluate_with_mathbackend(text: str) -> Optional[Fraction]:
@@ -198,54 +249,11 @@ def evaluate_with_mathbackend(text: str) -> Optional[Fraction]:
         nonlocal failed
         name = (m.group('op') or m.group('tex') or m.group('plain') or '').lower()
         args = _parse_int_args(m.group('args'))
-        if args is None:
+        r = None if args is None else _call(name, tuple(args))
+        if r is None:
             failed = True
             return m.group(0)
-        try:
-            if name == 'gcd' and len(args) >= 2:
-                r = mathbackend.run('numbers.gcd', *args)
-            elif name == 'lcm' and len(args) >= 2:
-                r = mathbackend.run('numbers.lcm', *args)
-            elif name in ('phi', 'varphi', 'totient') and len(args) == 1:
-                r = mathbackend.run('numbers.totient', args[0])
-            elif name == 'mu' and len(args) == 1:
-                r = mathbackend.run('numbers.moebius', args[0])
-            elif name == 'tau' and len(args) == 1:
-                r = mathbackend.run('numbers.num_divisors', args[0])
-            elif name == 'sigma' and len(args) in (1, 2):
-                r = mathbackend.run('numbers.sigma', *args)
-            elif name in ('modinv', 'invmod') and len(args) == 2:
-                r = mathbackend.run('numbers.modinv', args[0], args[1])
-                if not isinstance(r, int):
-                    failed = True
-                    return m.group(0)
-            elif name == 'comb' and len(args) == 2:
-                r = mathbackend.run('numbers.binomial', args[0], args[1])
-            elif name == 'perm' and len(args) == 2:
-                r = mathbackend.run('numbers.falling_factorial', args[0], args[1])
-            elif name == 'catalan' and len(args) == 1:
-                r = mathbackend.run('counting.catalan', args[0])
-            elif name == 'derangements' and len(args) == 1:
-                r = mathbackend.run('counting.derangements', args[0])
-            elif name == 'bell' and len(args) == 1:
-                r = mathbackend.run('numbers.bell', args[0])
-            elif name == 'partition' and len(args) == 1:
-                r = mathbackend.run('counting.partition_count', args[0])
-            elif name == 'stirling1' and len(args) == 2:
-                r = mathbackend.run('numbers.stirling1', args[0], args[1])
-            elif name == 'stirling2' and len(args) == 2:
-                r = mathbackend.run('numbers.stirling2', args[0], args[1])
-            elif name == 'fibonacci' and len(args) == 1:
-                r = mathbackend.run('numbers.fibonacci', args[0])
-            elif name == 'lucas' and len(args) == 1:
-                r = mathbackend.run('numbers.lucas', args[0])
-            else:
-                failed = True
-                return m.group(0)
-            return f'({int(r)})'
-        except (mathbackend.BadInput, mathbackend.NotCovered, ValueError, TypeError):
-            failed = True
-            return m.group(0)
+        return f'({r})'
 
     rewritten = _FUNC_CALL.sub(_replace_call, s)
     if failed:
