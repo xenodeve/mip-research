@@ -1,5 +1,5 @@
 import unittest
-from tools.igc.external_score import final_number, question_id
+from tools.igc.external_score import final_number, line_back, question_id, repeating
 
 
 class FinalNumber(unittest.TestCase):
@@ -43,6 +43,19 @@ class QuestionId(unittest.TestCase):
         self.assertEqual(question_id('math', 'What is 2+2?'), question_id('math', 'What is 2+2?'))
         self.assertNotEqual(question_id('math', 'What is 2+2?'), question_id('math', 'What is 2+3?'))
         self.assertTrue(question_id('gsm8k', 'q').startswith('gsm8k-'))
+
+
+class LineBackLoop(unittest.TestCase):
+    def test_repeating_catches_line_back_at_line_end_without_waiting_for_4096_boundary(self):
+        # A 15-token line repeated 16 times separated by varying filler so it is not a periodic tail, ending on newline 198 at len != 4096*k
+        line = list(range(300, 315)) + [198]
+        tokens = []
+        for i in range(16):
+            tokens.extend([500 + i, 600 + i * 3, 198])
+            tokens.extend(line)
+        self.assertNotEqual(len(tokens) % 4096, 0)
+        self.assertTrue(line_back(tokens))
+        self.assertTrue(repeating(tokens))
 
 
 if __name__ == '__main__':

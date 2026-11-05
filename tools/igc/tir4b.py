@@ -120,7 +120,7 @@ class Ids:
 class Arm:
     def __init__(self, force_after=0, execute=False, close_fit=False, loop_close=False, close_repeat=0, inline_calc=False, native_tool=False,
                  hint_calc=False, loop_hint=False, inline_plain=False, whole_hint=False, check_hand=False, whole_plain=False, hand_off=False, question_value=False,
-                 trust='cort', logit_value=0.0, suppress_recheck=0):
+                 trust='cort', logit_value=0.0, suppress_recheck=0, mathbackend=False, candidate_close=False):
         self.trust = trust   # the line after a hinted program that printed: 'cort' (the original), 'none', 'positive'
         self.suppress_recheck = suppress_recheck   # --suppress-recheck: this many steps after a value software gave, the re-check words' logits are lowered
         self.logit_value = logit_value   # --logit-value: the logit added to software's next value token while the model writes the value itself
@@ -128,6 +128,7 @@ class Arm:
         self.inline_calc, self.native_tool, self.hint_calc, self.loop_hint = inline_calc, native_tool, hint_calc, loop_hint
         self.inline_plain, self.whole_hint, self.check_hand = inline_plain, whole_hint, check_hand
         self.whole_plain, self.hand_off, self.question_value = whole_plain, hand_off, question_value
+        self.mathbackend, self.candidate_close = mathbackend, candidate_close
 
 
 # --inline-calc: MIP Native's inline value (include/strata/core/igc_inline.hpp parse_inline / after_value) for a model the engine cannot run yet.
@@ -175,13 +176,17 @@ def tedious(expr, value):
     return any(len(n) >= 3 for n in re.findall(r'\d+', expr)) or len(_OPS.findall(expr)) >= 3 or abs(Fraction(value)) >= 1000
 
 
-def inline_found(before, whole=False):
+def inline_found(before, whole=False, use_mathbackend=False):
     """(expression, spelled exact value) for the arithmetic that ends the text before an `=`, or None. The expression is read by
     tools.igc.mathexpr in every form a model writes (LaTeX at any depth, Unicode, ASCII); it refuses a symbol (algebra), a word, a mixed
-    number, a root or power that is not exact. `whole`: the expression the --whole-hint asked for, whose value is given even as an uneven
-    quotient, since it is the step itself, not a piece of the model's long division."""
+    number, a root or power that is not exact. When `use_mathbackend` is True, also resolves exact calls to the 6-module mathbackend
+    (gcd, lcm, phi, C, P, catalan, derangements, modinv, 2x2 det). `whole`: the expression the --whole-hint asked for, whose value is
+    given even as an uneven quotient, since it is the step itself, not a piece of the model's long division."""
     from tools.igc.mathexpr import expression_before, simple_quotient
     found = expression_before(before)
+    if found is None and use_mathbackend:
+        from tools.igc.unified_detect import expression_before_with_mathbackend
+        found = expression_before_with_mathbackend(before)
     if found is None:
         return None
     expr, value = found
@@ -195,9 +200,9 @@ def inline_found(before, whole=False):
     return expr, said
 
 
-def inline_value(before, whole=False):
+def inline_value(before, whole=False, use_mathbackend=False):
     """The spelled exact value of inline_found, or None."""
-    found = inline_found(before, whole)
+    found = inline_found(before, whole, use_mathbackend=use_mathbackend)
     return found[1] if found else None
 
 
@@ -252,6 +257,11 @@ class Rollout:
         self.plan = None     # --logit-value: the token ids of the value being written, one biased request each
         self.plan_at, self.plan_own, self.plan_event, self.last_lp = 0, [], None, None
         self.window = 0   # --suppress-recheck: steps left in which the re-check words are held down
+        if arm.candidate_close:
+            from tools.igc.unified_detect import CandidateAnswerTracker
+            self.tracker = CandidateAnswerTracker()
+        else:
+            self.tracker = None
 
     def bias(self):
         """{token id: logit added} for the request now asked, or None. --logit-value: software's next token, the model writes the value itself.
@@ -340,6 +350,8 @@ class Rollout:
             stops.add(self.ids.tool_close)
         if self.arm.check_hand and self.phase in ('think', 'answer'):
             stops |= self.ids.lines   # every line is checked as it ends, so a correction follows the line it corrects
+        if self.arm.candidate_close and self.phase == 'think':
+            stops |= self.ids.lines   # candidate answers and reflection starters are checked at line ends
         if self.whole_pending:
             stops |= self.ids.lines   # the whole step may come as a line of its own, with no `=`
         if self.arm.hand_off and self.given:
@@ -374,6 +386,8 @@ class Rollout:
             return False
         if self.arm.check_hand and self.phase in ('think', 'answer') and last in self.ids.lines:
             self.check_line()
+        if self.arm.candidate_close and self.phase == 'think' and last in self.ids.lines and self.check_candidate_line():
+            return False
         if self.whole_pending and self.arm.inline_calc and last in self.ids.lines:
             self.whole_line()
         if self.arm.hand_off and self.given and self.restated(last in self.ids.lines):
@@ -383,7 +397,7 @@ class Rollout:
         if (self.arm.inline_calc or self.arm.hint_calc or self.arm.logit_value) and last in self.ids.equals and self.phase in ('think', 'answer'):
             text = self.text()
             whole = self.whole_pending
-            found = inline_found(text[:text.rstrip().rfind('=')], whole=whole) if self.arm.inline_calc or self.arm.logit_value else None
+            found = inline_found(text[:text.rstrip().rfind('=')], whole=whole, use_mathbackend=self.arm.mathbackend) if self.arm.inline_calc or self.arm.logit_value else None
             if found is not None and self.arm.logit_value and not self.arm.inline_calc:
                 self.start_plan(*found)   # the value is not put in: the model writes it, its prediction of each token raised
             elif found is not None:   # the value the model would have computed, computed: the reasoning goes on from it
@@ -611,6 +625,33 @@ class Rollout:
         for expr, wrote, right in wrong_relations(line, self.moduli):
             self.inject(CORRECTION.format(expr=expr, right=right, wrote=wrote), 'hand check')
             self.events[-1].update(expr=expr[:200], value=right, wrote=wrote)
+            if self.tracker is not None:
+                self.tracker.record_falsification(wrong_value=wrote, wrong_expr_or_signature=expr)
+
+    def check_candidate_line(self):
+        """--candidate-close: records explicit final-answer conclusions (`\\boxed{v}`, `the final answer is v`) and checks whether the
+        3-tier CandidateAnswerTracker (`CROSS_METHOD_CONFIRMED`, never `SAME_ASSUMPTION_REPEAT` or `FALSIFIED_BY_SEARCH`) closes the
+        thinking when a reflection starter (`Wait`, `Hmm`, `Let me double-check`, `Let me verify`) begins a redundant re-check."""
+        if self.tracker is None or self.phase != 'think':
+            return False
+        from tools.igc.unified_detect import METHOD_ALGEBRAIC, METHOD_SMALL_CASE_CHECK
+        line = self.text().rstrip('\n').rsplit('\n', 1)[-1].strip()
+        if not line:
+            return False
+        for m in re.finditer(r'\\boxed\{([^{}]+)\}|(?:the\s+(?:final\s+)?answer\s+(?:is|should\s+be|would\s+be)|therefore[,\s]+the\s+(?:final\s+)?answer\s+is|so\s+the\s+final\s+answer\s+is)\s*\$?(-?\d+(?:/\d+)?)', line, re.I):
+            cand = (m.group(1) or m.group(2) or '').strip()
+            if cand:
+                recent = self.text()[-320:].lower()
+                method = METHOD_SMALL_CASE_CHECK if any(k in recent for k in ('small case', 'check:', 'verify:', 'verified', 'substitut', 'method 2', 'second method', 'another way', 'alternatively')) else METHOD_ALGEBRAIC
+                self.tracker.record_candidate(cand, recent[-160:], method=method, at_token=len(self.out))
+        if re.match(r'^(?:wait\b|hmm+\b|let\s+me\s+(?:double[- ]?check|re-?check|verify|recalculate)|let\'s\s+(?:double[- ]?check|verify))', line, re.I):
+            dec = self.tracker.evaluate_candidate(reflect_gate=True)
+            if dec.should_close and dec.value is not None:
+                self.inject(LOOP_CLOSE, 'candidate close')
+                self.events[-1].update(value=spelled(dec.value), status=dec.status, methods=list(dec.methods_seen), signatures=dec.unique_signatures)
+                self.phase = 'answer'
+                return True
+        return False
 
     def hint_due(self):
         """At an `=` that ends tedious arithmetic, spaced HINT_GAP apart: the line goes back and a hinted program opens. True when it opened."""
@@ -691,6 +732,10 @@ class Rollout:
         self.inject(output_block(shown_text(ok, shown)), 'output')
         self.events[-1].update(kind='output', by=self.by, code=code[:20000], code_chars=len(code), shown=(shown or '')[:4096],
                                shown_chars=len(shown or ''), ok=ok, seconds=took, fits=fits, run_at=at, auto_call=self.auto_call)
+        if fits and self.tracker is not None:
+            from tools.igc.unified_detect import METHOD_EXHAUSTIVE_SEARCH
+            last_ln = (shown or '').strip().splitlines()[-1].strip()
+            self.tracker.record_candidate(last_ln, code, method=METHOD_EXHAUSTIVE_SEARCH, at_token=len(self.out))
         if self.by == 'hint' and fits and self.arm.trust != 'none':
             self.inject(TRUST_LINES[self.arm.trust], 'trust hint')
         if self.arm.close_fit and fits:
@@ -906,7 +951,7 @@ def run(args):
     ids = Ids(tok, eos_ids(args.model, tok, GenerationConfig))
     arm = Arm(args.force_after, args.execute, args.close_fit, args.loop_close, args.close_repeat, args.inline_calc, args.native_tool, args.hint_calc, args.loop_hint, args.inline_plain,
               args.whole_hint, args.check_hand, args.whole_plain, args.hand_off, args.question_value, trust=args.trust_line, logit_value=args.logit_value,
-              suppress_recheck=args.suppress_recheck)
+              suppress_recheck=args.suppress_recheck, mathbackend=args.mathbackend, candidate_close=args.candidate_close)
     if args.suppress_recheck and (args.server or not (args.inline_calc or args.logit_value)):
         raise SystemExit('--suppress-recheck lowers the re-check words after a value software gave: it needs --inline-calc or --logit-value, and vLLM (not --server)')
     if args.logit_value and (args.inline_calc or args.server or args.whole_hint or args.hand_off):
@@ -1113,6 +1158,8 @@ def main(argv=None):
     r.add_argument('--server', default='', help='a llama-server URL (127.0.0.1) to run on in place of vLLM: this PC, on Windows')
     r.add_argument('--question-value', action='store_true', help='the whole value is the computation the question states, read by software')
     r.add_argument('--hand-off', action='store_true', help='a line that only restates a value software gave is cut, and the model is led to its answer')
+    r.add_argument('--mathbackend', action='store_true', help='extend --inline-calc with exact calls to the 6-module mathbackend (gcd, lcm, phi, C, P, catalan, derangements, modinv, 2x2 det)')
+    r.add_argument('--candidate-close', action='store_true', help='close thinking on a reflection starter only when CandidateAnswerTracker confirms the answer across independent methods (never on same-assumption repeats)')
     r.add_argument('--box', action='store_true', help="blocks run in the OS isolation box (AppContainer) on this PC: D1, the developer's call")
     r.add_argument('--no-think', action='store_true', help='enable_thinking=False: the reply is the answer, as Qwenputer measures arithmetic')
     r.add_argument('--greedy', action='store_true', help='temperature 0, for a protocol that publishes greedy numbers (Qwenputer)')

@@ -56,7 +56,7 @@ def repeating(tokens, longest=4096, rounds=20):
         tail = tokens[-period * count:]
         if tail == tail[:period] * count:
             return True
-    return counting(tokens) or (len(tokens) % 4096 == 0 and line_back(tokens))
+    return counting(tokens) or ((len(tokens) % 4096 == 0 or (bool(tokens) and tokens[-1] in (198, 271))) and line_back(tokens))
 
 
 def counting(tokens, longest=128, rounds=64):

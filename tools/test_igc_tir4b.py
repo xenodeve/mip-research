@@ -772,5 +772,27 @@ class SuppressRecheck(unittest.TestCase):
         self.assertIsNone(r.bias())
 
 
+class UnifiedMathBackendAndCandidateClose(unittest.TestCase):
+    """--mathbackend and --candidate-close: exact 6-module mathbackend inline evaluation and Assumption-Independent CandidateAnswerTracker."""
+    def test_mathbackend_evaluates_exact_number_theory_and_combinatorics(self):
+        r = rollout(inline_calc=True, inline_plain=True, mathbackend=True)
+        play(r, 'so \\gcd(84, 126) + C(10, 3) = and \\varphi(36) = done</think>\n\n162<|im_end|>', Kernel([]))
+        self.assertIn('\\gcd(84, 126) + C(10, 3) = 162 and \\varphi(36) = 12 done', r.text())
+
+    def test_same_assumption_repeat_does_not_close_early(self):
+        r = rollout(inline_calc=True, inline_plain=True, candidate_close=True)
+        play(r, 'by formula 6 \\times 7 + 2 = so the final answer is 44.\nagain 2 + 7 \\times 6 = so the final answer is 44.\nWait, let me double-check.\nactual answer</think>\n\n44<|im_end|>', Kernel([]))
+        self.assertNotIn('candidate close', kinds(r))
+        self.assertIn('actual answer</think>', r.text())
+
+    def test_cross_method_confirmation_closes_on_reflection(self):
+        r = rollout(inline_calc=True, inline_plain=True, candidate_close=True)
+        play(r, 'by formula 6 \\times 7 + 2 = so the final answer is 44.\nsmall case check: 40 + 4 = so the final answer is 44.\nWait, let me double-check.\n\\boxed{44}<|im_end|>', Kernel([]))
+        self.assertIn('candidate close', kinds(r))
+        ev = [e for e in r.events if e['kind'] == 'candidate close'][0]
+        self.assertEqual((ev['value'], ev['status']), ('44', 'CROSS_METHOD_CONFIRMED'))
+        self.assertEqual(r.finish, 'stop')
+
+
 if __name__ == '__main__':
     unittest.main()
