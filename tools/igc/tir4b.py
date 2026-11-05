@@ -12,7 +12,7 @@ Not here: MIP's inline arithmetic, which lives in the CUDA engine. Every text th
 tir4b.py run --model M --rows R.jsonl --out DIR [--force-after 512] [--execute] [--close-fit] [--loop-close] [--samples K] [--seed S] [--ids]
 tir4b.py math-train OUT.jsonl --n N [--levels 3,4,5] [--exclude ROWS.jsonl ...]     (on the VM: MATH train, never a test row)
 tir4b.py keep DIR [DIR ...] --out TRAIN.jsonl [--max-len 32768]                      (the trajectory each question trains on)"""
-import argparse, hashlib, json, os, random, re, sys, time
+import argparse, collections, hashlib, json, os, random, re, sys, time
 from concurrent.futures import ThreadPoolExecutor
 from fractions import Fraction
 from pathlib import Path
@@ -263,6 +263,7 @@ class Rollout:
         self.plan = None     # --logit-value: the token ids of the value being written, one biased request each
         self.plan_at, self.plan_own, self.plan_event, self.last_lp = 0, [], None, None
         self.window = 0   # --suppress-recheck: steps left in which the re-check words are held down
+        self.injected_exprs = collections.Counter()
         if arm.candidate_close:
             from tools.igc.unified_detect import CandidateAnswerTracker
             self.tracker = CandidateAnswerTracker()
@@ -408,15 +409,23 @@ class Rollout:
                 self.start_plan(*found)   # the value is not put in: the model writes it, its prediction of each token raised
             elif found is not None:   # the value the model would have computed, computed: the reasoning goes on from it
                 expr, value = found
-                if whole:
-                    value = self.question_value(value)
-                self.whole_pending = False
-                # the whole value ends its line: left open, an integer drew `.000...` from the model until the guard stopped it (pc4-whole dm div_big 7815)
-                self.inject((f' {value}' if self.arm.inline_plain else f' {value} (exact)') + ('\n' if whole else ''), 'inline value')
-                self.open_window()
-                self.events[-1].update(expr=expr[:200], value=value, whole=whole)
-                if whole:
-                    self.give(value)
+                norm_expr = re.sub(r'[\s()]', '', expr)
+                self.injected_exprs[norm_expr] += 1
+                if self.injected_exprs[norm_expr] >= 3:
+                    # Echo loop detected on identical arithmetic expression; stop repeating injection
+                    if self.phase == 'think' and self.arm.loop_close:
+                        self.on_loop()
+                        return False
+                else:
+                    if whole:
+                        value = self.question_value(value)
+                    self.whole_pending = False
+                    # the whole value ends its line: left open, an integer drew `.000...` from the model until the guard stopped it (pc4-whole dm div_big 7815)
+                    self.inject((f' {value}' if self.arm.inline_plain else f' {value} (exact)') + ('\n' if whole else ''), 'inline value')
+                    self.open_window()
+                    self.events[-1].update(expr=expr[:200], value=value, whole=whole)
+                    if whole:
+                        self.give(value)
             if self.left() <= 0:
                 self.done('length')
             elif len(self.out) - self.checked >= CHUNK:   # a request that ends at `=` skips the checks below: a loop of equations would run on

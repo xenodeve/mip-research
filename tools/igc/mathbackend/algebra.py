@@ -923,7 +923,7 @@ def _fp_edf(f, d, p, rng):
     n = len(f) - 1
     if n == d:
         return [f]
-    while True:
+    for _trial in range(500):
         a = _mt([rng.randrange(p) for _ in range(n)])
         if len(a) < 2:
             continue
@@ -938,6 +938,7 @@ def _fp_edf(f, d, p, rng):
             g = _mgcd(_msub(b, [1], p), f, p)
         if 1 < len(g) < len(f):
             return _fp_edf(g, d, p, rng) + _fp_edf(_mdivmod(f, g, p)[0], d, p, rng)
+    raise NotCovered('cantor-zassenhaus trial budget exceeded')
 
 
 def _fp_factor(f, p):
@@ -1345,6 +1346,7 @@ def _all_roots(p):
     for g, mult in _sqf_decomp(p):
         for lo, hi, gg, seq in _roots_sqfree(g):
             items.append([lo, hi, mult, gg, seq])
+    step_budget = 2000
     while True:
         clash = None
         for i, a in enumerate(items):
@@ -1357,6 +1359,14 @@ def _all_roots(p):
                 break
         if not clash:
             break
+        step_budget -= 1
+        if step_budget <= 0:
+            raise NotCovered('isolate_real_roots refinement budget exceeded')
+        a, b = clash
+        if a[0] == a[1] and b[0] == b[1] and a[0] == b[0]:
+            a[2] += b[2]
+            items.remove(b)
+            continue
         for it in clash:
             if it[0] != it[1]:
                 it[0], it[1] = _refine(it[3], it[4], it[0], it[1], (it[1] - it[0]) / 2)

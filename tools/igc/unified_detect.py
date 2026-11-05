@@ -256,7 +256,7 @@ class CandidateDecision:
 
 
 CAND_CONCLUSION_RE = re.compile(
-    r'\\boxed\{([^{}]+)\}|(?:the\s+(?:final\s+)?answer\s+(?:is|should\s+be|would\s+be)|therefore[,\s]+the\s+(?:final\s+)?answer\s+is|so\s+the\s+final\s+answer\s+is)\s*\$?(-?\d+(?:/\d+)?)',
+    r'\\boxed\{([^{}]+)\}|(?:the\s+(?:final\s+)?answer\s+(?:is|should\s+be|would\s+be)|therefore[,\s]+the\s+(?:final\s+)?answer\s+is|so\s+the\s+final\s+answer\s+is)\s*\$?(-?\d+(?:/\d+)?)|(?:total(?:\s+valid\s+ways|\s+number(?:\s+of\s+ways)?)?|so\s+(?:total|the\s+total|\$?\\?det\([A-Z]\)\$?))\s*(?:is|=|should\s+be)(?:[^=\n]*=)?\s*\$?(-?\d+(?:/\d+)?)\s*(?:\.|\$|$)',
     re.I,
 )
 
@@ -470,7 +470,7 @@ def detect_candidate_line(
     if not line:
         return None
     for m in CAND_CONCLUSION_RE.finditer(line):
-        cand = (m.group(1) or m.group(2) or '').strip()
+        cand = (m.group(1) or m.group(2) or (m.group(3) if len(m.groups()) >= 3 else None) or '').strip()
         if cand:
             recent = full_text[-320:].lower()
             method = METHOD_SMALL_CASE_CHECK if any(k in recent for k in METHOD_CHECK_KEYWORDS) else METHOD_ALGEBRAIC

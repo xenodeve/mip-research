@@ -1072,7 +1072,12 @@ def max_flow(edges, source, sink, directed=True):
         cap.append(w if not directed else Fraction(0))
     s, t = idx[source], idx[sink]
     value = Fraction(0)
+    max_aug_steps = max(2000, len(nodes) * len(es) + 20)
+    aug_steps = 0
     while True:
+        aug_steps += 1
+        if aug_steps > max_aug_steps:
+            raise NotCovered('max flow augmentation step budget exceeded')
         par = {s: None}
         q = deque([s])
         while q and t not in par:
