@@ -524,8 +524,23 @@ class Rollout:
             self.events[-1].update(cut_tokens=taken)
             self.enter('loop')
         elif self.phase == 'think' and self.arm.loop_close:
-            self.inject(LOOP_CLOSE, 'loop close')
-            self.phase = 'answer'
+            has_cand = True
+            if self.arm.candidate_close and self.tracker is not None:
+                has_cand = bool(self.tracker.observations)
+            if has_cand:
+                self.inject(LOOP_CLOSE, 'loop close')
+                self.phase = 'answer'
+            else:
+                floor = self.spans[-1][1] if self.spans else 0
+                cut = max(loop_start(self.out) or (len(self.out) - 64), floor)
+                if cut < len(self.out) and getattr(self, '_loop_nudges', 0) < 3:
+                    self._loop_nudges = getattr(self, '_loop_nudges', 0) + 1
+                    taken = len(self.out) - cut
+                    del self.out[cut:]
+                    self.inject('\nWait, let me rethink this derivation carefully.\n', 'loop nudge')
+                    self.events.append(dict(kind='loop nudge', at=len(self.out), cut_tokens=taken))
+                else:
+                    self.done('stuck')
         else:
             self.done('stuck')
 

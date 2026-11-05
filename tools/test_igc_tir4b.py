@@ -793,6 +793,13 @@ class UnifiedMathBackendAndCandidateClose(unittest.TestCase):
         self.assertEqual((ev['value'], ev['status']), ('44', 'CROSS_METHOD_CONFIRMED'))
         self.assertEqual(r.finish, 'stop')
 
+    def test_loop_without_candidate_nudges_instead_of_forcing_answer_phase(self):
+        r = rollout(execute=True, loop_close=True, candidate_close=True)
+        play(r, 'ab' * 700, Kernel([]))
+        self.assertIn('loop nudge', kinds(r))
+        self.assertEqual(r.phase, 'think')
+        self.assertNotIn('loop close', kinds(r))
+
 
 if __name__ == '__main__':
     unittest.main()

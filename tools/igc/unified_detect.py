@@ -285,6 +285,8 @@ def evaluate_with_mathbackend(text: str) -> Optional[Fraction]:
                 r = mathbackend.run('algebra.quartic_double_tangent_k', *args)['sum_k']
             elif name in ('disphenoid_inradius', 'disphenoid_inradius_from_edges_sq') and len(args) == 3:
                 r = mathbackend.run('geometry.disphenoid_inradius_from_edges_sq', *args)['m_plus_n_plus_p']
+            elif name in ('triangle_wave_intersections', 'piecewise_intersections') and len(args) in (2, 3):
+                r = mathbackend.run('algebra.triangle_wave_intersections', *args)['total_intersections']
             else:
                 failed = True
                 return m.group(0)
