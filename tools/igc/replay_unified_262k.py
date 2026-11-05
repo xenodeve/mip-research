@@ -1,5 +1,9 @@
 """Replay & Token-Reduction Analysis for the 262,144-token Native Context traces (`inlineclose` and `ctrl`).
 
+The stored traces were recorded before 6f4f702c (the repeated-expression close, removed in 4dc5e546, #301): `inlineclose` 41/48 is
+the arm as it ran then, not the current code. The candidate rule here is the live one (detect_candidate_line); with no program in
+these arms nothing can confirm a candidate, so it closes 0/48 (#303). It does not replay the echo skip or the loop nudge.
+
 Measures on the real 48 traces (`32 LiveBench + 16 AIME Contest`) at 262,144 context:
 1. Why scores increased from 20,000 cap -> 262,144 native context (`ctrl` 21/48 -> 33/48, `inlineclose` 24/48 -> 41/48):
    - Breakdown of previously truncated rows and loop close rescues.
