@@ -172,7 +172,15 @@ class _Parser:
         value = self.primary()
         while self.peek()[1] in ('!', '%', 'pmod'):
             op = self.take()[1]
-            if op == '!':
+            if op == '!' and self.peek()[1] == '!' and self.i not in self.spaced:   # `3!! = 3`: the double factorial (#306)
+                self.take()
+                if value.denominator != 1 or not -1 <= value <= 60:
+                    raise _NotExact('a double factorial out of reach')
+                out = 1
+                for j in range(int(value), 0, -2):
+                    out *= j
+                value = Fraction(out)
+            elif op == '!':
                 if value.denominator != 1 or not 0 <= value <= 30:
                     raise _NotExact('a factorial past 30!')
                 value = Fraction(factorial(int(value)))
@@ -528,11 +536,18 @@ _TERM = re.compile(r'\s*(\d+)\s*(?:\\times|\\cdot|\*|×)\s*(\d+)\s*')
 def _counts_items(expr, wrote):
     """`3 \\times 10 + 5 \\times 1 = 8`: the count of the items (3 tens and 5 ones are 8 coins), not their value."""
     terms = re.split(r'\s*\+\s*', expr.strip(' $()'))
-    pairs = [_TERM.fullmatch(t) for t in terms]
-    if len(terms) < 2 or not all(pairs):
+    pairs = [_TERM.fullmatch(t) or re.fullmatch(r'\s*(\d+)\s*', t) for t in terms]   # `1 \times 25 + 7 = 8`: seven ones (#306)
+    if len(terms) < 2 or not all(pairs) or not any(p.re is _TERM for p in pairs):
         return False
-    firsts, seconds = sum(int(p.group(1)) for p in pairs), sum(int(p.group(2)) for p in pairs)
+    firsts = sum(int(p.group(1)) for p in pairs)
+    seconds = sum(int(p.group(2)) if p.re is _TERM else 1 for p in pairs)
     return wrote in (firsts, seconds)
+
+
+def _conditions(line, base_text):
+    """`then $0 + 0 = 6$ and $0 + 0 = 0$`: the same left side twice with two values is two conditions tested, not two claims (#306)."""
+    said = re.findall(re.escape(base_text.strip()) + r'\s*=\s*(-?[\d.]+)', line)
+    return len(set(said)) > 1
 
 
 _REPEATING = re.compile(r'(?<![\d.])(\d+)\.(\d*?)(\d)\3{1,}(?![\d])')
@@ -547,7 +562,7 @@ def _repeating_matches(expr, wrote, text, op):
         whole, head, digit = m.group(1), m.group(2), m.group(3)
         return f'({Fraction(whole + "." + head if head else whole) + Fraction(int(digit), 9 * 10 ** len(head))})'
     value = evaluate(_REPEATING.sub(exact, expr))
-    return value is not None and abs(value - wrote) <= max(_tolerance(text, op), _unit(text) or 0)
+    return value is not None and abs(value - wrote) <= max(_tolerance(text, op), _unit(text) or 0) + _decimals_slack(text, False)
 
 
 def wrong_relations(line, moduli=()):
@@ -580,6 +595,8 @@ def wrong_relations(line, moduli=()):
     if not marks:
         return wrong
     base = expression_before(line[:marks[0].start()])
+    origin = base   # the chain's first expression, kept when an approximate chain moves its base on
+    prev = None   # the last link that read: a chain that rounds as it goes is checked against it too
     rough = False   # the chain has said \approx: its later `=` parts are approximate too
     for n, mark in enumerate(marks):
         end = marks[n + 1].start() if n + 1 < len(marks) else len(line)
@@ -592,6 +609,8 @@ def wrong_relations(line, moduli=()):
         first = _PLAIN.match(text.lstrip('-−'))
         if base is None:
             base = (text, value)
+        if origin is None:
+            origin = base
         elif _LONE.fullmatch(base[0].strip()) and _OPERATOR.search(text.lstrip('-−')) and not _LONE.fullmatch(text.strip()) \
                 and not _SCIENTIFIC.fullmatch(text.strip()):
             base = (text, value)   # `1/2 = \frac{(1/2)^2 - 3(1/2)}{...}`: f at x = 1/2, a substitution, not a claim that both are 1/2
@@ -601,7 +620,8 @@ def wrong_relations(line, moduli=()):
             # an arrow maps unless it ends a sum (`8+4+3 \to 16`): `$1/90 \to 91$` (m + n), `$55^2 \to 2$`, `$6-9 \to 16-9=7$` (a
             # borrow), `(-300) \rightarrow 2 negatives`. What it maps to starts the next comparison (#306)
             base = (text, value)
-        elif _counts_items(base[0], value) or _COUNT_NOUN.match(rest) or _repeating_matches(base[0], value, text, mark.group(1)):
+        elif _counts_items(base[0], value) or _COUNT_NOUN.match(rest) or _repeating_matches(base[0], value, text, mark.group(1)) \
+                or _conditions(line, base[0]):
             pass   # `3 \times 10 + 5 \times 1 = 8` coins; `1563 - 8.1666 = 1554.8333` with 8.1666... (#306)
         elif _OPERATOR.search(text.lstrip('-−')) and first and Fraction(first.group().replace(',', '')) == abs(base[1]):
             base = (text, value)   # `5 \times 2 = 10 + 1 = 11`: the value, then a carry added to it, a new step and not a wrong rewrite
@@ -628,7 +648,17 @@ def wrong_relations(line, moduli=()):
             column = right.denominator == 1 and value.denominator == 1 and 0 <= value <= 9 and (right - value) % 10 == 0 \
                 and re.fullmatch(r'\s*\d{1,2}\s*[-+−]\s*\d\s*', base[0]) is not None
             modular = modular or column
-            if off > tolerance and not quotient and not cut and not modular:   # `12+3=15=2` mod 13, in an answer that named 13
+            # a chain that rounds as it goes: `= 91.26 + 9.56 - 101 = 100.82 - 101`, each link within its places of the last (#306)
+            stepped = prev is not None and _decimals_slack(text, rough) and abs(prev[1] - value) <= tolerance
+            # `360^{\circ} \approx 6.28`: degrees turned into radians (#306)
+            radians = re.search(r'\^\s*\{?\s*\\circ|°', base[0]) is not None and right and abs(value - right * Fraction(355, 113) / 180) <= abs(right) / 1000 + (_unit(text) or 0)
+            # `244000 - 245000 \approx 0`: nothing at the scale of the parts (#306)
+            scale = max((Fraction(x.replace(',', '')) for x in _NUMBER.findall(base[0])), default=Fraction(0))
+            nought = rough and value == 0 and abs(right) <= scale / 100
+            # `14 \times 1.732 / 3 \approx 24.2 / 3 \approx 8.08`: an approximate chain goes on from its last approximation, but a
+            # value nearer the first is no slip (#306)
+            near_first = rough and origin is not None and abs(origin[1] - value) <= tolerance
+            if off > tolerance and not quotient and not cut and not modular and not stepped and not radians and not nought and not near_first:   # `12+3=15=2` mod 13
                 m, sci = _PLAIN.fullmatch(text), _SCIENTIFIC.fullmatch(text)
                 places = len(m.group(1) or '') if m else 0
                 said = spelled(right)
@@ -644,6 +674,9 @@ def wrong_relations(line, moduli=()):
                 elif places and (len(said.split('.')[-1]) > places if '.' in said else '/' in said):
                     said = rounded(right, places)
                 wrong.append((base[0], text, said))
+        # the last link that was right: one that follows a wrong link is not right by agreeing with it (`126 \times 70 / 19.6` after the
+        # wrong `126 \times 700 / 196`)
+        prev = (text, value) if not wrong or wrong[-1][1] != text else None
         if rough:
             base = (text, value)   # an approximate chain goes on from its last approximation: `\approx 6.89 - 4 = 2.89`
         if rest.strip(' $.,;:') and not _RELATION.match(rest.strip()):

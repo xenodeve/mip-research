@@ -194,6 +194,15 @@ class ReplayMisreads(unittest.TestCase):
                      '$11/6 = 11 \\cdot 6^{-1} = 11 \\cdot 1 = 11 \\equiv 1$.',     # mod 5, no \\pmod written
                      '*   0-4=6.',                                                  # a borrow in one column
                      '$55^2 \\to 2$',
+                     'So new total cost is $1 \\times 25 + 7 = 8$?',                # one quarter and seven pennies: 8 coins
+                     'If $a=0, b=0$, then $0 + 0 = 6$ and $0 + 0 = 0$.',            # two conditions tested
+                     'Pairs of $\\{A, B, C, D\\}$. Total partitions: $3!! = 3$.',    # the double factorial, not (3!)!
+                     'the period is $360^{\\circ} \\approx 6.28$.',                  # degrees into radians
+                     '$244000 - 245000 \\approx 0$.',                                # nothing at the scale of its parts
+                     '$4(22.8166) + 2(4.78) - 101 = 91.26 + 9.56 - 101 = 100.82 - 101 \\approx 0$.',   # rounds as it goes
+                     'The value is approx $14 \\times 1.732 / 3 \\approx 24.2 / 3 \\approx 8.08$.',
+                     'slope $\\frac{1-0}{1.66-3} = \\frac{1}{-1.33} = -0.75$.',
+
                      '$6-9 \\to 16-9=7$'):
             with self.subTest(line=line):
                 self.assertEqual(wrong_relations(line), [])
