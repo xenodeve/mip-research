@@ -101,9 +101,16 @@ class _Parser:
 
     def term(self):
         value = self.unary()
+        divided = None   # how the last division in this term was spaced
         while True:
             kind, v = self.peek()
             if v in (MUL, DIV, 'mod'):
+                if v == DIV:
+                    gap = self.i in self.spaced or self.i + 1 in self.spaced
+                    if divided is not None and gap != divided:
+                        # `-1/4 / 1/2` meant (-1/4)/(1/2): the spaces group it; `(360/27)/4*(-5)/2`, spaced alike, reads left to right (#306)
+                        raise _NotExact('a/b / c/d: the spacing groups it, the grammar does not')
+                    divided = gap
                 self.take()
                 right = self.unary()
                 if v != MUL and right == 0:
@@ -276,13 +283,42 @@ _START = re.compile(r'[\d.(\[{\\\-−]')
 _BOUNDARY = set(' \t$([{=:;,') | {'\\'}
 
 
+# commands after which a new operand starts: operators, relations, spacing, words, brackets' sizes
+_NOT_AN_OPERAND = {'times', 'cdot', 'div', 'ast', 'pm', 'mp', 'le', 'ge', 'leq', 'geq', 'lt', 'gt', 'neq', 'ne', 'approx', 'equiv', 'sim',
+                   'simeq', 'cong', 'implies', 'impliedby', 'iff', 'Rightarrow', 'Leftarrow', 'Leftrightarrow', 'rightarrow', 'leftarrow',
+                   'to', 'mapsto', 'quad', 'qquad', 'text', 'textbf', 'textit', 'mathrm', 'mathbf', 'left', 'right', 'big', 'Big', 'bigg',
+                   'Bigg', 'colon', 'therefore', 'because', 'in', 'notin', 'subset', 'subseteq', 'cup', 'cap', 'land', 'lor', 'mid',
+                   'displaystyle', 'textstyle', 'hline', 'frac', 'dfrac', 'tfrac', 'sqrt', 'boxed', 'and', 'or', 'wedge', 'vee', 'neg',
+                   'lfloor', 'lceil', 'lvert', 'langle', 'lbrace', 'operatorname', 'begin', 'end', 'item', 'pmod', 'bmod', 'mod'}
+_TAIL_OPERATOR = re.compile(r'(?:[+\-*/^×÷·⋅∙−±∓]|\\times|\\cdot|\\div|\\ast|\\pm|\\mp)\s*$')
+
+
+def _tail(head):
+    """True when what starts after `head` is the tail of a longer expression: head ends in a binary operator (`SS / (2-1)`, `x - 3 \\times
+    4`), or in a symbol command (`\\sum (1/4 \\times 1/4)`, `\\rho (2)`). Its value is not the expression's: --check-hand corrected
+    `s^2 = SS / (2-1) = 264.5` to 1, and an inline value would have put 1 in (#306)."""
+    h = head.rstrip()
+    if re.fullmatch(r'\s*(?:[-*+•−]|\d+[.)])?', h.lstrip()) and re.fullmatch(r'\s*[-*+•−]?', h):
+        return False   # `- (-1)/(-15)`, `*   2 \times 3`: a list's bullet opens the line, no operator
+    if _TAIL_OPERATOR.search(h):
+        return True
+    cmd = re.search(r'\\([A-Za-z]+)$', h)
+    if cmd:
+        return cmd.group(1) not in _NOT_AN_OPERAND and not _FUNCTION_BEFORE.search(h)
+    # a symbol before it: `2 BX \cdot CX (3/5) = 576` read (3/5) as the left side (#306); a point's name, a single letter
+    return re.search(r'(?<![A-Za-z\\])(?:[A-Z]{1,3}|[a-z])(?:_\{?\w+\}?|\^\{?\w+\}?|\')*$', h) is not None
+
+
 def _symbol_before(head):
     """True when the text before a `-` ends in an operand (a number, a bracket, a one-letter symbol, `b_2`): the `-` is then binary."""
     h = head.rstrip()
     if not h:
         return False
-    if h[-1].isdigit() or h[-1] in ')]}':
+    if h[-1].isdigit() or h[-1] in ')]}|':   # `|x| - 1/2`: an absolute value ends an operand too (#306)
         return True
+    cmd = re.search(r'\\([A-Za-z]+)$', h)
+    if cmd:   # `\rho - (1 + \sqrt{5})`, `\pi - 1`: a Greek letter or a constant; `\times`, `\le`, `\quad` end no operand
+        return cmd.group(1) not in _NOT_AN_OPERAND
     word = re.search(r'([A-Za-z]+)(?:_\{?\w+\}?|\^\{?\w+\}?|\d*|\')*$', h)
     return bool(word) and (len(word.group(1)) == 1 or '_' in h[word.start():] or '^' in h[word.start():])
 
@@ -301,9 +337,8 @@ def expression_before(text):
             continue   # `u^2 (1 + \frac{169 \times 3}{841})`: a factor of a product on a symbol, no value of its own
         if re.search(r'[\d)}\]]\s+$', line[:i]) or _FUNCTION_BEFORE.search(line[:i]):
             continue   # `3^3 5^1`, `19600 (81/196)`: a factor beside a number; `\log_5 2^6`, `\sin 84^\circ`: a function's argument
-        if re.search(r'(?:[+\-*/^×÷·⋅−]|\\times|\\cdot|\\div)\s*$', line[:i]) and _symbol_before(re.sub(
-                r'(?:[+\-*/^×÷·⋅−]|\\times|\\cdot|\\div)\s*$', '', line[:i])):
-            continue   # `Z / (7/3)`: the tail of an expression on a symbol, not a value of its own
+        if _tail(line[:i]):
+            continue   # `Z / (7/3)`, `SS / (2-1)`, `\sum (1/4 \times 1/4)`: the tail of a longer expression, not a value of its own (#306)
         expr = line[i:].strip()
         if not _OPERATOR.search(expr.lstrip('-−')):
             continue
@@ -476,6 +511,45 @@ def moduli_in(text):
     return found
 
 
+def _arrow_sum(base, text, value):
+    """`8+4+3 \\to 16`: an arrow that ends a sum of numbers into a number of its size is a computation to check."""
+    b = base[0].strip(' $')
+    if not re.fullmatch(r'-?\d+(?:\s*[+\-−]\s*\d+)+', b) or not _PLAIN.fullmatch(text.strip()) or not base[1] or not value:
+        return False
+    return Fraction(1, 2) <= value / base[1] <= 2
+
+
+_CONDITION = re.compile(r'\b(?:false|not true|impossible|contradiction|need|needs|want|for this to|suppose|assume|if|whether|maybe|perhaps)\b',
+                        re.I)
+_COUNT_NOUN = re.compile(r'\s*\$?\s*(?:coins?|notes?|bills?|stamps?|pieces?|items?)\b', re.I)
+_TERM = re.compile(r'\s*(\d+)\s*(?:\\times|\\cdot|\*|×)\s*(\d+)\s*')
+
+
+def _counts_items(expr, wrote):
+    """`3 \\times 10 + 5 \\times 1 = 8`: the count of the items (3 tens and 5 ones are 8 coins), not their value."""
+    terms = re.split(r'\s*\+\s*', expr.strip(' $()'))
+    pairs = [_TERM.fullmatch(t) for t in terms]
+    if len(terms) < 2 or not all(pairs):
+        return False
+    firsts, seconds = sum(int(p.group(1)) for p in pairs), sum(int(p.group(2)) for p in pairs)
+    return wrote in (firsts, seconds)
+
+
+_REPEATING = re.compile(r'(?<![\d.])(\d+)\.(\d*?)(\d)\3{1,}(?![\d])')
+
+
+def _repeating_matches(expr, wrote, text, op):
+    """`1563 - 8.1666 = 1554.8333`: 8.1666 is 8.1666..., cut; with it read as repeating the written value is right."""
+    if not _REPEATING.search(expr):
+        return False
+
+    def exact(m):
+        whole, head, digit = m.group(1), m.group(2), m.group(3)
+        return f'({Fraction(whole + "." + head if head else whole) + Fraction(int(digit), 9 * 10 ** len(head))})'
+    value = evaluate(_REPEATING.sub(exact, expr))
+    return value is not None and abs(value - wrote) <= max(_tolerance(text, op), _unit(text) or 0)
+
+
 def wrong_relations(line, moduli=()):
     """[(expression, what was written, the right value)] for each relation on the line whose sides differ: `=` chains (each part against the
     first: `= 189 + 17 = 196` is a wrong rewrite of 196), \\approx and ≈ (to the places written), arrows (`7+3+5 \\to 15`), and congruences
@@ -484,8 +558,15 @@ def wrong_relations(line, moduli=()):
     statements on one line (`$x = 3$, $y = 5$`). A relation is checked only when one side computes something."""
     if re.search(r'borrow|carry', line, re.I):
         return []
+    moduli = set(moduli)
+    if re.search(r'\bparity\b|\b(?:even|odd)\b', line, re.I):
+        moduli.add(2)   # `The parity is $1 + 1 = 0$ (even)` (#306)
+    if re.search(r'\^\s*\{?\s*\\circ|°|\bdegrees?\b', line):
+        moduli.add(360)   # `-72 - 168 = -240 = 120^\circ`: one angle (#306)
     wrong = []
     m = re.search(r'\\equiv\s*(.+?)\\pmod\s*\{?\s*([\d,]+)\s*\}?', line)
+    if m and (_CONDITION.search(line) or '?' in line[m.end():]):
+        return []   # `we need $8 \equiv -1 \pmod{27}$, which is false`: a condition the model tested and rejected (#306)
     if m:
         left = expression_before(line[:m.start()]) or ((lambda v: (line[:m.start()].strip(' $'), v) if v is not None else None)(
             evaluate(line[:m.start()].strip(' $').rsplit('$', 1)[-1])))
@@ -493,6 +574,8 @@ def wrong_relations(line, moduli=()):
         if left and right is not None and mod and left[1].denominator == right.denominator == 1 and (left[1] - right) % mod:
             wrong.append((left[0], f'{m.group(1).strip()} \\pmod{{{m.group(2)}}}', f'{int(left[1]) % int(mod)} \\pmod{{{m.group(2)}}}'))
         return wrong
+    if re.search(r'\\equiv|≡', line):
+        return wrong   # `11 \cdot 6^{-1} = 11 \cdot 1 = 11 \equiv 1`: a line that works mod m with no \pmod to name it (#306)
     marks = list(_RELATION.finditer(line))
     if not marks:
         return wrong
@@ -514,6 +597,12 @@ def wrong_relations(line, moduli=()):
             base = (text, value)   # `1/2 = \frac{(1/2)^2 - 3(1/2)}{...}`: f at x = 1/2, a substitution, not a claim that both are 1/2
         elif _POWER_OF_TEN.fullmatch(text.strip()) or _constants(base[0], text) or _reads_otherwise(base[0], value):
             pass   # `6^9 \approx 10^7`; `then 3/4 = -2/3`; `3+1 \times 1+1 = 8` meant as (3+1)(1+1), `(-66^2)` as (-66)^2
+        elif mark.group(1) not in ('=', '\\approx', '≈') and not _arrow_sum(base, text, value):
+            # an arrow maps unless it ends a sum (`8+4+3 \to 16`): `$1/90 \to 91$` (m + n), `$55^2 \to 2$`, `$6-9 \to 16-9=7$` (a
+            # borrow), `(-300) \rightarrow 2 negatives`. What it maps to starts the next comparison (#306)
+            base = (text, value)
+        elif _counts_items(base[0], value) or _COUNT_NOUN.match(rest) or _repeating_matches(base[0], value, text, mark.group(1)):
+            pass   # `3 \times 10 + 5 \times 1 = 8` coins; `1563 - 8.1666 = 1554.8333` with 8.1666... (#306)
         elif _OPERATOR.search(text.lstrip('-−')) and first and Fraction(first.group().replace(',', '')) == abs(base[1]):
             base = (text, value)   # `5 \times 2 = 10 + 1 = 11`: the value, then a carry added to it, a new step and not a wrong rewrite
         elif _estimate(base[0], text) or (_OPERATOR.search(text.lstrip('-−')) and not _SCIENTIFIC.fullmatch(text.strip())
@@ -532,7 +621,13 @@ def wrong_relations(line, moduli=()):
             tolerance = _tolerance(text, '\\approx' if rough else mark.group(1)) + _decimals_slack(text, rough)
             if unit == 1 and right.denominator != 1:
                 tolerance = max(tolerance, Fraction(1))   # 130.98 - 22.88 = 108: rounded or cut to an integer
+            if rough and _OPERATOR.search(text.lstrip('-−')) and not _SCIENTIFIC.fullmatch(text.strip()):
+                tolerance = max(tolerance, abs(right) / 10)   # `(39/2)^2 / 8 \approx 19^2 / 8`: an estimate on rounded numbers (#306)
             modular = right.denominator == value.denominator == 1 and any((right - value) % m == 0 for m in moduli)
+            # one column of a written sum or difference: `0-4=6` borrows, `7+5=2` carries; a digit that is the value mod 10 (#306)
+            column = right.denominator == 1 and value.denominator == 1 and 0 <= value <= 9 and (right - value) % 10 == 0 \
+                and re.fullmatch(r'\s*\d{1,2}\s*[-+−]\s*\d\s*', base[0]) is not None
+            modular = modular or column
             if off > tolerance and not quotient and not cut and not modular:   # `12+3=15=2` mod 13, in an answer that named 13
                 m, sci = _PLAIN.fullmatch(text), _SCIENTIFIC.fullmatch(text)
                 places = len(m.group(1) or '') if m else 0
@@ -540,7 +635,12 @@ def wrong_relations(line, moduli=()):
                 if sci:   # in the written form: 20.1857 \times 10^{-7}, not 37/18329827
                     k = _power(sci)
                     tail = f'10^{{{k}}}' if sci.group(2) is not None else '1' + '0' * k
-                    said = f'{rounded(right / Fraction(10) ** k, len(sci.group(1) or ""))} \\times {tail}'
+                    places = len(sci.group(1) or '')
+                    q = right / Fraction(10) ** k
+                    # `882 \times 10^6` for 88.2 \times 10^6: to the places written it read `88 \times 10^6`, not the value either. A value that
+                    # ends within 8 places is given whole; one that does not is given to the places written (#306)
+                    places = next((p for p in range(places, 9) if (q * 10 ** p).denominator == 1), places)
+                    said = f'{rounded(right / Fraction(10) ** k, places)} \\times {tail}'
                 elif places and (len(said.split('.')[-1]) > places if '.' in said else '/' in said):
                     said = rounded(right, places)
                 wrong.append((base[0], text, said))

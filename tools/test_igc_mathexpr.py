@@ -168,5 +168,52 @@ class WrongRelations(unittest.TestCase):
                          [('37 / 1.8329827 \\times 10^7', '20.1852 \\times 10^{-7}', '20.1857 \\times 10^{-7}')])
 
 
+class ReplayMisreads(unittest.TestCase):
+    """#306: the replay of stored control answers (tools/igc/sim_replay.py) put a --check-hand correction in on 6 lines, all right."""
+    def test_the_six_lines_are_right(self):
+        for line in ('    $s^2 = SS / (2-1) = 264.5$.',
+                     '*   $P(\\text{same quadrant}) = \\sum P(u \\in A_k, v \\in A_k) = \\sum (1/4 \\times 1/4) = 4 \\times 1/16 = 1/4$.',
+                     '            *   $|x| - 1/2 = 1/4 \\implies |x| = 3/4$.',
+                     'The parity is $1 + 1 = 0$ (even).',
+                     'the answer would be 91 ($1/90 \\to 91$). If it meant match 3 or more, the answer would be 26 ($1/25 \\to 26$).',
+                     '$C$ is at $-72 - 168 = -240 = 120^\\circ$.'):
+            with self.subTest(line=line):
+                self.assertEqual(wrong_relations(line), [])
+
+    def test_the_audit_over_every_stored_line(self):
+        # --check-hand run over all 306,389 ended lines of seven stored 4B control arms: each of these was a correction where the model
+        # was right, or a correction that was itself wrong
+        for line in ('8 - 1.166 = 6.833',                                           # 1.166 is 7/6 cut
+                     '$CR = 3 - 1.66 = 1.33 = 4/3$.',
+                     '$\\cos \\theta = -1/4 / \\sqrt{1/16 + 3/16} = -1/4 / 1/2 = -1/2$.',   # (-1/4)/(1/2) by its spaces
+                     'Maybe $7 \\equiv 0 \\pmod 3$? No.',
+                     'So $2wy - 48x + 576 - 2 BX \\cdot CX (3/5) = 576$.',          # the tail of a product on CX
+                     'Optimal: $3 \\times 10 = 3$ coins.',
+                     '$f(35) = 3 \\times 10 + 5 \\times 1 = 8$.',
+                     'Variance is roughly $(39/2)^2 / 8 \\approx 19^2 / 8 \\approx 361/8 \\approx 45$.',
+                     '$11/6 = 11 \\cdot 6^{-1} = 11 \\cdot 1 = 11 \\equiv 1$.',     # mod 5, no \\pmod written
+                     '*   0-4=6.',                                                  # a borrow in one column
+                     '$55^2 \\to 2$',
+                     '$6-9 \\to 16-9=7$'):
+            with self.subTest(line=line):
+                self.assertEqual(wrong_relations(line), [])
+        self.assertEqual(wrong_relations('$8+4+3 \\to 16$'), [('8+4+3', '16', '15')])   # an arrow that ends a sum is still checked
+        got = wrong_relations('$12600 \\times 7000 = 882 \\times 10^6$.')
+        self.assertEqual(got[0][2], '88.2 \\times 10^{6}')   # not `88 \times 10^6`, which is not the value either
+
+    def test_a_slip_on_such_lines_is_still_caught(self):
+        self.assertEqual(wrong_relations('$s^2 = 528 / (2-1) = 264.5$.'), [('528 / (2-1)', '264.5', '528')])
+        self.assertEqual(wrong_relations('The parity is $1 + 2 = 0$ (even).'), [('1 + 2', '0', '3')])
+        self.assertTrue(wrong_relations('$C$ is at $-72 - 168 = -250 = 110^\\circ$.'))
+
+    def test_the_tail_of_a_longer_expression_has_no_value(self):
+        for text in ('$s^2 = SS / (2-1)', '$x - 3 \\times 4', '$\\sum (1/4 \\times 1/4)', '$|x| - 1/2', '$\\rho - (1+2)', '$AB + 2 \\times 3'):
+            with self.subTest(text=text):
+                self.assertIsNone(expression_before(text))
+        self.assertEqual(expression_before('- (-1)/(-15) '), ('(-1)/(-15)', F(1, 15)))   # a bullet is no operator
+        self.assertEqual(expression_before('*   2 \\times 3'), ('2 \\times 3', 6))
+        self.assertEqual(expression_before('$x = 2 \\times 3'), ('2 \\times 3', 6))
+
+
 if __name__ == '__main__':
     unittest.main()
