@@ -698,7 +698,7 @@ class _Eval:
 
     def tick(self):
         self.steps += 1
-        if self.steps > 200000:
+        if self.steps > 60000:   # about 0.35 s: a nested sum of 4*10^8 terms stopped at 200000 took 1.15 s
             raise NotExact('too much work for one step')
 
     def ev(self, node, env, pi=None):
