@@ -65,6 +65,17 @@ class Values(unittest.TestCase):
         self.check([(r'2^{100} \bmod 7', '2'), (r'3^{2024} \pmod{1000}', str(pow(3, 2024, 1000))), (r'17 \bmod 5', '2'),
                     (r'2016 \pmod{1000}', '16'), ('491 mod 3', '2'), (r'2^{100}', None)])
 
+    def test_double_factorial_bases_and_repeating_decimals(self):
+        self.check([(r'(12-1)!!', '10395'), (r'8!!', '384'), (r'17_{49}', '56'), (r'97_{21} - 17_{21}', '168'), (r'19_{8}', None),
+                    (r'0.\overline{49}', '49/99'), (r'0.\overline{4}', '4/9'), (r'0.4\overline{9}', '0.5'), (r'0.1\overline{09}', '6/55')])
+
+    def test_degrees_by_context(self):
+        self.assertEqual(x.spell(x.evaluate(r'\tan(45)', degrees=True)), '1')
+        self.assertEqual(x.spell(x.evaluate(r'-\cot 135', degrees=True)), '1')
+        self.assertIsNone(x.evaluate(r'\tan(45)'))
+        self.assertEqual(ud.evaluate_exact(r'\sin 30', 'the angle is 60^\circ, so '), Fraction(1, 2))
+        self.assertIsNone(ud.evaluate_exact(r'\sin 30', 'in radians, '))
+
     def test_what_reads_two_ways_is_refused(self):
         self.check([(r'2\frac{1}{3}', None), ('3 5', None), ('2 (2)', None), (r'1/2\sqrt{3}', None), ('x + 1', None),
                     (r'|a| |b|', None)])

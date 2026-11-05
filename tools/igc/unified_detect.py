@@ -34,10 +34,10 @@ Implements the two core safeguards of `docs/plans/2026-11-05-mip-unified-detecti
      Stirling/Catalan/Bell/derangements, a modular inverse, one determinant; `C(n,k)`, `P(n,k)`, `\sigma`, `\tau`, `\phi`, `\mu` only
      where the text before names them) and with `exactexpr.py`: square roots kept as roots, trig at exact angles, logs that come out,
      sums and products over a range, `a^b mod m`, a product with no sign, and a one-variable function the text defined.
-   - Over the 48 control traces of a100_262k (27,627 `=`), it puts a value at 5,982; mathexpr alone at 5,197. Of the 785 new values
-     709 are the value the model wrote next, 66 are followed by no value to compare, 10 differ: 4 slips of the model (the software's
-     value is right), 5 another form of the same value or a decimal the model wanted, 1 wrong (`w(0)`, a function whose domain the
-     text gave elsewhere) (2026-11-06).
+   - Over the 48 control traces of a100_262k (27,627 `=`), it puts a value at 6,043; mathexpr alone at 5,197, and none of those is
+     lost. Of the 846 new values 755 are the value the model wrote next, 80 are followed by no value to compare, 11 differ: 4 slips of
+     the model (the software's value is right), 6 another form of the same value or a decimal the model wanted, 1 wrong (`w(0)`, a
+     function whose domain the text gave elsewhere) (2026-11-06).
 """
 from __future__ import annotations
 
@@ -285,6 +285,9 @@ def _rewrite_calls(s: str, context: str, line: str) -> Optional[str]:
     return out
 
 
+_DEGREE_TEXT = re.compile(r'\^\s*\{?\s*\\circ|°|\bdegrees?\b')
+
+
 def evaluate_exact(text: str, context: str = '', functions: Optional[dict] = None):
     """The exact value of `text`: a Fraction, an `exactexpr.Value` when it holds square roots, or None (never a guess).
 
@@ -341,7 +344,9 @@ def evaluate_exact(text: str, context: str = '', functions: Optional[dict] = Non
         val = mathexpr.evaluate(rewritten)
         if val is not None:
             return val
-    v = exactexpr.evaluate(rewritten, functions)
+    # `\tan(45) = 1`, `\cot 135`: a text that works in degrees writes some angles with no sign (livebench-c3cc0058, -41e8ed05)
+    degrees = bool(_DEGREE_TEXT.search(context[-3000:]) or _DEGREE_TEXT.search(s))
+    v = exactexpr.evaluate(rewritten, functions, degrees=degrees)
     if v is None:
         return None
     q = v.rational()
@@ -360,7 +365,7 @@ _TAIL_OF_MORE_BEFORE = re.compile(r'(?:[+\-*/^×÷·⋅−)\]}\d]|\\times|\\cdot
 # (`\sum_`, `\log_2`: `_` is a word character, so the command names end at a non-letter, not at \b)
 _EXACT_HINT = re.compile(r'\\sqrt|√|\bsqrt\b|\\(?:sin|cos|tan|cot|sec|csc|log|ln|sum|prod|binom|dbinom|tbinom|pi|bmod|pmod|mod|lfloor|lceil)(?![A-Za-z])'
                          r'|\b(?:sin|cos|tan|log|ln|mod)(?![A-Za-z])|[πθ°]|\\circ|\d\s*\(|\)\s*\(|[A-Za-z]\(|\b(?:gcd|lcm|comb|perm|totient)\b|\\gcd|\\lcm|\\varphi'
-                         r'|\\det|\\begin\{|\^\s*\{\s*-1\s*\}')
+                         r'|\\det|\\begin\{|\^\s*\{\s*-1\s*\}|!!|\\overline|\d_\{?\d')
 _SPELL_SKIP = re.compile(r'\s|\\left|\\right|[{}()]|\\cdot|\*|\\,')
 
 

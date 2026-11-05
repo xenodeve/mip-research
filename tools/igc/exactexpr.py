@@ -333,7 +333,7 @@ _COMMANDS = {r'\times': ('op', '*'), r'\cdot': ('op', '*'), r'\ast': ('op', '*')
              r'\lfloor': ('(', 'floor'), r'\rfloor': (')', 'floor'), r'\lceil': ('(', 'ceil'), r'\rceil': (')', 'ceil'),
              r'\{': ('(', '{'), r'\}': (')', '{'), r'\lbrace': ('(', '{'), r'\rbrace': (')', '{'), r'\%': ('op', '%'),
              r'\sum': ('big', 'sum'), r'\prod': ('big', 'prod'), r'\log': ('log', None), r'\ln': ('log', 'e'), r'\lg': ('log', 'lg'),
-             r'\lvert': ('bar',), r'\rvert': ('bar',), r'\vert': ('bar',), r'\mid': ('bar',)}
+             r'\lvert': ('bar',), r'\rvert': ('bar',), r'\vert': ('bar',), r'\mid': ('bar',), r'\overline': ('overline',)}
 _COMMANDS.update({'\\' + t: ('trig', t) for t in _TRIG})
 _WORD = {'sqrt': ('sqrt',), 'pi': ('pi',), 'mod': ('op', 'mod'), 'log': ('log', None), 'ln': ('log', 'e')}
 _WORD.update({t: ('trig', t) for t in _TRIG})
@@ -361,8 +361,12 @@ def _tokens(text):
         m = mathexpr._NUMBER.match(s, i)
         if m and (c.isdigit() or c == '.'):
             raw = m.group().replace(',', '')
-            out.append(('num', Fraction(raw.lower()) if 'e' in raw.lower() else Fraction(raw), '.' in raw or 'e' in raw.lower(), spaced))
             i = m.end()
+            if s.startswith('.\\overline', i) and '.' not in raw:   # `0.\overline{49}`: the point belongs to the number
+                raw += '.'
+                i += 1
+            out.append(('num', Fraction(raw.lower()) if 'e' in raw.lower() else Fraction(raw.rstrip('.')), '.' in raw or 'e' in raw.lower(),
+                        raw, spaced))
             continue
         if c == '\\':
             m = re.match(r'\\(?:[A-Za-z]+|.)', s[i:])
@@ -501,7 +505,11 @@ class _Parser:
         while True:
             if self.at('!'):
                 self.take()
-                node = ('!', node)
+                if self.at('!') and not self.peek()[-1]:   # (12 - 1)!! = 11 x 9 x ... x 1
+                    self.take()
+                    node = ('!!', node)
+                else:
+                    node = ('!', node)
             elif self.at('op', '%') and not self._percent_is_mod():
                 self.take()
                 node = ('%', node)
@@ -549,11 +557,41 @@ class _Parser:
         node = self.power()
         return node
 
+    def repeating(self, tok):
+        """`0.\\overline{49}` = 49/99, `0.4\\overline{9}` = 1/2: the digits under the bar repeat for ever."""
+        self.take('overline')
+        self.take('(', 'g')
+        digits = ''
+        while self.at('num'):
+            digits += self.take()[3]
+        self.take(')', 'g')
+        raw = tok[3]
+        if '.' not in raw or not digits.isdigit():
+            raise NotExact('a bar over no repeating digits')
+        places = len(raw.split('.', 1)[1])
+        value = Fraction(raw.rstrip('.')) + Fraction(int(digits), 10 ** places * (10 ** len(digits) - 1))
+        return ('num', value, False)
+
+    def based(self, tok):
+        """`17_{49}` = 1 x 49 + 7: decimal digits written in base b, each under b (a digit past 9 has no decimal spelling)."""
+        self.take('_')
+        base = self.group()
+        if base[0] != 'num' or base[1].denominator != 1 or not 2 <= base[1] <= 10 ** 6:
+            raise NotExact('a subscript that is no base')
+        b, digits = int(base[1]), tok[3]
+        if not digits.isdigit() or any(int(c) >= b for c in digits):
+            raise NotExact('a digit past its base')
+        return ('num', Fraction(sum(int(c) * b ** j for j, c in enumerate(reversed(digits)))), False)
+
     def primary(self):
         tok = self.peek()
         kind = tok[0]
         if kind == 'num':
             self.take()
+            if self.at('overline'):
+                return self.repeating(tok)
+            if self.at('_') and not tok[2]:
+                return self.based(tok)
             return ('num', tok[1], tok[2])
         if kind == '(':
             self.take()
@@ -643,8 +681,9 @@ def _parse(text):
 
 
 class _Eval:
-    def __init__(self, functions):
+    def __init__(self, functions, degrees=False):
         self.functions = functions or {}
+        self.degrees = degrees
         self.decimal = False
         self.irrational = False
         self.steps = 0
@@ -704,6 +743,14 @@ class _Eval:
             return Value.of(_integer(self.ev(a, env, pi)) % abs(m))
         if k == '^':
             return _power(self.ev(node[1], env, pi), self.ev(node[2], env, pi))
+        if k == '!!':
+            n = _integer(self.ev(node[1], env, pi))
+            if not -1 <= n <= 60:
+                raise NotExact('a double factorial out of reach')
+            out = 1
+            for j in range(n, 0, -2):
+                out *= j
+            return Value.of(out)
         if k == '!':
             n = _integer(self.ev(node[1], env, pi))
             if not 0 <= n <= 34:
@@ -769,7 +816,7 @@ class _Eval:
             a = self.ev(node, env, Value.of(180))
         else:
             a = self.ev(node, env, None)
-            if a != ZERO:
+            if a != ZERO and not self.degrees:
                 raise NotExact('an angle with no unit: degrees or radians')
         q = a.rational()
         if q is None:
@@ -800,11 +847,12 @@ def _bind_calls(node, functions):
     return tuple(_bind_calls(x, functions) if isinstance(x, tuple) else x for x in node)
 
 
-def evaluate(text, functions=None):
-    """The exact value of the whole text, or None."""
+def evaluate(text, functions=None, degrees=False):
+    """The exact value of the whole text, or None. `degrees`: an angle with no unit is in degrees (`\\tan(45)`, `\\cot 135` in a text that
+    works in degrees); without it only 0 has a unit-free value."""
     try:
         tree = _bind_calls(_parse(text), functions or {})
-        e = _Eval(functions)
+        e = _Eval(functions, degrees)
         value = e.ev(tree, {})
         if e.decimal and value.rational() is None:
             return None   # `\sqrt{310.9666}`: the model wants a decimal
@@ -870,9 +918,12 @@ def spell(value, latex=True):
     q = value.rational()
     if q is not None:
         return mathexpr.spelled(q)
-    if all(c < 0 for c in value.t.values()):
+    if all(c < 0 for c in value.t.values()):   # `-\frac{1 + \sqrt{5}}{4}`; with no denominator `-2 - \sqrt{3}` below
         inner = spell(-value, latex)
-        return '-' + inner if latex and inner.startswith('\\frac') or ' ' not in inner else f'-({inner})'
+        if latex and inner.startswith('\\frac'):
+            return '-' + inner
+        if not latex and '/' in inner:
+            return f'-({inner})' if ' ' in inner else '-' + inner
     terms = sorted(value.t.items())
     den = 1
     for _, c in terms:
