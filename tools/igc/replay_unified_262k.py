@@ -75,7 +75,7 @@ def compute_oracle_upper_bound(dataset: Dict[str, Any], label: str = "") -> Dict
         for idx, ln in enumerate(lines):
             ln_str = ln.strip()
             for m in CAND_CONCLUSION_RE.finditer(ln_str):
-                cand = (m.group(1) or m.group(2) or '').strip()
+                cand = (m.group(1) or m.group(2) or (m.group(3) if len(m.groups()) >= 3 else None) or '').strip()
                 cand_norm = CandidateAnswerTracker.normalize_candidate(cand)
                 if cand_norm is not None and cand_norm == gold_norm:
                     hit_tok = int(toks * ((char_pos + m.end()) / total_chars))
@@ -134,7 +134,7 @@ def replay_dataset(
             ln_str = ln.strip()
             # Record candidate
             for m in CAND_CONCLUSION_RE.finditer(ln_str):
-                cand = (m.group(1) or m.group(2) or '').strip()
+                cand = (m.group(1) or m.group(2) or (m.group(3) if len(m.groups()) >= 3 else None) or '').strip()
                 if cand:
                     upto = text[:char_pos + m.end()]
                     recent = upto[-320:].lower()
