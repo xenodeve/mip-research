@@ -238,7 +238,7 @@ def canonical_assumption_signature(expr_or_code: str, method: str = METHOD_ALGEB
 
 @dataclass(frozen=True)
 class CandidateObservation:
-    value: Fraction
+    value: Any
     method: str
     signature: str
     source_text: str
@@ -249,10 +249,26 @@ class CandidateObservation:
 class CandidateDecision:
     status: str
     should_close: bool
-    value: Optional[Fraction]
+    value: Any
     reason: str
     methods_seen: Tuple[str, ...] = ()
     unique_signatures: int = 0
+
+
+CAND_CONCLUSION_RE = re.compile(
+    r'\\boxed\{([^{}]+)\}|(?:the\s+(?:final\s+)?answer\s+(?:is|should\s+be|would\s+be)|therefore[,\s]+the\s+(?:final\s+)?answer\s+is|so\s+the\s+final\s+answer\s+is)\s*\$?(-?\d+(?:/\d+)?)',
+    re.I,
+)
+
+REFLECT_STARTER_RE = re.compile(
+    r'^(?:wait\b|hmm+\b|let\s+me\s+(?:double[- ]?check|re-?check|verify|recalculate)|let\'s\s+(?:double[- ]?check|verify))',
+    re.I,
+)
+
+METHOD_CHECK_KEYWORDS = (
+    'small case', 'check:', 'verify:', 'verified', 'substitut',
+    'method 2', 'second method', 'another way', 'alternatively'
+)
 
 
 class CandidateAnswerTracker:
@@ -270,7 +286,7 @@ class CandidateAnswerTracker:
 
     def __init__(self) -> None:
         self.observations: List[CandidateObservation] = []
-        self.falsified_values: Set[Fraction] = set()
+        self.falsified_values: Set[Any] = set()
         self.falsified_signatures: Set[str] = set()
 
     @staticmethod
@@ -289,6 +305,28 @@ class CandidateAnswerTracker:
                 return None
         return None
 
+    @staticmethod
+    def normalize_candidate(val: Any) -> Any:
+        if isinstance(val, bool) or val is None:
+            return None
+        if isinstance(val, (int, Fraction)):
+            return Fraction(val)
+        if isinstance(val, str):
+            v = val.strip()
+            v = re.sub(r'^\$+|\$+$', '', v).strip()
+            v = re.sub(r'\\(?:text|mathbf|mathrm|boxed)\{([^{}]+)\}', r'\1', v).strip()
+            mc = re.match(r'^(?:option\s+)?([A-E])(?:\b|$)', v, re.I)
+            if mc:
+                return mc.group(1).upper()
+            try:
+                frac = CandidateAnswerTracker._to_fraction(v)
+                if frac is not None:
+                    return frac
+            except Exception:
+                pass
+            return v
+        return None
+
     def record_candidate(
         self,
         value: Any,
@@ -297,21 +335,21 @@ class CandidateAnswerTracker:
         at_token: int = 0,
         signature: Optional[str] = None,
     ) -> Optional[CandidateObservation]:
-        frac = self._to_fraction(value)
-        if frac is None:
+        norm = self.normalize_candidate(value)
+        if norm is None:
             return None
         if method not in (METHOD_ALGEBRAIC, METHOD_EXHAUSTIVE_SEARCH, METHOD_SMALL_CASE_CHECK):
             raise ValueError(f'unknown candidate method: {method}')
         sig = signature or canonical_assumption_signature(expr_or_code, method=method)
-        obs = CandidateObservation(value=frac, method=method, signature=sig, source_text=expr_or_code[:200], at_token=at_token)
+        obs = CandidateObservation(value=norm, method=method, signature=sig, source_text=expr_or_code[:200], at_token=at_token)
         self.observations.append(obs)
         return obs
 
     def record_falsification(self, wrong_value: Any = None, wrong_expr_or_signature: Optional[str] = None) -> None:
         """Mark a candidate value and/or assumption signature as falsified by small-case check or constraint substitution."""
-        frac = self._to_fraction(wrong_value)
-        if frac is not None:
-            self.falsified_values.add(frac)
+        norm = self.normalize_candidate(wrong_value)
+        if norm is not None:
+            self.falsified_values.add(norm)
         if wrong_expr_or_signature:
             self.falsified_signatures.add(wrong_expr_or_signature)
             self.falsified_signatures.add(canonical_assumption_signature(wrong_expr_or_signature, METHOD_ALGEBRAIC))
@@ -328,7 +366,7 @@ class CandidateAnswerTracker:
         if not self.observations and value is None:
             return CandidateDecision(STATUS_SINGLE, False, None, 'no candidate answers recorded')
 
-        target = self._to_fraction(value) if value is not None else self.observations[-1].value
+        target = self.normalize_candidate(value) if value is not None else self.observations[-1].value
         if target is None:
             return CandidateDecision(STATUS_SINGLE, False, None, 'unparseable candidate value')
 
@@ -393,16 +431,17 @@ class CandidateAnswerTracker:
             # Check whether their numeric operand sets overlap heavily (shared intermediate assumption).
             num_sets = [set(_NUM_TOKEN.findall(o.source_text)) - {'0', '1', '2'} for o in matching]
             shared_assumption = len(num_sets) >= 2 and all(len(num_sets[0] & ns) > 0 for ns in num_sets[1:] if ns)
-            if shared_assumption:
-                close = bool(in_verified_loop or near_ceiling)
-                return CandidateDecision(
-                    status=STATUS_SAME_ASSUMPTION,
-                    should_close=close,
-                    value=target,
-                    reason='multiple algebraic expressions share the same intermediate constants without search/constraint check',
-                    methods_seen=methods,
-                    unique_signatures=len(sigs),
-                )
+            close = bool(in_verified_loop or near_ceiling)
+            return CandidateDecision(
+                status=STATUS_SAME_ASSUMPTION,
+                should_close=close,
+                value=target,
+                reason=('multiple algebraic expressions share the same intermediate constants without search/constraint check'
+                        if shared_assumption else
+                        'multiple candidate repetitions within the same method family; supporting evidence only (no cross-method confirmation)'),
+                methods_seen=methods,
+                unique_signatures=len(sigs),
+            )
 
         # Cross-method confirmed (e.g. Algebraic + Exhaustive Search / Small-Case / Substitution Check, or disjoint methods)
         close = bool(reflect_gate or in_verified_loop or near_ceiling)
@@ -414,6 +453,33 @@ class CandidateAnswerTracker:
             methods_seen=methods,
             unique_signatures=len(sigs),
         )
+
+
+def detect_candidate_line(
+    tracker: CandidateAnswerTracker,
+    line: str,
+    full_text: str,
+    at_token: int = 0,
+    reflect_gate: bool = True,
+    min_tokens: int = 0,
+) -> Optional[CandidateDecision]:
+    """Shared rule for live generation (tir4b) and offline replay.
+    Records candidates from explicit conclusion patterns in `line`, and if `line` starts
+    with a reflection starter (and at_token >= min_tokens), evaluates whether tracker closes."""
+    line = line.strip()
+    if not line:
+        return None
+    for m in CAND_CONCLUSION_RE.finditer(line):
+        cand = (m.group(1) or m.group(2) or '').strip()
+        if cand:
+            recent = full_text[-320:].lower()
+            method = METHOD_SMALL_CASE_CHECK if any(k in recent for k in METHOD_CHECK_KEYWORDS) else METHOD_ALGEBRAIC
+            tracker.record_candidate(cand, recent[-160:], method=method, at_token=at_token)
+    if at_token >= min_tokens and REFLECT_STARTER_RE.match(line):
+        dec = tracker.evaluate_candidate(reflect_gate=reflect_gate)
+        if dec.should_close and dec.value is not None:
+            return dec
+    return None
 
 
 # ----------------------------------------------------------------------------------------------------------------------------------

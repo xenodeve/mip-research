@@ -25,11 +25,31 @@ from fractions import Fraction
 import numpy as np
 import torch
 import torch.nn.functional as F
+
+for p in ('/content', str(Path(__file__).resolve().parents[3]), str(Path(__file__).resolve().parent)):
+    if p not in sys.path:
+        sys.path.insert(0, p)
+
 try:
     from tools.igc.mathexpr import evaluate, expression_before
-except ImportError:   # on a VM the file sits next to the script
-    sys.path.insert(0, '/content')
+except ImportError:
     from mathexpr import evaluate, expression_before
+
+try:
+    from tools.igc.probe.ood_metrics import (
+        SignalCalibration, fit_train_calibrations, score_fusions_ood,
+        compute_no_digit_mask, count_destructive_false_alarms,
+        evaluate_ood_detector, split_traces_by_suite, format_ood_row
+    )
+except ImportError:
+    try:
+        from ood_metrics import (
+            SignalCalibration, fit_train_calibrations, score_fusions_ood,
+            compute_no_digit_mask, count_destructive_false_alarms,
+            evaluate_ood_detector, split_traces_by_suite, format_ood_row
+        )
+    except ImportError:
+        pass
 
 ap = argparse.ArgumentParser()
 ap.add_argument('--model', required=True)
@@ -40,24 +60,27 @@ ap.add_argument('--layers', default='8,16,24,31')
 ap.add_argument('--router', action='store_true')
 ap.add_argument('--dry', action='store_true')
 ap.add_argument('--check', action='store_true', help='test every detector against the real decode (alignment, extractors, shifted labels) and stop')
+ap.add_argument('--ood-split', action='store_true', help='split traces by suite prefix (livebench- vs contest-) and evaluate OOD generalization in both directions with fixed train thresholds')
 ap.add_argument('--maxtok', type=int, default=30000)
 ap.add_argument('--limit', type=int, default=0)
 ap.add_argument('--loop-run', type=int, default=10, help='how many lines in a row that already appeared make a loop')
-args = ap.parse_args()
-LAYERS = [int(x) for x in args.layers.split(',')]
-KS, FA, FOLDS = (2, 8, 32), 0.01, 3
-LOOP_RUN = args.loop_run   # lines in a row that already appeared. On the 36 control rows: 10 flags 11 rows (10 of the 14 the runner called stuck, 1 right one), 6 flags 17 (12 stuck, 5 right)
-DEV = 'cpu' if args.dry else 'cuda:0'
-rng = np.random.default_rng(0)
-torch.manual_seed(0)
 
-from transformers import AutoTokenizer
-tok = AutoTokenizer.from_pretrained(args.model)
-if not args.dry:
-    from transformers import AutoModelForCausalLM
-    model = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.bfloat16, device_map=DEV).eval()
-    lm = model.model.language_model if hasattr(model.model, 'language_model') else model.model
-    blocks = lm.layers
+# Module-level defaults & variables
+args = None
+LAYERS = [8, 16, 24, 31]
+KS, FA, FOLDS = (2, 8, 32), 0.01, 3
+LOOP_RUN = 10
+DEV = 'cpu'
+rng = np.random.default_rng(0)
+tok = None
+model = None
+lm = None
+blocks = None
+V = 248320
+START = {'comp': re.compile(r'^[\s\d\.\,\+\-\*/=\^\(\)×÷\$]+$'), 'reflect': re.compile(r'^\s*(wait|hmm|actually|alternatively|verify|check|recheck|but)\b', re.I)}
+start_mask = {}
+results = []
+rows = []
 
 # ------------------------------------------------------------------------------------------------ events
 WRITTEN_END = re.compile(r'[=\n$;]|\\approx|\\neq|\\quad|,\s')
@@ -132,21 +155,6 @@ def loop_events(text):
 
 EXTRACT = {'comp': comp_events, 'reflect': reflect_events, 'loop': loop_events}
 
-# ------------------------------------------------------------------------------------------------ data
-V = 248320 if args.dry else model.lm_head.weight.shape[0]
-START = {'comp': re.compile(r'^[\s\d\.\,\+\-\*/=\^\(\)×÷\$]+$'), 'reflect': re.compile(r'^\s*(wait|hmm|actually|alternatively|verify|check|recheck|but)\b', re.I)}
-start_mask = {}
-if not args.dry:
-    toks = tok.convert_ids_to_tokens(list(range(V)))
-    strs = [tok.convert_tokens_to_string([p]) if p is not None else '' for p in toks]
-    for kind, pat in START.items():
-        mk = torch.zeros(V, dtype=torch.bool)
-        for i, s in enumerate(strs):
-            if s.strip() and pat.match(s) and (kind != 'comp' or re.search(r'[\d\+\-\*/=\^×÷]', s)):
-                mk[i] = True
-        start_mask[kind] = mk.to(DEV)
-        print('start tokens', kind, int(mk.sum()), flush=True)
-
 
 def load_traces(paths, role):
     rows = []
@@ -211,40 +219,6 @@ def features(r):
     return dict(caps=caps, hp=hp, router=rt, top1=torch.cat(top1).numpy(), ent=torch.cat(ent).numpy(), am=torch.cat(am).numpy(),
                 nxt={k: torch.cat(v).numpy() for k, v in nxt.items()})
 
-
-APPLY = bool(args.train_traces)
-rows = (load_traces(args.train_traces, 'train') if APPLY else []) + load_traces(args.traces, 'test')
-print('traces', len(rows), 'tokens', sum(len(r['out_ids']) for r in rows), flush=True)
-for r in rows:
-    ps = [tok.decode([t]) for t in r['out_ids']]
-    offs, n = [], 0
-    for p in ps:
-        offs.append(n)
-        n += len(p)
-    text = ''.join(ps)
-    r['text'], r['offs'], r['pieces'] = text, offs, ps
-    r['n'] = len(r['out_ids'])
-    r['events'] = {}
-    for kind, fn in EXTRACT.items():
-        evs = fn(text)
-        for e in evs:
-            e['tok'] = bisect.bisect_right(offs, e['onset']) - 1
-            if e.get('vstart') is not None:
-                e['vtok'] = bisect.bisect_right(offs, e['vstart']) - 1
-        own = np.zeros(r['n'] + 1, dtype=bool)
-        for s_, e_, _ in r['spans']:
-            own[s_:e_] = True
-        r['events'][kind] = [e for e in evs if not own[min(e['tok'], r['n'])]]
-    t0 = time.time()
-    r.update(features(r))
-    print(r['id'], r['src'], 'tokens', r['n'], {k: len(v) for k, v in r['events'].items()}, f'{time.time() - t0:.0f}s', flush=True)
-    r['ids_np'] = np.array(r['out_ids'])
-
-if not args.dry:   # the features are in memory: the weights are not needed for the learning (a 35B model left no room for it)
-    del model, lm, blocks
-    import gc
-    gc.collect()
-    torch.cuda.empty_cache()
 
 # ------------------------------------------------------------------------------------------------ learning on the GPU
 def labels(r, kind, k):
@@ -449,13 +423,6 @@ def run_checks():
     print(f'  {n_own} tokens inside the software\'s own spans in these traces; events kept only outside them')
 
 
-if args.check:
-    run_checks()
-    sys.exit(0)
-
-results = []
-
-
 # Detectors read together (the developer, 2026-11-05: the signals err in different places, so the signals together should be sharper). Parameter-free: each member's
 # score becomes its rank percentile among all positions of the set being read, and the fused score is the mean of the members' percentiles. Nothing is fitted on the
 # set, so there is nothing to over-fit; the threshold is the same 1 %-of-positions rule as for the single signals.
@@ -516,96 +483,226 @@ def emit(agg, kind, k, arm=''):
               f'(random {res["random"]:.3f})  median lead {res["lead"]}  precision {res["precision"]:.3f}', flush=True)
 
 
-if APPLY:
-    train_rows = [r for r in rows if r['role'] == 'train']
-    arms = {}
+def main(cli_args=None):
+    global args, LAYERS, KS, FA, FOLDS, LOOP_RUN, DEV, rng, tok, model, lm, blocks, V, start_mask, APPLY, rows, results
+    args = ap.parse_args(cli_args)
+    LAYERS = [int(x) for x in args.layers.split(',')]
+    KS, FA, FOLDS = (2, 8, 32), 0.01, 3
+    LOOP_RUN = args.loop_run
+    DEV = 'cpu' if args.dry else 'cuda:0'
+    rng = np.random.default_rng(0)
+    torch.manual_seed(0)
+    results = []
+
+    from transformers import AutoTokenizer
+    tok = AutoTokenizer.from_pretrained(args.model)
+    if not args.dry:
+        from transformers import AutoModelForCausalLM
+        model = AutoModelForCausalLM.from_pretrained(args.model, dtype=torch.bfloat16, device_map=DEV).eval()
+        lm = model.model.language_model if hasattr(model.model, 'language_model') else model.model
+        blocks = lm.layers
+
+    V = 248320 if args.dry else model.lm_head.weight.shape[0]
+    if not args.dry:
+        toks = tok.convert_ids_to_tokens(list(range(V)))
+        strs = [tok.convert_tokens_to_string([p]) if p is not None else '' for p in toks]
+        for kind, pat in START.items():
+            mk = torch.zeros(V, dtype=torch.bool)
+            for i, s in enumerate(strs):
+                if s.strip() and pat.match(s) and (kind != 'comp' or re.search(r'[\d\+\-\*/=\^×÷]', s)):
+                    mk[i] = True
+            start_mask[kind] = mk.to(DEV)
+            print('start tokens', kind, int(mk.sum()), flush=True)
+
+    APPLY = bool(args.train_traces)
+    rows = (load_traces(args.train_traces, 'train') if APPLY else []) + load_traces(args.traces, 'test')
+    print('traces', len(rows), 'tokens', sum(len(r['out_ids']) for r in rows), flush=True)
     for r in rows:
-        if r['role'] == 'test':
-            arms.setdefault(r['arm'], []).append(r)
-    print('detectors fitted on', len(train_rows), 'control traces; read on', {a: len(v) for a, v in arms.items()}, flush=True)
+        ps = [tok.decode([t]) for t in r['out_ids']]
+        offs, n = [], 0
+        for p in ps:
+            offs.append(n)
+            n += len(p)
+        text = ''.join(ps)
+        r['text'], r['offs'], r['pieces'] = text, offs, ps
+        r['n'] = len(r['out_ids'])
+        r['events'] = {}
+        for kind, fn in EXTRACT.items():
+            evs = fn(text)
+            for e in evs:
+                e['tok'] = bisect.bisect_right(offs, e['onset']) - 1
+                if e.get('vstart') is not None:
+                    e['vtok'] = bisect.bisect_right(offs, e['vstart']) - 1
+            own = np.zeros(r['n'] + 1, dtype=bool)
+            for s_, e_, _ in r['spans']:
+                own[s_:e_] = True
+            r['events'][kind] = [e for e in evs if not own[min(e['tok'], r['n'])]]
+        t0 = time.time()
+        r.update(features(r))
+        print(r['id'], r['src'], 'tokens', r['n'], {k: len(v) for k, v in r['events'].items()}, f'{time.time() - t0:.0f}s', flush=True)
+        r['ids_np'] = np.array(r['out_ids'])
+
+    if not args.dry:
+        del model, lm, blocks
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
+
+    if args.check:
+        run_checks()
+        sys.exit(0)
+
+    if args.ood_split:
+        suites = split_traces_by_suite(rows)
+        if 'livebench' in suites and 'contest' in suites:
+            directions = [('livebench', 'contest'), ('contest', 'livebench')]
+        elif len(suites) >= 2:
+            s_keys = sorted(suites.keys())
+            directions = [(s_keys[0], s_keys[1]), (s_keys[1], s_keys[0])]
+        else:
+            print(f'Error: --ood-split requires traces with at least two suites (e.g. livebench- and contest-), found: {list(suites.keys())}', file=sys.stderr)
+            sys.exit(1)
+
+        print(f'OOD split evaluation across suites: {", ".join(f"{k}: {len(v)} traces" for k, v in suites.items())}', flush=True)
+
+        for train_suite, test_suite in directions:
+            tr = suites[train_suite]
+            te = suites[test_suite]
+            dir_name = f'{train_suite}->{test_suite}'
+            print(f'\n====================================================================================================')
+            print(f'OOD Direction: {dir_name} (train: {len(tr)} traces -> test: {len(te)} traces)')
+            print(f'====================================================================================================', flush=True)
+
+            for kind in EXTRACT:
+                tr_onsets = sum(len(r['events'][kind]) for r in tr)
+                te_onsets = sum(len(r['events'][kind]) for r in te)
+                print(f'\n######## {kind}: {tr_onsets} onsets in {train_suite} (train), {te_onsets} onsets in {test_suite} (test)', flush=True)
+                if tr_onsets < 3 or te_onsets < 1:
+                    continue
+                for k in KS:
+                    scorers = make_scorers(kind, k, tr)
+                    if not scorers:
+                        continue
+                    train_scores = {name: [np.asarray(sc(r)) for r in tr] for name, sc in scorers.items()}
+                    calibs = fit_train_calibrations(train_scores, FUSIONS, fa=FA)
+                    test_base_scores = {name: [np.asarray(sc(r)) for r in te] for name, sc in scorers.items()}
+                    test_all_scores = score_fusions_ood(test_base_scores, FUSIONS, calibs)
+
+                    for name, s_list in test_all_scores.items():
+                        res = evaluate_ood_detector(te, kind, k, name, s_list, calibs[name])
+                        res['direction'] = dir_name
+                        res['train_suite'] = train_suite
+                        res['test_suite'] = test_suite
+                        results.append(res)
+                        print(format_ood_row(res, dir_name), flush=True)
+
+        wrong_res = {}
+        for train_suite, test_suite in directions:
+            te = suites[test_suite]
+            dir_name = f'{train_suite}->{test_suite}'
+            W = [(r, e['vtok'] - 1, not e['right']) for r in te for e in r['events']['comp'] if e['right'] is not None and e.get('vtok') is not None and e['vtok'] >= 1]
+            yw = np.array([w[2] for w in W])
+            if 3 <= yw.sum() < len(yw):
+                wrong_res[dir_name] = round(auroc(yw, np.array([1 - r['top1'][t] for r, t, _ in W])), 3)
+                print(f'  wrong values ({dir_name}): read {len(W)}, wrong {int(yw.sum())}, AUROC {wrong_res[dir_name]}', flush=True)
+
+        json.dump(dict(model=args.model, mode='ood-split', suites={s: len(v) for s, v in suites.items()}, results=results, wrong=wrong_res), open(args.out, 'w'))
+        sys.exit(0)
+
+    if APPLY:
+        train_rows = [r for r in rows if r['role'] == 'train']
+        arms = {}
+        for r in rows:
+            if r['role'] == 'test':
+                arms.setdefault(r['arm'], []).append(r)
+        print('detectors fitted on', len(train_rows), 'control traces; read on', {a: len(v) for a, v in arms.items()}, flush=True)
+        for kind in EXTRACT:
+            total = sum(len(r['events'][kind]) for r in train_rows)
+            print(f'\n######## {kind}: {total} onsets in the control traces; per arm: ' +
+                  str({a: sum(len(r['events'][kind]) for r in v) for a, v in arms.items()}), flush=True)
+            if total < 10:
+                continue
+            for k in KS:
+                scorers = make_scorers(kind, k, train_rows)
+                for arm, te in arms.items():
+                    agg = {}
+                    accumulate(agg, te, scorers, kind, k)
+                    emit(agg, kind, k, arm)
+        print('\n######## wrong values, per arm (digit confidence, 1 - top-1 probability, at the state before the first digit)')
+        wrong_res = {}
+        for arm, te in arms.items():
+            W = [(r, e['vtok'] - 1, not e['right']) for r in te for e in r['events']['comp'] if e['right'] is not None and e.get('vtok') is not None and e['vtok'] >= 1]
+            yw = np.array([w[2] for w in W])
+            if 3 <= yw.sum() < len(yw):
+                wrong_res[arm] = round(auroc(yw, np.array([1 - r['top1'][t] for r, t, _ in W])), 3)
+            print(f'  {arm}: values read {len(W)}, wrong {int(yw.sum()) if len(W) else 0}, AUROC {wrong_res.get(arm)}')
+        json.dump(dict(model=args.model, mode='apply', arms={a: len(v) for a, v in arms.items()}, results=results, wrong=wrong_res), open(args.out, 'w'))
+        sys.exit(0)
+
+    order = rng.permutation(len(rows))
+    fold_of = {int(i): j % FOLDS for j, i in enumerate(order)}
     for kind in EXTRACT:
-        total = sum(len(r['events'][kind]) for r in train_rows)
-        print(f'\n######## {kind}: {total} onsets in the control traces; per arm: ' +
-              str({a: sum(len(r['events'][kind]) for r in v) for a, v in arms.items()}), flush=True)
+        total = sum(len(r['events'][kind]) for r in rows)
+        print(f'\n######## {kind}: {total} onsets in {len(rows)} traces', flush=True)
         if total < 10:
             continue
         for k in KS:
-            scorers = make_scorers(kind, k, train_rows)
-            for arm, te in arms.items():
-                agg = {}
-                accumulate(agg, te, scorers, kind, k)
-                emit(agg, kind, k, arm)
-    print('\n######## wrong values, per arm (digit confidence, 1 - top-1 probability, at the state before the first digit)')
+            agg = {}
+            for f in range(FOLDS):
+                tr = [r for i, r in enumerate(rows) if fold_of[i] != f]
+                te = [r for i, r in enumerate(rows) if fold_of[i] == f]
+                accumulate(agg, te, make_scorers(kind, k, tr), kind, k)
+            emit(agg, kind, k)
+
+    # ------------------------------------------------------------------------------------------------ a wrong value
+    print('\n######## wrong values')
+    W = []
+    for ri, r in enumerate(rows):
+        for e in r['events']['comp']:
+            if e['right'] is not None and e.get('vtok') is not None and e['vtok'] >= 1:
+                W.append((ri, e['vtok'] - 1, not e['right']))
+    yw = np.array([w[2] for w in W])
+    print('values read', len(W), 'wrong', int(yw.sum()))
     wrong_res = {}
-    for arm, te in arms.items():
-        W = [(r, e['vtok'] - 1, not e['right']) for r in te for e in r['events']['comp'] if e['right'] is not None and e.get('vtok') is not None and e['vtok'] >= 1]
-        yw = np.array([w[2] for w in W])
-        if 3 <= yw.sum() < len(yw):
-            wrong_res[arm] = round(auroc(yw, np.array([1 - r['top1'][t] for r, t, _ in W])), 3)
-        print(f'  {arm}: values read {len(W)}, wrong {int(yw.sum()) if len(W) else 0}, AUROC {wrong_res.get(arm)}')
-    json.dump(dict(model=args.model, mode='apply', arms={a: len(v) for a, v in arms.items()}, results=results, wrong=wrong_res), open(args.out, 'w'))
-    sys.exit(0)
+    if 3 <= yw.sum() < len(yw):
+        for name, key in (('digit confidence (1 - top-1 prob)', 'top1'), ('entropy', 'ent')):
+            sc = np.array([(1 - rows[ri][key][t]) if key == 'top1' else rows[ri][key][t] for ri, t, _ in W])
+            wrong_res[name] = round(auroc(yw, sc), 3)
+            print(f'  {name}: AUROC {wrong_res[name]}')
+        folds = np.array([fold_of[w[0]] for w in W])
+        for L in LAYERS:
+            X = torch.stack([rows[ri]['caps'][L][t].float() for ri, t, _ in W]).to(DEV)
+            sc = np.zeros(len(W))
+            for f in range(FOLDS):
+                trm, tem = folds != f, folds == f
+                if yw[trm].sum() < 2 or tem.sum() == 0:
+                    continue
+                fn = fit_dense(X[torch.tensor(trm, device=DEV)], torch.tensor(yw[trm], device=DEV), l2=1e-2)
+                sc[tem] = fn(X[torch.tensor(tem, device=DEV)]).cpu().numpy()
+            wrong_res[f'probe_L{L}'] = round(auroc(yw, sc), 3)
+            print(f'  probe L{L}: AUROC {wrong_res[f"probe_L{L}"]}')
 
-order = rng.permutation(len(rows))
-fold_of = {int(i): j % FOLDS for j, i in enumerate(order)}
-for kind in EXTRACT:
-    total = sum(len(r['events'][kind]) for r in rows)
-    print(f'\n######## {kind}: {total} onsets in {len(rows)} traces', flush=True)
-    if total < 10:
-        continue
-    for k in KS:
-        agg = {}
-        for f in range(FOLDS):
-            tr = [r for i, r in enumerate(rows) if fold_of[i] != f]
-            te = [r for i, r in enumerate(rows) if fold_of[i] == f]
-            accumulate(agg, te, make_scorers(kind, k, tr), kind, k)
-        emit(agg, kind, k)
+    # ------------------------------------------------------------------------------------------------ the end of the prompt
+    print('\n######## end of the prompt: does the trace end with a right answer?')
+    lab = [(i, r) for i, r in enumerate(rows) if r.get('right') is not None and str(r['right']) in ('True', 'False', 'true', 'false')]
+    yp = np.array([str(r['right']).lower() == 'true' for _, r in lab])
+    prompt_res = {}
+    print('traces with a right / wrong label:', len(lab), 'right', int(yp.sum()))
+    if len(lab) >= 12 and 3 <= yp.sum() <= len(yp) - 3:
+        length = np.array([len(r['prompt_ids']) for _, r in lab], float)
+        prompt_res['prompt length'] = round(auroc(~yp, length), 3)
+        print(f'  prompt length (longer -> wrong): AUROC {prompt_res["prompt length"]}')
+        for L in LAYERS:
+            X = torch.stack([r['hp'][L] for _, r in lab]).to(DEV)
+            sc = np.zeros(len(lab))
+            for j in range(len(lab)):   # leave one out
+                keep = torch.tensor([i != j for i in range(len(lab))], device=DEV)
+                fn = fit_dense(X[keep], torch.tensor(~yp[keep.cpu().numpy()], device=DEV), l2=1e-1, steps=100)
+                sc[j] = float(fn(X[j:j + 1]).cpu())
+            prompt_res[f'probe_L{L}'] = round(auroc(~yp, sc), 3)
+            print(f'  probe at the last prompt token, L{L} (leave one out): AUROC for "wrong" {prompt_res[f"probe_L{L}"]}')
+    json.dump(dict(model=args.model, traces=len(rows), results=results, wrong=wrong_res, prompt=prompt_res), open(args.out, 'w'))
 
-# ------------------------------------------------------------------------------------------------ a wrong value
-print('\n######## wrong values')
-W = []
-for ri, r in enumerate(rows):
-    for e in r['events']['comp']:
-        if e['right'] is not None and e.get('vtok') is not None and e['vtok'] >= 1:
-            W.append((ri, e['vtok'] - 1, not e['right']))
-yw = np.array([w[2] for w in W])
-print('values read', len(W), 'wrong', int(yw.sum()))
-wrong_res = {}
-if 3 <= yw.sum() < len(yw):
-    for name, key in (('digit confidence (1 - top-1 prob)', 'top1'), ('entropy', 'ent')):
-        sc = np.array([(1 - rows[ri][key][t]) if key == 'top1' else rows[ri][key][t] for ri, t, _ in W])
-        wrong_res[name] = round(auroc(yw, sc), 3)
-        print(f'  {name}: AUROC {wrong_res[name]}')
-    folds = np.array([fold_of[w[0]] for w in W])
-    for L in LAYERS:
-        X = torch.stack([rows[ri]['caps'][L][t].float() for ri, t, _ in W]).to(DEV)
-        sc = np.zeros(len(W))
-        for f in range(FOLDS):
-            trm, tem = folds != f, folds == f
-            if yw[trm].sum() < 2 or tem.sum() == 0:
-                continue
-            fn = fit_dense(X[torch.tensor(trm, device=DEV)], torch.tensor(yw[trm], device=DEV), l2=1e-2)
-            sc[tem] = fn(X[torch.tensor(tem, device=DEV)]).cpu().numpy()
-        wrong_res[f'probe_L{L}'] = round(auroc(yw, sc), 3)
-        print(f'  probe L{L}: AUROC {wrong_res[f"probe_L{L}"]}')
 
-# ------------------------------------------------------------------------------------------------ the end of the prompt
-print('\n######## end of the prompt: does the trace end with a right answer?')
-lab = [(i, r) for i, r in enumerate(rows) if r.get('right') is not None and str(r['right']) in ('True', 'False', 'true', 'false')]
-yp = np.array([str(r['right']).lower() == 'true' for _, r in lab])
-prompt_res = {}
-print('traces with a right / wrong label:', len(lab), 'right', int(yp.sum()))
-if len(lab) >= 12 and 3 <= yp.sum() <= len(yp) - 3:
-    length = np.array([len(r['prompt_ids']) for _, r in lab], float)
-    prompt_res['prompt length'] = round(auroc(~yp, length), 3)
-    print(f'  prompt length (longer -> wrong): AUROC {prompt_res["prompt length"]}')
-    for L in LAYERS:
-        X = torch.stack([r['hp'][L] for _, r in lab]).to(DEV)
-        sc = np.zeros(len(lab))
-        for j in range(len(lab)):   # leave one out
-            keep = torch.tensor([i != j for i in range(len(lab))], device=DEV)
-            fn = fit_dense(X[keep], torch.tensor(~yp[keep.cpu().numpy()], device=DEV), l2=1e-1, steps=100)
-            sc[j] = float(fn(X[j:j + 1]).cpu())
-        prompt_res[f'probe_L{L}'] = round(auroc(~yp, sc), 3)
-        print(f'  probe at the last prompt token, L{L} (leave one out): AUROC for "wrong" {prompt_res[f"probe_L{L}"]}')
-json.dump(dict(model=args.model, traces=len(rows), results=results, wrong=wrong_res, prompt=prompt_res), open(args.out, 'w'))
+if __name__ == '__main__':
+    main()

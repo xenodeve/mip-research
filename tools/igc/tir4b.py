@@ -209,6 +209,12 @@ def inline_value(before, whole=False, use_mathbackend=False):
 def spelled(value):
     """An integer as itself, a value with a terminating decimal as that decimal (the model's own spelling: 9/2 written for 0.9 x 5 broke its
     decimal sum into a loop, dm 6890), and only the rest as a reduced fraction, as Qwenputer's library prints."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, int):
+        return str(value)
+    if not hasattr(value, 'denominator'):
+        return str(value)
     if value.denominator == 1:
         return str(value.numerator)
     d = value.denominator
@@ -634,23 +640,15 @@ class Rollout:
         thinking when a reflection starter (`Wait`, `Hmm`, `Let me double-check`, `Let me verify`) begins a redundant re-check."""
         if self.tracker is None or self.phase != 'think':
             return False
-        from tools.igc.unified_detect import METHOD_ALGEBRAIC, METHOD_SMALL_CASE_CHECK
-        line = self.text().rstrip('\n').rsplit('\n', 1)[-1].strip()
-        if not line:
-            return False
-        for m in re.finditer(r'\\boxed\{([^{}]+)\}|(?:the\s+(?:final\s+)?answer\s+(?:is|should\s+be|would\s+be)|therefore[,\s]+the\s+(?:final\s+)?answer\s+is|so\s+the\s+final\s+answer\s+is)\s*\$?(-?\d+(?:/\d+)?)', line, re.I):
-            cand = (m.group(1) or m.group(2) or '').strip()
-            if cand:
-                recent = self.text()[-320:].lower()
-                method = METHOD_SMALL_CASE_CHECK if any(k in recent for k in ('small case', 'check:', 'verify:', 'verified', 'substitut', 'method 2', 'second method', 'another way', 'alternatively')) else METHOD_ALGEBRAIC
-                self.tracker.record_candidate(cand, recent[-160:], method=method, at_token=len(self.out))
-        if re.match(r'^(?:wait\b|hmm+\b|let\s+me\s+(?:double[- ]?check|re-?check|verify|recalculate)|let\'s\s+(?:double[- ]?check|verify))', line, re.I):
-            dec = self.tracker.evaluate_candidate(reflect_gate=True)
-            if dec.should_close and dec.value is not None:
-                self.inject(LOOP_CLOSE, 'candidate close')
-                self.events[-1].update(value=spelled(dec.value), status=dec.status, methods=list(dec.methods_seen), signatures=dec.unique_signatures)
-                self.phase = 'answer'
-                return True
+        from tools.igc.unified_detect import detect_candidate_line
+        text = self.text()
+        line = text.rstrip('\n').rsplit('\n', 1)[-1].strip()
+        dec = detect_candidate_line(self.tracker, line, text, at_token=len(self.out))
+        if dec is not None and dec.should_close and dec.value is not None:
+            self.inject(LOOP_CLOSE, 'candidate close')
+            self.events[-1].update(value=spelled(dec.value), status=dec.status, methods=list(dec.methods_seen), signatures=dec.unique_signatures)
+            self.phase = 'answer'
+            return True
         return False
 
     def hint_due(self):
