@@ -12,7 +12,7 @@ Not here: MIP's inline arithmetic, which lives in the CUDA engine. Every text th
 tir4b.py run --model M --rows R.jsonl --out DIR [--force-after 512] [--execute] [--close-fit] [--loop-close] [--samples K] [--seed S] [--ids]
 tir4b.py math-train OUT.jsonl --n N [--levels 3,4,5] [--exclude ROWS.jsonl ...]     (on the VM: MATH train, never a test row)
 tir4b.py keep DIR [DIR ...] --out TRAIN.jsonl [--max-len 32768]                      (the trajectory each question trains on)"""
-import argparse, hashlib, json, os, random, re, sys, time
+import argparse, hashlib, json, math, os, random, re, sys, time
 from concurrent.futures import ThreadPoolExecutor
 from fractions import Fraction
 from pathlib import Path
@@ -189,21 +189,38 @@ def inline_found(before, whole=False, use_mathbackend=False):
     (gcd, lcm, phi, C, P, catalan, derangements, modinv, 2x2 det). `whole`: the expression the --whole-hint asked for, whose value is
     given even as an uneven quotient, since it is the step itself, not a piece of the model's long division."""
     from tools.igc.mathexpr import expression_before, simple_quotient
-    found = expression_before(before)
-    if found is None and use_mathbackend:
+    if use_mathbackend:   # it reads mathexpr's expression too, and a longer one ahead of it: `\sqrt{2} \cdot 4 + 1` is not 5
         from tools.igc.unified_detect import expression_before_with_mathbackend
         found = expression_before_with_mathbackend(before)
+    else:
+        found = expression_before(before)
     if found is None:
         return None
     expr, value = found
     said = spelled(value)
     if whole:
         return expr, said
-    if '/' in said and simple_quotient(expr):
-        return None   # an integer quotient that does not come out: the model is doing long division and wants a digit, not 21/19 (dm div_big)
+    if '/' in said and simple_quotient(expr) and not (use_mathbackend and _reduces(expr, before)):
+        # an integer quotient that does not come out: the model is doing long division and wants a digit, not 21/19 (dm div_big). One
+        # that reduces is a step of its own: `10044/42 = 1674/7`, `6/26 = 3/13` (ctrl traces of a100_262k)
+        return None
     if said == re.sub(r'[\s()]', '', expr):
         return None   # nothing new, and `= 15/13 = 15/13 = ...` looped until stuck
     return expr, said
+
+
+def _reduces(expr, before=''):
+    """An integer over an integer with a common factor: its lowest terms are news. Not in a long division or a divisibility test, which
+    want a digit or a decimal: `$70 / 6 = 11$ rem 4` after `Let's check $70308 / 6$`, `1302 / 9 = 144.66` after `divisible by` (ctrl traces
+    of a100_262k: 50 reductions the model wrote, 8 places it wanted the quotient)."""
+    nums = [int(x) for x in re.findall(r'\d+', expr)]
+    if len(nums) != 2 or math.gcd(*nums) == 1:
+        return False
+    a, b = nums
+    recent = before[-400:]
+    if re.search(r'\brem\b|remainder|long division|divisib|divides|\bdigit', recent, re.I):
+        return False
+    return not re.search(rf'(?<!\d){a}\d+\s*(?:/|\\div|÷)\s*{b}(?!\d)', recent)   # the first piece of a long division of a{digits} by b
 
 
 def inline_value(before, whole=False, use_mathbackend=False):
@@ -459,7 +476,7 @@ class Rollout:
         if self.phase == 'answer':
             if self.left() <= 0:
                 self.done('length')
-            elif looping(self.out):
+            elif self.looping_now():
                 self.done('stuck')
             return False
         if last == self.ids.think_close:
@@ -527,8 +544,22 @@ class Rollout:
 
     def looping_now(self):
         """The loop checks over the thinking since the last nudge (all of it before one): a nudge leaves the lines that looped in the text, and
-        line_back counts lines over the whole history, so read from the start every check after a nudge fired again at once (#304)."""
-        return looping(self.out[self.loop_floor:] if self.phase == 'think' else self.out)
+        line_back counts lines over the whole history, so read from the start every check after a nudge fired again at once (#304).
+        In the answer, over the answer alone: an answer restates lines of its thinking, and read with them line_back could end a right
+        answer `stuck` (#305)."""
+        if self.phase == 'think':
+            return looping(self.out[self.loop_floor:])
+        if self.phase == 'answer':
+            return looping(self.out[self.answer_start():])
+        return looping(self.out)
+
+    def answer_start(self):
+        """Where the answer begins: after the last `</think>` (the model's or the runner's close), or 0 when there is none."""
+        close = self.ids.think_close
+        for j in range(len(self.out) - 1, -1, -1):
+            if self.out[j] == close:
+                return j + 1
+        return 0
 
     def on_loop(self):
         """A loop in the thinking: a program to test the idea (--loop-hint, at most LOOP_HINTS), else the close (--loop-close), else the
@@ -1202,7 +1233,7 @@ def main(argv=None):
     r.add_argument('--server', default='', help='a llama-server URL (127.0.0.1) to run on in place of vLLM: this PC, on Windows')
     r.add_argument('--question-value', action='store_true', help='the whole value is the computation the question states, read by software')
     r.add_argument('--hand-off', action='store_true', help='a line that only restates a value software gave is cut, and the model is led to its answer')
-    r.add_argument('--mathbackend', action='store_true', help='extend --inline-calc with exact calls to the 6-module mathbackend (gcd, lcm, phi, C, P, catalan, derangements, modinv, 2x2 det)')
+    r.add_argument('--mathbackend', action='store_true', help='extend --inline-calc with the exact bridge (unified_detect.expression_before_exact): mathbackend calls, roots kept as roots, exact trig and logs, sums and products over a range, a^b mod m, lowest terms')
     r.add_argument('--candidate-close', action='store_true', help='close thinking on a reflection starter only when CandidateAnswerTracker confirms the answer across independent methods (never on same-assumption repeats)')
     r.add_argument('--box', action='store_true', help="blocks run in the OS isolation box (AppContainer) on this PC: D1, the developer's call")
     r.add_argument('--no-think', action='store_true', help='enable_thinking=False: the reply is the answer, as Qwenputer measures arithmetic')

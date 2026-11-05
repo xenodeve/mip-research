@@ -839,6 +839,23 @@ class UnifiedMathBackendAndCandidateClose(unittest.TestCase):
         self.assertIn('loop close', kinds(r))
         self.assertNotEqual(r.finish, 'stuck')
 
+    def test_an_answer_that_restates_its_thinking_is_not_stuck(self):
+        """#305: the answer's loop check read the whole history, so a line the thinking wrote 15 times and the answer once more made 16 for
+        line_back, and a right answer ended `stuck`. In the answer it reads the answer alone."""
+        import random
+        rng = random.Random(5)
+        same = 'and so the sum must be even here\n'
+        thinking = ''.join(same + ''.join(rng.choice('qwertyuiopasdfghjklzxcvbnm ') for _ in range(30)) + '\n' for _ in range(15))
+        # line_back runs on a check that ends at a line end: --check-hand ends every request there (any arm does when a chunk does)
+        script = thinking + '</think>\n' + same + 'The answer is 7.\n' + PAD * 2 + '\\boxed{7}<|im_end|>'
+        for arm in (dict(check_hand=True), dict(check_hand=True, inline_calc=True), dict(check_hand=True, execute=True, loop_close=True)):
+            r = rollout(**arm)
+            play(r, script, Kernel([]))
+            self.assertEqual(r.finish, 'stop', arm)
+        r = rollout()
+        play(r, '</think>\n' + same * 60 + '\\boxed{7}<|im_end|>', Kernel([]))
+        self.assertEqual(r.finish, 'stuck')   # a loop in the answer itself still stops
+
 
 class RepeatedValues(unittest.TestCase):
     """#301: an expression used three times anywhere in an answer closed or nudged the thinking as a loop, at the third use in 41 of 48

@@ -29,10 +29,15 @@ Implements the two core safeguards of `docs/plans/2026-11-05-mip-unified-detecti
        with disjoint intermediate structure) AND `reflect_gate` indicates the model is starting another redundant re-check,
        `should_close()` returns True (`CROSS_METHOD_CONFIRMED`).
 
-3. `mathbackend_inline`:
-   - Extends `mathexpr.py` with exact natural / LaTeX / functional calls into the 6-module `mathbackend` (382 operations:
-     `counting`, `numbers`, `algebra`, `geometry`, `search`, `symbolic`), covering `\gcd`, `\lcm`, `\varphi`, `\det`,
-     `P(n,k)`, `C(n,k)`, Stirling/Catalan/derangements, modular inverse, and exact symbolic polynomial expansion/roots.
+3. The inline bridge of the --mathbackend arm (`expression_before_exact`):
+   - Extends `mathexpr.py` with calls into the 6-module `mathbackend` (`\gcd`, `\lcm`, `\varphi`, `totient`, `comb`, `perm`,
+     Stirling/Catalan/Bell/derangements, a modular inverse, one determinant; `C(n,k)`, `P(n,k)`, `\sigma`, `\tau`, `\phi`, `\mu` only
+     where the text before names them) and with `exactexpr.py`: square roots kept as roots, trig at exact angles, logs that come out,
+     sums and products over a range, `a^b mod m`, a product with no sign, and a one-variable function the text defined.
+   - Over the 48 control traces of a100_262k (27,627 `=`), it puts a value at 5,982; mathexpr alone at 5,197. Of the 785 new values
+     709 are the value the model wrote next, 66 are followed by no value to compare, 10 differ: 4 slips of the model (the software's
+     value is right), 5 another form of the same value or a decimal the model wanted, 1 wrong (`w(0)`, a function whose domain the
+     text gave elsewhere) (2026-11-06).
 """
 from __future__ import annotations
 
@@ -46,6 +51,7 @@ import math
 import re
 from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
+from tools.igc import exactexpr
 from tools.igc import mathexpr
 from tools.igc import mathbackend
 
@@ -161,6 +167,48 @@ def _parse_int_args(raw: str) -> Optional[List[int]]:
     return out
 
 
+# `C(10, 3)`, `P(5, 2)`, `\sigma(12)`, `\tau(12)`, `\phi(12)`, `\mu(30)` are number functions only where the text is about them: points are
+# named P and C (`P(2, 3) =` put in 0, #302), and a permutation, a step function, a measure use the Greek letters. Each is read only when
+# the text before says what it is, and C / P never on a line about points.
+_GATED_CALL = re.compile(r'(?<![A-Za-z\\])(?P<name>C|P|\\sigma|\\tau|\\phi|\\mu|sigma|tau|phi|mu)\s*\(\s*(?P<args>[^()]+)\s*\)')
+_GATE = {
+    'C': re.compile(r'\b(?:choose|choosing|combinations?|subsets?|committees?|selections?|select)\b|\\binom|\bC\(n,\s*k\)|\bnCr\b', re.I),
+    'P': re.compile(r'\b(?:permutations?|arrangements?|arrange|ordered selections?)\b|\bP\(n,\s*k\)|\bnPr\b', re.I),
+    'sigma': re.compile(r'\bsum of (?:the |all |its )?(?:positive )?divisors\b|\bdivisor sum\b|\\sigma\(n\)\s*(?:=|is|denotes)', re.I),
+    'tau': re.compile(r'\bnumber of (?:the |its )?(?:positive )?divisors\b|\bdivisor count\b|\\tau\(n\)\s*(?:=|is|denotes)', re.I),
+    'phi': re.compile(r'\btotient\b|\bEuler\'?s? (?:phi|function)\b|\bcoprime to\b|\brelatively prime to\b', re.I),
+    'mu': re.compile(r'\bM[oö]bius\b', re.I),
+}
+_POINTS = re.compile(r'\b(?:points?|coordinates?|vertex|vertices|midpoint|segment|origin|lies? on|plane|line)\b|\\triangle|\\angle|\\overline', re.I)
+_GATED_OP = {'C': ('numbers.binomial', 2), 'P': ('numbers.falling_factorial', 2), 'sigma': ('numbers.sigma', 1),
+             'tau': ('numbers.num_divisors', 1), 'phi': ('numbers.totient', 1), 'mu': ('numbers.moebius', 1)}
+
+
+def _gated_value(name: str, args: List[int], context: str, line: str) -> Optional[int]:
+    """The value of a gated call, or None when the text does not say it is a number function or the arguments do not fit one."""
+    name = name.lstrip('\\')
+    op, arity = _GATED_OP[name]
+    if len(args) != arity or not _GATE[name].search(context):
+        return None
+    if name in ('C', 'P'):
+        n, k = args
+        if _POINTS.search(line) or not 0 <= k <= n or n > 10 ** 6:
+            return None   # P(2, 3) with k > n is a point, not 0
+        if _too_big('comb' if name == 'C' else 'perm', (n, k)):
+            return None
+    elif args[0] < 1 or args[0] > 10 ** 12:
+        return None
+    try:
+        r = mathbackend.run(op, *args)
+    except (mathbackend.BadInput, mathbackend.NotCovered, ValueError, TypeError):
+        return None
+    if isinstance(r, Fraction) and r.denominator == 1:
+        r = r.numerator
+    if isinstance(r, bool) or not isinstance(r, int) or abs(r) > mathexpr.LIMIT:
+        return None
+    return r
+
+
 _CALLS = {   # name in the text -> (operation, the argument counts it takes)
     'gcd': ('numbers.gcd', None), 'lcm': ('numbers.lcm', None), 'varphi': ('numbers.totient', (1,)), 'totient': ('numbers.totient', (1,)),
     'modinv': ('numbers.modinv', (2,)), 'invmod': ('numbers.modinv', (2,)), 'comb': ('numbers.binomial', (2,)),
@@ -203,15 +251,52 @@ def _call(name: str, args: Tuple[int, ...]) -> Optional[int]:
     return r
 
 
-def evaluate_with_mathbackend(text: str) -> Optional[Fraction]:
-    """Evaluate `text` using `mathexpr.evaluate` first, falling back to exact 6-module `mathbackend` calls when `text`
-    contains number-theoretic, combinatorial, or matrix forms (`gcd(a,b)`, `lcm(a,b)`, `phi(n)`, `C(n,k)`, `P(n,k)`,
-    `a^{-1} \\pmod{m}`, 2x2 `\\det`, etc.). Returns an exact `Fraction` or `None` (never guesses)."""
+def _rewrite_calls(s: str, context: str, line: str) -> Optional[str]:
+    """`s` with every number-function call replaced by its value in brackets; None when a call is there and has no value."""
+    failed = False
+
+    def _replace_call(m: re.Match) -> str:
+        nonlocal failed
+        name = (m.group('op') or m.group('tex') or m.group('plain') or '').lower()
+        args = _parse_int_args(m.group('args'))
+        r = None if args is None else _call(name, tuple(args))
+        if r is None:
+            failed = True
+            return m.group(0)
+        return f'({r})'
+
+    def _replace_gated(m: re.Match) -> str:
+        nonlocal failed
+        args = _parse_int_args(m.group('args'))
+        r = None if args is None else _gated_value(m.group('name'), args, context, line)
+        if r is None:
+            failed = True
+            return m.group(0)
+        return f'({r})'
+
+    out = s
+    for _ in range(2):   # gcd(lcm(4, 6), 8): the inner call first
+        if _FUNC_CALL.search(out):
+            out = _FUNC_CALL.sub(_replace_call, out)
+        if _GATED_CALL.search(out):
+            out = _GATED_CALL.sub(_replace_gated, out)
+        if failed:
+            return None
+    return out
+
+
+def evaluate_exact(text: str, context: str = '', functions: Optional[dict] = None):
+    """The exact value of `text`: a Fraction, an `exactexpr.Value` when it holds square roots, or None (never a guess).
+
+    In order: a modular inverse `a^{-1} \\pmod{m}`; tools.igc.mathexpr; one determinant; number-function calls (`gcd`, `\\binom`, `comb`,
+    and `C(n, k)`, `\\sigma(n)` ... only where `context`, the text before, says they are number functions) put in as values; then
+    tools.igc.exactexpr for roots, exact trig and logs, sums and products over a range, `a^b mod m`, a product with no sign, and the
+    one-variable functions in `functions` (`exactexpr.definitions` of the text before)."""
     s = text.strip().strip('$').strip()
     if not s:
         return None
 
-    # Check modular inverse `a^{-1} \pmod{m}` BEFORE `mathexpr.evaluate` (which would read `a^{-1} \pmod{m}` as `(1/a) % m` and fail, or misparse)
+    # A modular inverse `a^{-1} \pmod{m}` before mathexpr, which reads it as `(1/a) % m`
     m_inv = _MOD_INV_TEX.fullmatch(s)
     if m_inv:
         try:
@@ -224,7 +309,7 @@ def evaluate_with_mathbackend(text: str) -> Optional[Fraction]:
     if val is not None:
         return val
 
-    # Check general N x N determinant in LaTeX (2x2 to 20x20)
+    # One N x N determinant in LaTeX (2x2 to 20x20)
     m_det = _DET_MATRIX.search(s)
     if m_det:
         # A matrix is not its determinant: only `\det`, `determinant` or bars (vmatrix) ask for one. A bare pmatrix before `=` got its
@@ -246,56 +331,117 @@ def evaluate_with_mathbackend(text: str) -> Optional[Fraction]:
                 # the value of the rest of the text with the determinant in its place; mathexpr refuses words
                 rest = (s[:m_det.start()] + f'({res})' + s[m_det.end():]).strip()
                 return mathexpr.evaluate(re.sub(r'^(?:\\det|\\operatorname\{det\})\s*', '', rest))
-
-    # Rewrite known exact function calls (`gcd(...)`, `lcm(...)`, `C(n, k)`, `phi(n)`, etc.) into integer literals, then pass to mathexpr
-    if not _FUNC_CALL.search(s):
         return None
 
-    failed = False
-
-    def _replace_call(m: re.Match) -> str:
-        nonlocal failed
-        name = (m.group('op') or m.group('tex') or m.group('plain') or '').lower()
-        args = _parse_int_args(m.group('args'))
-        r = None if args is None else _call(name, tuple(args))
-        if r is None:
-            failed = True
-            return m.group(0)
-        return f'({r})'
-
-    rewritten = _FUNC_CALL.sub(_replace_call, s)
-    if failed:
+    line = context.rsplit('\n', 1)[-1] + s
+    rewritten = _rewrite_calls(s, context, line)
+    if rewritten is None:
         return None
-    if _FUNC_CALL.search(rewritten):
-        rewritten = _FUNC_CALL.sub(_replace_call, rewritten)
-        if failed:
-            return None
-    return mathexpr.evaluate(rewritten)
+    if rewritten != s:
+        val = mathexpr.evaluate(rewritten)
+        if val is not None:
+            return val
+    v = exactexpr.evaluate(rewritten, functions)
+    if v is None:
+        return None
+    q = v.rational()
+    return q if q is not None else v
+
+
+def evaluate_with_mathbackend(text: str, context: str = '') -> Optional[Fraction]:
+    """The rational value of `text` by `evaluate_exact`, or None (a value with roots in it too)."""
+    v = evaluate_exact(text, context)
+    return v if isinstance(v, Fraction) else None
 
 
 _TAIL_OF_MORE = re.compile(r'(?:[+*/^×÷·⋅]|\\times|\\cdot|\\div)')
 _TAIL_OF_MORE_BEFORE = re.compile(r'(?:[+\-*/^×÷·⋅−)\]}\d]|\\times|\\cdot|\\div)\s*$')
+# What exactexpr reads and mathexpr does not: a line with none of these is left to mathexpr alone, so most `=` cost nothing more
+# (`\sum_`, `\log_2`: `_` is a word character, so the command names end at a non-letter, not at \b)
+_EXACT_HINT = re.compile(r'\\sqrt|√|\bsqrt\b|\\(?:sin|cos|tan|cot|sec|csc|log|ln|sum|prod|binom|dbinom|tbinom|pi|bmod|pmod|mod|lfloor|lceil)(?![A-Za-z])'
+                         r'|\b(?:sin|cos|tan|log|ln|mod)(?![A-Za-z])|[πθ°]|\\circ|\d\s*\(|\)\s*\(|[A-Za-z]\(|\b(?:gcd|lcm|comb|perm|totient)\b|\\gcd|\\lcm|\\varphi'
+                         r'|\\det|\\begin\{|\^\s*\{\s*-1\s*\}')
+_SPELL_SKIP = re.compile(r'\s|\\left|\\right|[{}()]|\\cdot|\*|\\,')
+
+
+def _same_spelling(expr: str, said: str) -> bool:
+    """The value spelled is what the text already wrote: `3\\sqrt{186} =` has nothing new to put in."""
+    a = _SPELL_SKIP.sub('', expr.replace('\\dfrac', '\\frac').replace('\\tfrac', '\\frac'))
+    b = _SPELL_SKIP.sub('', said)
+    return a == b
+
+
+def _start_refused(line: str, i: int) -> bool:
+    """mathexpr.expression_before's rules for where a value cannot start, and the tail of a longer expression."""
+    head = line[:i]
+    c = line[i]
+    if i and (head[-1] not in mathexpr._BOUNDARY or head[-1] == '\\'):
+        return True   # inside a word, or inside a command's name: `\sqrt` is read from its backslash
+    if c in '-−' and (mathexpr._symbol_before(head) or not head.strip() and line[i + 1:i + 2] == ' '):
+        return True   # a minus after a symbol is binary; `- ` opening a line is a bullet
+    if c == '(' and re.search(r'[A-Za-z]\S*\s*$', head) and mathexpr._symbol_before(head):
+        return True   # `u^2 (1 + ...)`: a factor of a product on a symbol
+    if mathexpr._FUNCTION_BEFORE.search(head):
+        return True   # `\sin 30^\circ`: the argument of a function, read with its function
+    cand = line[i:].strip().strip('$').strip()
+    if _TAIL_OF_MORE.match(cand) or _TAIL_OF_MORE_BEFORE.search(head):
+        return True   # `C(9, 3) + gcd(15, 25)`: the tail of a longer expression has no value of its own
+    if re.search(r'[A-Za-z]\s*$', head) and mathexpr._symbol_before(head):
+        return True   # `x 4(117)`, `n \sqrt{2}`: a factor of a product on a symbol
+    word = re.search(r'\\([A-Za-z]+)\s*$', head)
+    if word and word.group(1) not in _NOT_A_SYMBOL:
+        return True   # `\rho - (1+\sqrt{5})`: what follows a Greek letter is a tail, its value is not the expression's (contest-d827a551)
+    return False
+
+
+# commands that end an operand: an operator, a relation, spacing, words; any other command (`\rho`, `\lambda`, `\pi` alone) is a symbol
+_NOT_A_SYMBOL = {'times', 'cdot', 'div', 'ast', 'pm', 'mp', 'le', 'ge', 'leq', 'geq', 'lt', 'gt', 'neq', 'ne', 'approx', 'equiv', 'sim',
+                 'implies', 'Rightarrow', 'rightarrow', 'to', 'iff', 'quad', 'qquad', 'text', 'textbf', 'mathrm', 'left', 'right', 'big',
+                 'Big', 'bigg', 'Bigg', 'colon', 'therefore', 'because', 'in', 'notin', 'subset', 'cup', 'cap', 'land', 'lor', 'mid'}
+
+
+def expression_before_exact(text: str):
+    """(expression, value) for the longest exact expression that ends `text` on its last line, read by `evaluate_exact`, or None.
+    The value is a Fraction, or the spelling of a value with roots in it (`3\\sqrt{186}`, plain `3*sqrt(186)` in a line with no LaTeX).
+    None too when that value is already what the text wrote."""
+    got = mathexpr.expression_before(text)
+    line = text.rsplit('\n', 1)[-1].rstrip()
+    if not _EXACT_HINT.search(line):
+        return got
+    stop = len(line)
+    if got is not None:   # a longer expression than mathexpr's: `\sqrt{2} \cdot 4 + 1` is not 5
+        at = line.rfind(got[0])
+        stop = at if at >= 0 else len(line)
+    base = text[:len(text) - len(text.rsplit('\n', 1)[-1])]   # the text before this line
+    functions = None
+    for i in range(stop):
+        if not line[i].strip() or line[i] in '$=,;:' or _start_refused(line, i):
+            continue
+        cand = line[i:].strip().strip('$').strip()
+        if not cand or '$' in cand:
+            continue   # `$2$ $\sqrt{8}$` is two values, not a product
+        if functions is None:
+            functions = exactexpr.definitions(text)
+        try:
+            v = evaluate_exact(cand, (base[-6000:] + line[:i]), functions)
+        except RecursionError:
+            v = None
+        if v is None:
+            continue
+        if isinstance(v, Fraction):
+            said = mathexpr.spelled(v)
+            if re.fullmatch(r'-?\d+(?:\.\d+)?', cand.strip('() ')):
+                return None   # a lone number, `(3)`
+            return (cand, v) if not _same_spelling(cand, said) else None
+        latex = '\\' in cand or ('sqrt' not in cand and '$' in line)
+        said = exactexpr.spell(v, latex=latex)
+        return None if _same_spelling(cand, said) else (cand, said)
+    return got
 
 
 def expression_before_with_mathbackend(text: str) -> Optional[Tuple[str, Fraction]]:
-    """Like `mathexpr.expression_before(text)`, but also recognizes exact calls to the 6-module `mathbackend`."""
-    got = mathexpr.expression_before(text)
-    if got is not None:
-        return got
-    line = text.rsplit('\n', 1)[-1].rstrip()
-    for i in range(len(line)):
-        if i and line[i - 1] not in mathexpr._BOUNDARY:
-            continue
-        cand = line[i:].strip().strip('$').strip()
-        if not cand or not (_FUNC_CALL.search(cand) or _MOD_INV_TEX.search(cand) or _DET_MATRIX.search(cand)):
-            continue
-        if _TAIL_OF_MORE.match(cand) or _TAIL_OF_MORE_BEFORE.search(line[:i]):
-            # The tail of a longer expression has no value of its own: `C(9, 3) + gcd(15, 25)` with C unread put in gcd's 5 for the sum
-            continue
-        val = evaluate_with_mathbackend(cand)
-        if val is not None:
-            return cand, val
-    return None
+    """`expression_before_exact`, the reader of the --mathbackend arm. Kept by this name for its callers."""
+    return expression_before_exact(text)
 
 
 # ----------------------------------------------------------------------------------------------------------------------------------
