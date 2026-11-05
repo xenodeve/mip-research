@@ -19,6 +19,9 @@ import time
 from fractions import Fraction
 from pathlib import Path
 
+if hasattr(sys, 'set_int_max_str_digits'):
+    sys.set_int_max_str_digits(0)
+
 import sympy as sp
 from sympy.ntheory.digits import digits as sp_digits
 from sympy.ntheory.modular import solve_congruence
@@ -81,6 +84,7 @@ def rint(rng, digits_lo=1, digits_hi=6, neg=True):
 
 
 GEN = {}
+BOUNDS = {}      # op name -> [(args, oracle, oracle name)]: the bound cases, filled in the last section of this file
 
 
 def gen(*names):
@@ -1027,10 +1031,11 @@ def g_pellsol(rng, n, name):
         base = diop_DN(d, 1)[0]
         x1, y1 = int(base[0]), int(base[1])
         sols = []
-        for j in range(1, k + 1):          # (x1 + y1 sqrt d)^j by sympy's exact expansion
-            e = sp.expand((x1 + y1 * sp.sqrt(d)) ** j)
-            sols.append((int(e.coeff(sp.sqrt(d), 0)), int(e.coeff(sp.sqrt(d), 1))))
-        return ((d, k), sols, 'SymPy exact powers of the fundamental unit')
+        t = sp.Symbol('t')
+        for j in range(1, k + 1):          # (x1 + y1 t)^j reduced modulo t^2 - d (t stands for sqrt d; sqrt(8) would split as 2*sqrt(2), so no radicals here)
+            e = sp.Poly(sp.rem(sp.expand((x1 + y1 * t) ** j), t ** 2 - d, t), t)
+            sols.append((int(e.coeff_monomial(1)), int(e.coeff_monomial(t))))
+        return ((d, k), sols, 'SymPy exact powers of the fundamental unit mod t^2 - d')
     return fill([((2, 3), [(3, 2), (17, 12), (99, 70)], 'SymPy'), ((4, 3), [], 'square d'), ((2, 0), BAD, 'count 0')], make, n, rng)
 
 
@@ -1230,8 +1235,15 @@ def check_case(opname, args, oracle):
     return 'disagree', f'got {str(res)[:100]} expected {str(oracle)[:100]}'
 
 
+def build_cases(name, rng, n):
+    """The generator's cases, with the operation's bound cases (at the bound and just past it, see BOUNDS) as the last ones; n cases in all (or more, if the edges are more)."""
+    cases = GEN[name](rng, n)
+    extra = BOUNDS.get(name, [])
+    return cases[:max(n - len(extra), 0)] + list(extra)
+
+
 def run_sim(seed=1, n=60, only=None, out_dir=None):
-    n = max(int(n), 40)
+    n = max(int(n), 60)
     reg = {k: v for k, v in registry().items() if k.startswith(MODULE + '.')}
     report = {'module': MODULE, 'seed': seed, 'n_per_op': n, 'sympy': sp.__version__, 'ops': {}, 'no_case': []}
     for name in sorted(reg):
@@ -1242,10 +1254,10 @@ def run_sim(seed=1, n=60, only=None, out_dir=None):
             continue
         rng = random.Random(f'{seed}:{name}')
         t0 = time.time()
-        cases = GEN[name](rng, n)
+        cases = build_cases(name, rng, n)
         print(f'  {name}: cases built in {time.time() - t0:.1f} s', file=sys.stderr, flush=True)
         rec = dict(kind=reg[name]['kind'], bound=reg[name]['bound'], generated=len(cases), answered=0, agree=0, refused=0, refused_expected=0, refused_reasons={},
-                   disagree=0, disagree_examples=[], oracles={})
+                   disagree=0, disagree_examples=[], oracles={}, expected_refusals_ok=0)
         for args, oracle, oname in cases:
             rec['oracles'][oname] = rec['oracles'].get(oname, 0) + 1
             kind, detail = check_case(name, args, oracle)
@@ -1254,6 +1266,7 @@ def run_sim(seed=1, n=60, only=None, out_dir=None):
                 rec['agree'] += 1
             elif kind == 'refused_expected':
                 rec['refused_expected'] += 1
+                rec['expected_refusals_ok'] = rec['refused_expected']
                 rec['agree'] += 1
                 rec['answered'] += 1
             elif kind == 'refused':
@@ -1299,7 +1312,7 @@ def generate(seed, n):
     out = []
     for name in sorted(GEN):
         rng = random.Random(f'{seed}:{name}')
-        out += [(name, a, o, on) for a, o, on in GEN[name](rng, max(int(n), 40))]
+        out += [(name, a, o, on) for a, o, on in build_cases(name, rng, max(int(n), 60))]
     return out
 
 

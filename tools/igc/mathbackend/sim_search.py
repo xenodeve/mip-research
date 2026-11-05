@@ -22,7 +22,8 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any, Callable, NamedTuple
 
-from tools.igc.mathbackend import BadInput, NotCovered, Surd, registry, run
+from tools.igc.mathbackend import BadInput, NotCovered, Surd, registry
+from tools.igc.mathbackend import run as backend_run
 from tools.igc.mathbackend.search import Numeric
 
 import mpmath as mp
@@ -1459,7 +1460,7 @@ def _bucket(msg):
 def run_case(c):
     """-> (outcome, detail, honest) where outcome is 'agree', 'disagree', 'refused', 'refused_expected', 'error'."""
     try:
-        res = run(c.op, *c.args, **c.kw)
+        res = backend_run(c.op, *c.args, **c.kw)
     except NotCovered as e:
         if c.oracle == REFUSE:
             return 'refused_expected', str(e), None
@@ -1545,6 +1546,16 @@ def run_all(seed=1, n=40, only=None, verbose=False):
     rep = {'module': 'search', 'seed': seed, 'n': n, 'seconds': round(time.time() - t_all, 1), 'operations_registered': ops_registered,
            'operations_without_case': [o for o in ops_registered if o not in per], 'per_operation': per}
     return rep
+
+
+def run(seed=1, n=60, only=None):
+    """The coordinator's entry point (sim.py): run_all, with an unexpected exception counted as a disagreement and the expected refusals under `expected_refusals_ok`."""
+    rep = run_all(seed, n, only)
+    ops = {}
+    for name, r in rep['per_operation'].items():
+        ops[name] = dict(generated=r['generated'], answered=r['answered'], agree=r['agree'], refused=dict(r['refused']), expected_refusals_ok=r['refused_expected'],
+                         disagree=r['disagree'] + r['errors'], seconds=r['seconds'])
+    return {'ops': ops, 'operations_without_case': rep['operations_without_case'], 'seconds': rep['seconds']}
 
 
 def print_table(rep):

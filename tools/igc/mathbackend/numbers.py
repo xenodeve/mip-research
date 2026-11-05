@@ -1456,6 +1456,8 @@ def rat_trunc(x):
 def rat_round(x, mode='half_away'):
     """x rounded to an integer; mode 'half_away' (halves go away from zero, the school rule), 'half_even' or 'half_up' (halves go up). rat_round("5/2") -> 3."""
     x = _rat(x)
+    if mode not in ('half_away', 'half_up', 'half_even'):
+        raise BadInput("mode must be 'half_away', 'half_up' or 'half_even'")
     fl = math.floor(x)
     d = x - fl
     if d < Fraction(1, 2):
@@ -1468,7 +1470,6 @@ def rat_round(x, mode='half_away'):
         return fl + 1
     if mode == 'half_even':
         return fl if fl % 2 == 0 else fl + 1
-    raise BadInput("mode must be 'half_away', 'half_up' or 'half_even'")
 
 
 @op('numbers.rat_mod', kind='exact arithmetic', bound='any size')

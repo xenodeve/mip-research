@@ -6,3 +6,6 @@ comment block in its backend file: `Adapted from <project> <version>, <path>, <l
 
 | project | version | licence | files taken | backend function | changes |
 |---|---|---|---|---|---|
+| (none) | - | - | - | - | - |
+
+All six backend modules (`counting.py`, `numbers.py`, `algebra.py`, `geometry.py`, `search.py`, `symbolic.py`) are implemented directly from textbook algorithms using Python's standard library (`fractions.Fraction`, `math`, `itertools`, `functools`). SymPy (BSD-3), mpmath (BSD-3), and NetworkX (BSD-3) are used strictly as independent reference oracles in `sim_*.py` and unit tests (`tools/test_mathbackend_*.py`), never imported by the runtime backend modules.

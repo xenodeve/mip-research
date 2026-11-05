@@ -2193,16 +2193,26 @@ def _linear_system(eqs):
     if len(eqs) > MAX_DIM:
         raise NotCovered(f'more than {MAX_DIM} equations')
     forms = []
+    vs_set = set()
     for e in eqs:
         if e.count('=') != 1:
             raise BadInput(f'an equation needs exactly one =: {e!r}')
         l, r = e.split('=')
+        for k, v in _tokens(e):
+            if k == 'v':
+                vs_set.add(v)
         mp = _mp_add(_parse_multi(l), _parse_multi(r), -1)
         for m in mp:
             if sum(x for _, x in m) > 1:
                 raise NotCovered(f'not linear: {e!r}')
         forms.append(mp)
-    vs = sorted({v for mp in forms for m in mp for v, _ in m})
+    for mp in forms:
+        for m in mp:
+            for v, _ in m:
+                vs_set.add(v)
+    vs = sorted(vs_set)
+    if not vs:
+        raise BadInput('no variable in the system')
     if len(vs) > MAX_DIM:
         raise NotCovered(f'more than {MAX_DIM} variables')
     A = [[mp.get(((v, 1),), Fraction(0)) for v in vs] for mp in forms]

@@ -37,6 +37,12 @@ class Refuse:
         self.why = why
 
 
+class BadIn:
+    """The oracle's value: the input is malformed and the operation must raise BadInput (a value, or a NotCovered, is a disagreement)."""
+    def __init__(self, why=''):
+        self.why = why
+
+
 def mk(op, args, val, name, **kw):
     return Case(op, tuple(args), val, name, kw)
 
@@ -2029,6 +2035,16 @@ GENERATORS = [
 ]
 
 
+def g_edges(rng, n):
+    """Edge cases for every operation (empty, zero, one element, the largest allowed input, just past the bound), a fixed list in sim_counting_edge.py.
+    It ignores rng and n, and sits last in GENERATORS so that the random cases above keep the seeds they always had."""
+    from tools.igc.mathbackend import sim_counting_edge
+    return sim_counting_edge.edge_cases()
+
+
+GENERATORS.append(g_edges)
+
+
 def registered():
     return sorted(f.op_name for f in vars(C).values() if hasattr(f, 'op_name') and f.op_name.startswith('counting.'))
 
@@ -2051,16 +2067,18 @@ def _same(a, b):
     return a == b and type(a) in (type(b), int, Fraction, bool) or (isinstance(a, (int, Fraction)) and isinstance(b, (int, Fraction)) and a == b)
 
 
-def run(seed=1, n=60, out='build-mathbackend/counting.json'):
+def run(seed=1, n=60, out='build-mathbackend/counting.json', mod=None, cases=None):
+    """mod: the module whose operations are called (default counting; the mutation runner passes an edited copy); cases: a list to run instead of generate(seed, n)."""
+    mod = C if mod is None else mod
     t0 = time.time()
-    cases = generate(seed, n)
+    cases = generate(seed, n) if cases is None else cases
     ops = registered()
     rows = {o: dict(generated=0, answered=0, agree=0, refused=0, refusal_reasons={}, expected_refusals=0, expected_refusals_ok=0, disagree=0, seconds=0.0, oracles={}, disagreements=[]) for o in ops}
     for c in cases:
         row = rows[c.op]
         row['generated'] += 1
         row['oracles'][c.oracle_name] = row['oracles'].get(c.oracle_name, 0) + 1
-        fn = getattr(C, c.op.split('.', 1)[1])
+        fn = getattr(mod, c.op.split('.', 1)[1])
         t1 = time.time()
         expect_refusal = isinstance(c.oracle, Refuse)
         if expect_refusal:
@@ -2072,12 +2090,19 @@ def run(seed=1, n=60, out='build-mathbackend/counting.json'):
             row['seconds'] += time.time() - t1
             if expect_refusal:
                 row['expected_refusals_ok'] += 1
+            elif isinstance(c.oracle, BadIn):
+                row['disagree'] += 1
+                row['disagreements'].append(dict(args=repr(c.args)[:200], kwargs=repr(c.kwargs)[:100], oracle='must raise BadInput', backend=f'NotCovered: {e}'))
             else:
                 row['refused'] += 1
                 row['refusal_reasons'][reason] = row['refusal_reasons'].get(reason, 0) + 1
             continue
         except BadInput as e:
             row['seconds'] += time.time() - t1
+            if isinstance(c.oracle, BadIn):
+                row['answered'] += 1
+                row['agree'] += 1
+                continue
             row['disagree'] += 1
             row['disagreements'].append(dict(args=repr(c.args)[:200], kwargs=repr(c.kwargs)[:100], oracle=repr(c.oracle)[:200], backend=f'BadInput: {e}'))
             continue
@@ -2088,9 +2113,9 @@ def run(seed=1, n=60, out='build-mathbackend/counting.json'):
             continue
         row['seconds'] += time.time() - t1
         row['answered'] += 1
-        if expect_refusal:
+        if expect_refusal or isinstance(c.oracle, BadIn):
             row['disagree'] += 1
-            row['disagreements'].append(dict(args=repr(c.args)[:200], kwargs=repr(c.kwargs)[:100], oracle='must refuse', backend=repr(got)[:100]))
+            row['disagreements'].append(dict(args=repr(c.args)[:200], kwargs=repr(c.kwargs)[:100], oracle='must refuse' if expect_refusal else 'must raise BadInput', backend=repr(got)[:100]))
         elif _same(got, c.oracle):
             row['agree'] += 1
         else:

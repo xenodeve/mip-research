@@ -1310,12 +1310,14 @@ def g_solve_linear_str(rng, n):
         bb = sympy.Matrix([sy(v) for v in b])
         rk = M.rank()
         rk2 = M.row_join(bb).rank()
-        # variables that appear in at least one equation
-        used = [j for j in range(k) if any(a[i][j] != 0 for i in range(m))] or [0]
+        # variables that appear in the TEXT of at least one equation: a column with a nonzero entry, and vs[0] when a row is all zero (the text then reads '0*x')
+        used = [j for j in range(k) if any(a[i][j] != 0 for i in range(m)) or (j == 0 and any(all(v == 0 for v in a[i]) for i in range(m)))]
         status = 'none' if rk2 > rk else ('unique' if rk == len(used) else 'infinite')
 
         def cert(r, a=a, b=b, vs=vs, status=status, used=used, rk=rk):
             if r['status'] != status:
+                return False
+            if r['variables'] != sorted(vs[j] for j in used):
                 return False
             if status == 'none':
                 return r['solution'] is None
@@ -1452,12 +1454,28 @@ def g_recurrence_guess(rng, n):
             for m in range(L, len(s)):
                 if sum((cf[i] * s[m - 1 - i] for i in range(L)), Fraction(0)) != s[m]:
                     return False
-            H = sympy.Matrix(len(s) // 2, len(s) - len(s) // 2, lambda i, j: sy(s[i + j]))   # Hankel matrix of the terms
-            return H.rank() == L or L <= H.rank()
+            return shortest_recurrence_order(s) == L
         out.append(((s,), Answers(cert) if N >= 2 * k + 1 else MayRefuse(cert),
-                    'cert: the recurrence regenerates every term, order not above the Hankel rank (SymPy); with N = 2*order the bound (2*order + 1 terms) may refuse'))
+                    'cert: the recurrence regenerates every term, and no recurrence of a smaller order fits (linear system solved with SymPy, one per smaller order); with N = 2*order the bound (2*order + 1 terms) may refuse'))
     out.append((([1, 2, 4, 8, 16, 32, 64],), (lambda r: r['order'] == 1 and r['coeffs'] == [2]), 'hand: powers of two'))
     return out
+
+
+def shortest_recurrence_order(s):
+    """The smallest L for which s[m] = c1 s[m-1] + ... + cL s[m-L] holds for every m >= L (some constants c): brute force, one SymPy linear system per L."""
+    for L in range(0, len(s)):
+        if L == 0:
+            if all(v == 0 for v in s):
+                return 0
+            continue
+        rows = [[sy(s[m - i]) for i in range(1, L + 1)] for m in range(L, len(s))]
+        if not rows:
+            return L
+        M = sympy.Matrix(rows)
+        rhs = sympy.Matrix([sy(s[m]) for m in range(L, len(s))])
+        if M.rank() == M.row_join(rhs).rank():
+            return L
+    return len(s)
 
 
 GENS = {

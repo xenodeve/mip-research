@@ -1331,7 +1331,13 @@ def hypergeom_pmf(N, K, n, k):
 def hypergeom_cdf(N, K, n, k):
     """P(X <= k) for the hypergeometric distribution of hypergeom_pmf, exact Fraction. hypergeom_cdf(10, 4, 3, 1) -> Fraction(2, 3)"""
     k = _int(k, 'k')
-    lo = max(0, _int(n, 'n') - (_int(N, 'N') - _int(K, 'K')))
+    hypergeom_pmf(N, K, n, 0)                                  # the checks of the pmf: the domain and the size bound, before any loop
+    N, K, n = _int(N, 'N'), _int(K, 'K'), _int(n, 'n')
+    lo, hi = max(0, n - (N - K)), min(n, K)
+    if k < lo:
+        return Fraction(0)
+    if k >= hi:
+        return Fraction(1)
     return sum((hypergeom_pmf(N, K, n, j) for j in range(lo, k + 1)), Fraction(0))
 
 
@@ -1364,20 +1370,23 @@ def negbinomial_pmf(r, p, k):
     return comb(k - 1, r - 1) * p ** r * (1 - p) ** (k - r) if k >= r else Fraction(0)
 
 
-@op('search.poisson_partial_sum', kind='probability', bound='k <= 100000')
+@op('search.poisson_partial_sum', kind='probability', bound='k <= 20000 (exact integers, no gcd until the end)')
 def poisson_partial_sum(lam, k):
     """The exact finite sum 1 + lam + lam^2/2! + ... + lam^k/k! as a Fraction (the truncated exponential series: P(X <= k) = e^-lam times this).
     poisson_partial_sum(2, 3) -> Fraction(19, 3)"""
     lam, k = _q(lam, 'lam'), _int(k, 'k')
     if lam < 0:
         raise BadInput('lam must be non-negative')
-    if k > 100000:
-        raise NotCovered('k > 100000')
-    s, t = Fraction(0), Fraction(1)
-    for j in range(0, k + 1):
-        s += t
-        t = t * lam / (j + 1)
-    return s
+    if k > 20000:
+        raise NotCovered('k > 20000')
+    if k < 0:
+        return Fraction(0)
+    pn, qd = lam.numerator, lam.denominator
+    a, b = 1, 1                                  # Horner from the top, H_j = a/b: H_k = 1, H_(j-1) = 1 + (lam/j) H_j; a and b stay integers
+    for j in range(k, 0, -1):
+        qb = qd * j * b
+        a, b = qb + pn * a, qb
+    return Fraction(a, b)
 
 
 # ----------------------------------------------------------------------------------------------------------------------------------------
@@ -2379,28 +2388,40 @@ def _poisson_lam(lam):
     return lam
 
 
+def _poisson_terms(lam, k, prec, want_sum):
+    """(lam^k/k! * e^-lam, or the sum of lam^j/j! for j <= k times e^-lam) as Decimals at `prec` digits: k multiplications of positive numbers, so the relative error
+    is at most about 3*k units of the last digit."""
+    with _ctx(prec):
+        lamd = Decimal(lam.numerator) / Decimal(lam.denominator)
+        t, tot = Decimal(1), Decimal(1)
+        for j in range(1, k + 1):
+            t = t * lamd / j
+            tot += t
+        return ((tot if want_sum else t) * (-lamd).exp())
+
+
+def _poisson_value(lam, k, digits, want_sum):
+    g = len(str(k + 1)) + 1                                       # guard digits for the k roundings
+    res = [_poisson_terms(lam, k, digits + extra + g + int(lam) // 2, want_sum) for extra in (12, 24)]
+    return _finish(res[1], abs(res[1] - res[0]) + abs(res[1]) * Decimal(10) ** -(digits + 8), digits, rel=True)
+
+
 @op('search.poisson_pmf', kind='probability', bound='lam <= 2000, k <= 100000, digits <= 60')
 def poisson_pmf(lam, k, digits=30):
-    """P(X = k) for X ~ Poisson(lam), to `digits` significant digits: e^-lam lam^k / k! with the exact Fraction lam^k/k! and a Decimal e^-lam.
-    Returns Numeric(value, error). poisson_pmf(2, 3, digits=10) -> Numeric(value=Decimal('0.1804470443'), ...)"""
+    """P(X = k) for X ~ Poisson(lam), to `digits` significant digits: e^-lam lam^k / k! by k positive Decimal multiplications at a precision well above the
+    digits (the same at two precisions, the difference is the error estimate). Returns Numeric(value, error). poisson_pmf(2, 3, digits=10) -> Numeric(value=Decimal('0.1804470443'), ...)"""
     _check_digits(digits)
     lam, k = _poisson_lam(lam), _int(k, 'k')
     if k > 100000 or digits > 60:
         raise NotCovered('k > 100000 or digits > 60')
     if k < 0:
         return _finish(Decimal(0), Decimal(0), digits, rel=True)
-    frac = lam ** k / factorial(k)
-    res = []
-    for g in (15, 28):
-        with _ctx(digits + g + int(lam) // 2 + 5):
-            lamd = Decimal(lam.numerator) / Decimal(lam.denominator)
-            res.append((Decimal(frac.numerator) / Decimal(frac.denominator)) * (-lamd).exp())
-    return _finish(res[1], abs(res[1] - res[0]) + abs(res[1]) * Decimal(10) ** -(digits + 8), digits, rel=True)
+    return _poisson_value(lam, k, digits, False)
 
 
 @op('search.poisson_cdf', kind='probability', bound='lam <= 2000, k <= 100000, digits <= 60')
 def poisson_cdf(lam, k, digits=30):
-    """P(X <= k) for X ~ Poisson(lam), to `digits` significant digits: e^-lam times the exact truncated series poisson_partial_sum(lam, k).
+    """P(X <= k) for X ~ Poisson(lam), to `digits` significant digits: e^-lam times the sum of the positive terms lam^j/j! (j <= k), as poisson_pmf does.
     Returns Numeric(value, error). poisson_cdf(2, 3, digits=10) -> Numeric(value=Decimal('0.8571234605'), ...)"""
     _check_digits(digits)
     lam, k = _poisson_lam(lam), _int(k, 'k')
@@ -2408,10 +2429,4 @@ def poisson_cdf(lam, k, digits=30):
         raise NotCovered('k > 100000 or digits > 60')
     if k < 0:
         return _finish(Decimal(0), Decimal(0), digits, rel=True)
-    s = poisson_partial_sum(lam, k)
-    res = []
-    for g in (15, 28):
-        with _ctx(digits + g + int(lam) // 2 + 5):
-            lamd = Decimal(lam.numerator) / Decimal(lam.denominator)
-            res.append((Decimal(s.numerator) / Decimal(s.denominator)) * (-lamd).exp())
-    return _finish(res[1], abs(res[1] - res[0]) + abs(res[1]) * Decimal(10) ** -(digits + 8), digits, rel=True)
+    return _poisson_value(lam, k, digits, True)

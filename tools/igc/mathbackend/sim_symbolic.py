@@ -195,6 +195,7 @@ def gen_simplify(rs, n):
     out = []
     for i in range(n):
         a, b, c = lin(rs), lin(rs), lin(rs)
+        b_, c_ = a, b
         k = i % 4
         if k == 0:
             t = f'({a}*{b})/({a}*{c})'
@@ -209,7 +210,7 @@ def gen_simplify(rs, n):
                 continue
         except Exception:
             continue
-        out.append(Case('symbolic.simplify', (t,), {'sympy': t}, 'sympy-exact'))
+        out.append(Case('symbolic.simplify', (t,), {'sympy': t, 'bad_input': zero_sym(sy(b_) + sy(c_)) if k == 3 else False}, 'sympy-exact'))
     return out
 
 
@@ -251,7 +252,7 @@ def gen_equal(rs, n):
         else:
             t1, t2 = f'sqrt(x^2)', rs.choice(['x', 'abs(x)'])
             truth = t2 == 'abs(x)'
-        out.append(Case('symbolic.equal', (t1, t2), {'truth': truth}, 'sympy-exact'))
+        out.append(Case('symbolic.equal', (t1, t2), {'truth': truth, 'expect_refuse': k == 3}, 'sympy-exact'))
     return out
 
 
@@ -361,7 +362,12 @@ def gen_limit(rs, n):
             pt, direction = int(pt[:-1]), '+'
         elif isinstance(pt, str) and pt.endswith('-') and pt != '-oo':
             pt, direction = int(pt[:-1]), '-'
-        out.append(Case('symbolic.limit', (t, 'x', pt, direction), {'sympy': t}, 'sympy-limit'))
+        orc = {'sympy': t}
+        if tpl in ('x^x',):
+            orc['expect_refuse'] = True
+        if direction == 'both' and tpl in ('1/x', '(x-{a})/abs(x-{a})') and pt in (0, a):
+            orc['refuse'] = True                    # the two sides differ: the limit does not exist, so any value is wrong
+        out.append(Case('symbolic.limit', (t, 'x', pt, direction), orc, 'sympy-limit'))
     return out
 
 
@@ -372,12 +378,15 @@ INT_TEMPLATES = [
     '1/sqrt(x+{a})', 'exp(x)*sin(x)', 'sin(x)^2', 'tan(x)', 'atan(x)', 'exp(x^2)', '1/(x^3+x+1)', 'sin(x)/x', '1/(x^4+1)', 'x/(x^2+1)^2', 'abs(x)', '1/x', '2^x', 'x*3^x']
 
 
+INT_OUT_OF_SCOPE = {'exp(x^2)', '1/(x^3+x+1)', 'sin(x)/x', '1/(x^4+1)'}
+
+
 def gen_integrate(rs, n):
     out = []
     for i in range(n):
         tpl = INT_TEMPLATES[i % len(INT_TEMPLATES)]
         t = tpl.format(a=rs.randint(1, 4), b=rs.randint(1, 5))
-        out.append(Case('symbolic.integrate', (t, 'x'), {'sympy': t}, 'certificate'))
+        out.append(Case('symbolic.integrate', (t, 'x'), {'sympy': t, 'expect_refuse': tpl in INT_OUT_OF_SCOPE}, 'certificate'))
     return out
 
 
@@ -388,14 +397,25 @@ DEF_TEMPLATES = [('x^2', 0, 3), ('x^3 - 2*x', -1, 2), ('exp(-x)', 0, 'oo'), ('ex
                  ('1/(1+x)^3', 0, 'oo'), ('x*exp(x)', -1, 1), ('1/(x^2+4)', -2, 2), ('cos(x)^2', 0, 'pi'), ('1/x', -2, -1), ('1/x', -1, 1), ('sqrt(1-x)', 0, 1), ('abs(x)', -1, 2)]
 
 
+_DIVERGING_PAIRS = {('1/x^2', -1, 1), ('1/x', 0, 1), ('1/(x^2-1)', 0, 3), ('1/(x-1)^2', 0, 3), ('1/x', -1, 1)}
+
+
+def _diverges(t, lo, hi):
+    return (t, lo, hi) in _DIVERGING_PAIRS or (re.fullmatch(r'1/\(\d\*x\)', t) is not None and lo <= 0 <= hi)
+
+
 def gen_integrate_definite(rs, n):
     out = []
     for i in range(n):
-        t, lo, hi = DEF_TEMPLATES[i % len(DEF_TEMPLATES)]
+        orig_t, lo, hi = DEF_TEMPLATES[i % len(DEF_TEMPLATES)]
+        t = orig_t
         if i >= len(DEF_TEMPLATES):
             c = rs.randint(1, 3)
             t = re.sub(r'\bx\b', f'({c}*x)', t) if rs.random() < 0.4 else t
-        out.append(Case('symbolic.integrate_definite', (t, 'x', lo, hi), {'sympy': t, 'lo': lo, 'hi': hi}, 'certificate'))
+        orc = {'sympy': t, 'lo': lo, 'hi': hi}
+        if (orig_t, lo, hi) in _DIVERGING_PAIRS or _diverges(t, lo, hi):
+            orc['refuse'] = True                    # a pole inside the interval or a divergent improper integral
+        out.append(Case('symbolic.integrate_definite', (t, 'x', lo, hi), orc, 'certificate'))
     return out
 
 
@@ -406,12 +426,15 @@ SUM_TEMPLATES = [('k', 1, 'n'), ('k^2', 1, 'n'), ('k^3', 1, 'n'), ('{a}*k^2 - k 
                  ('k^2', 3, 'n'), ('2*3^k', 1, 'n'), ('1/(k^2-1)', 2, 'n'), ('k^4', 1, 'n'), ('(k^2+k)/2^k', 1, 'oo')]
 
 
+SUM_OUT_OF_SCOPE = {('1/k', 'n'), ('1/k^2', 'oo'), ('2^k', 'oo'), ('k', 'oo')}
+
+
 def gen_sum_closed(rs, n):
     out = []
     for i in range(n):
         tpl, lo, hi = SUM_TEMPLATES[i % len(SUM_TEMPLATES)]
         t = tpl.format(a=rs.randint(2, 4), b=rs.randint(2, 5))
-        out.append(Case('symbolic.sum_closed', (t, 'k', lo, hi), {'sympy': t, 'lo': lo, 'hi': hi}, 'brute-force'))
+        out.append(Case('symbolic.sum_closed', (t, 'k', lo, hi), {'sympy': t, 'lo': lo, 'hi': hi, 'expect_refuse': (tpl, hi) in SUM_OUT_OF_SCOPE, 'bad_input': tpl == 'k!'}, 'brute-force'))
     return out
 
 
@@ -424,6 +447,9 @@ def gen_sum_range(rs, n):
         hi = lo + rs.randint(0, 25)
         out.append(Case('symbolic.sum_range', (t, 'k', lo, hi), {'sympy': t}, 'brute-force'))
     return out
+
+
+SOLVE_OUT_OF_SCOPE = {'sin(x) = 1/2', 'x*exp(x) = 1', 'x = x', 'x^3 + x + 1 = 0'}
 
 
 def gen_solve(rs, n):
@@ -456,7 +482,7 @@ def gen_solve(rs, n):
         else:
             t = rs.choice([f'{rs.randint(1, 4)}*x - {rs.randint(1, 9)} = {rs.randint(1, 9)}*x + {rs.randint(1, 9)}', f'x^2 = {rs.randint(0, 20)}', f'(x - 1)^2 = 0', f'x^2 + x + 1 = 0',
                            f'x^2 - 2*x - 1 = 0'])
-        out.append(Case('symbolic.solve', (t, 'x'), {'sympy': t}, 'sympy-solveset'))
+        out.append(Case('symbolic.solve', (t, 'x'), {'sympy': t, 'expect_refuse': t in SOLVE_OUT_OF_SCOPE or t.startswith('|x - 1| + |x + 2| = 3')}, 'sympy-solveset'))
     return out
 
 
@@ -676,8 +702,8 @@ def chk_limit(res, args, orc):
 def chk_integrate(res, args, orc):
     f = sy(args[0])
     F = sy(res)
-    if sym_mod.parse(res) != sym_mod.parse(res):
-        return 'disagree', 'roundtrip'
+    if sym_mod.to_text(sym_mod.parse(res)) != res:
+        return 'disagree', 'canonical text does not parse back to itself'
     pts = ['0.37', '1.13', '1.91', '2.47', '0.61', '3.29', '-0.7', '-2.3']
     dF = sp.diff(F, X)
     # abs() antiderivatives are checked off the kink; sympy differentiates Abs as sign
@@ -696,7 +722,10 @@ def chk_integrate_definite(res, args, orc):
             return -mpmath.inf
         return mpmath.mpf(str(sp.N(sy(str(v)), 40)))
     try:
-        ref = mpmath.quad(f, [b(lo), b(hi)])
+        pts = [b(lo), b(hi)]
+        if 'abs' in t and pts[0] < 0 < pts[1]:
+            pts = [pts[0], mpmath.mpf(0), pts[1]]      # the kink of abs(x) at 0 would spoil the quadrature
+        ref = mpmath.quad(f, pts)
     except Exception:
         return 'unchecked', 'oracle quad failed'
     got = mpmath.mpf(str(sp.N(sy(res), 40)))
@@ -774,6 +803,8 @@ CHECKERS = {
 # ------------------------------------------------------------------------------------------------------------------------------------ runner
 
 def run(seed=1, n=60, out_dir=None, verbose=False):
+    """Run every case. A refusal (NotCovered) of a case marked `expect_refuse` (outside the stated scope, or a limit/series/integral that does not exist) is an
+    expected refusal; a refusal of any other case is an unexpected one (a gap to close or to list in symbolic.NOT_COVERED). An answer is always checked."""
     t0 = time.time()
     cases = generate(seed, n)
     stats = {}
@@ -781,19 +812,23 @@ def run(seed=1, n=60, out_dir=None, verbose=False):
     unchecked_cases = []
     refused_cases = []
     for c in cases:
-        st = stats.setdefault(c.op, dict(generated=0, answered=0, agree=0, unchecked=0, refused=Counter(), disagree=0, seconds=0.0))
+        st = stats.setdefault(c.op, dict(generated=0, answered=0, agree=0, unchecked=0, refused=Counter(), expected_refusals_ok=0, disagree=0, seconds=0.0, oracles=Counter()))
         st['generated'] += 1
+        st['oracles'][c.oracle_name] += 1
         t1 = time.time()
+        expect = bool(c.oracle.get('expect_refuse') or c.oracle.get('refuse'))
         try:
             res = run_op(c.op, *c.args)
-        except NotCovered as ex:
-            st['refused'][str(ex)] += 1
-            refused_cases.append((c.op, c.args, str(ex)))
+        except (NotCovered, BadInput) as ex:
+            kind = 'NotCovered' if isinstance(ex, NotCovered) else 'BadInput'
             st['seconds'] += time.time() - t1
-            continue
-        except BadInput as ex:
-            st['refused']['BadInput: ' + str(ex)] += 1
-            st['seconds'] += time.time() - t1
+            if expect and kind == 'NotCovered':
+                st['expected_refusals_ok'] += 1
+            elif c.oracle.get('bad_input') and kind == 'BadInput':
+                st['expected_refusals_ok'] += 1
+            else:
+                st['refused'][f'{kind}: {ex}'] += 1
+                refused_cases.append((c.op, c.args, f'{kind}: {ex}'))
             continue
         except RecursionError:
             st['disagree'] += 1
@@ -804,12 +839,11 @@ def run(seed=1, n=60, out_dir=None, verbose=False):
             disagreements.append((c.op, c.args, f'{type(ex).__name__}: {ex}'))
             continue
         st['seconds'] += time.time() - t1
+        st['answered'] += 1
         if c.oracle.get('refuse'):
-            st['answered'] += 1
             st['disagree'] += 1
             disagreements.append((c.op, c.args, f'answered {res!r} where it must refuse'))
             continue
-        st['answered'] += 1
         try:
             verdict, detail = CHECKERS[c.op](res, c.args, c.oracle)
         except Exception as ex:
@@ -818,16 +852,16 @@ def run(seed=1, n=60, out_dir=None, verbose=False):
             st['agree'] += 1
         elif verdict == 'unchecked':
             st['unchecked'] += 1
-            st.setdefault('unchecked_reasons', Counter())[detail] += 1
             unchecked_cases.append((c.op, c.args, detail))
         else:
             st['disagree'] += 1
             disagreements.append((c.op, c.args, f'{detail}; result {res!r}'))
     reg = [k for k in registry() if k.startswith('symbolic.')]
+    per = {k: dict(generated=v['generated'], answered=v['answered'], agree=v['agree'], unchecked=v['unchecked'], refused=dict(v['refused']),
+                   refused_total=sum(v['refused'].values()), expected_refusals_ok=v['expected_refusals_ok'], disagree=v['disagree'], seconds=round(v['seconds'], 2),
+                   oracles=dict(v['oracles'])) for k, v in sorted(stats.items())}
     report = dict(module='symbolic', seed=seed, n=n, seconds=round(time.time() - t0, 1), operations_registered=len(reg),
-                  operations_without_case=sorted(set(reg) - set(stats)),
-                  per_operation={k: dict(generated=v['generated'], answered=v['answered'], agree=v['agree'], unchecked=v['unchecked'], refused=dict(v['refused']),
-                                          refused_total=sum(v['refused'].values()), disagree=v['disagree'], seconds=round(v['seconds'], 2)) for k, v in sorted(stats.items())},
+                  operations_without_case=sorted(set(reg) - set(stats)), ops=per, per_operation=per,
                   refused_cases=[dict(op=o, args=repr(a), reason=d) for o, a, d in refused_cases],
                   unchecked=[dict(op=o, args=repr(a), detail=d) for o, a, d in unchecked_cases],
                   disagreements=[dict(op=o, args=repr(a), detail=d) for o, a, d in disagreements])
@@ -839,15 +873,19 @@ def run(seed=1, n=60, out_dir=None, verbose=False):
 
 def print_table(rep):
     print(f'symbolic: {rep["operations_registered"]} operations, seed {rep["seed"]}, n {rep["n"]}, {rep["seconds"]} s')
-    print(f'{"operation":34}{"gen":>5}{"ans":>5}{"agree":>6}{"unchk":>6}{"refused":>8}{"disagree":>9}')
+    print(f'{"operation":30}{"gen":>5}{"ans":>5}{"agree":>6}{"unchk":>6}{"exp.ref":>8}{"unexp.ref":>10}{"disagree":>9}')
     tot = Counter()
     for k, v in rep['per_operation'].items():
-        print(f'{k:34}{v["generated"]:>5}{v["answered"]:>5}{v["agree"]:>6}{v["unchecked"]:>6}{v["refused_total"]:>8}{v["disagree"]:>9}')
-        for key in ('generated', 'answered', 'agree', 'unchecked', 'refused_total', 'disagree'):
+        print(f'{k:30}{v["generated"]:>5}{v["answered"]:>5}{v["agree"]:>6}{v["unchecked"]:>6}{v["expected_refusals_ok"]:>8}{v["refused_total"]:>10}{v["disagree"]:>9}')
+        for key in ('generated', 'answered', 'agree', 'unchecked', 'expected_refusals_ok', 'refused_total', 'disagree'):
             tot[key] += v[key]
-    print(f'{"TOTAL":34}{tot["generated"]:>5}{tot["answered"]:>5}{tot["agree"]:>6}{tot["unchecked"]:>6}{tot["refused_total"]:>8}{tot["disagree"]:>9}')
+    print(f'{"TOTAL":30}{tot["generated"]:>5}{tot["answered"]:>5}{tot["agree"]:>6}{tot["unchecked"]:>6}{tot["expected_refusals_ok"]:>8}{tot["refused_total"]:>10}{tot["disagree"]:>9}')
     if rep['operations_without_case']:
         print('operations with no case:', rep['operations_without_case'])
+    for d in rep['refused_cases'][:60]:
+        print('UNEXPECTED REFUSAL', d['op'], d['args'][:90], '|', d['reason'][:100])
+    for d in rep['unchecked'][:20]:
+        print('UNCHECKED', d['op'], d['args'][:90], d['detail'][:120])
     for d in rep['disagreements'][:40]:
         print('DISAGREE', d['op'], d['args'][:100], d['detail'][:200])
 

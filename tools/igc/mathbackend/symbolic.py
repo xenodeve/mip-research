@@ -505,10 +505,15 @@ def _sign_pow(arg):
     return _const(sgn) * _atom_expr(Atom('m', arg=Expr(keep)))
 
 
+_PARSE = {'general_pow': False}
+
+
 def _pow_symbolic(base, e):
     """base ** e with a non-numeric exponent: a positive constant base becomes exp(e*log(base)); base -1 becomes (-1)**e."""
     q = base.as_fraction()
     if q is None:
+        if base.symbols() and _PARSE['general_pow']:
+            return _exp(e * _log(base))          # base**e = exp(e*log(base)), valid where base > 0; a series with a non-positive leading coefficient is refused later
         if base.symbols():
             raise NotCovered('symbolic exponent needs a constant base')
         if _const_sign(base) <= 0:
@@ -1280,15 +1285,20 @@ class _Parser:
         return res if power is None else _pow(res, power)
 
 
-def parse(text, e_is_euler=False):
-    """Read expression text (plain infix or a LaTeX subset) into a canonical Expr."""
+def parse(text, e_is_euler=False, general_pow=False):
+    """Read expression text (plain infix or a LaTeX subset) into a canonical Expr. general_pow: read a^b with a symbolic base and exponent as exp(b*log(a)) (for limits)."""
     if not isinstance(text, str):
         raise BadInput('expression must be text')
     toks = _tokenize(text)
     if not toks:
         raise BadInput('empty expression')
     p = _Parser(toks, e_is_euler)
-    v = p.expr()
+    old = _PARSE['general_pow']
+    _PARSE['general_pow'] = general_pow
+    try:
+        v = p.expr()
+    finally:
+        _PARSE['general_pow'] = old
     if p.i != len(toks):
         raise BadInput(f'unexpected {p.peek()[1]!r}')
     return v
@@ -1901,7 +1911,8 @@ def ser_pow(a, r):
 
 
 def ser_exp(a):
-    _need_no_log(a, 'exp')
+    if a.has_log() and any(e <= 0 and '_L' in v.symbols() for e, v in a.c.items()):
+        raise NotCovered('exp of a series with log terms that are not small')
     if not a.c:
         return Ser({Fraction(0): ONE}, a.prec)
     v = a.val()
@@ -2064,6 +2075,91 @@ def one_sided_limit(e, var, point, direction):
     raise NotCovered('series: ' + (last or 'no result'))
 
 
+def _poly_sign_inf(q):
+    q = _pn(q)
+    return 0 if not q else (1 if q[-1] > 0 else -1)
+
+
+def _dom_atom(a, var):
+    """(Q, S): the atom's value is exp(Q(x)) * S(x) up to a factor that tends to 1; Q a coefficient list without constant term."""
+    k = a.kind
+    if k in 'kr' or not a.has(var):
+        return [], _atom_expr(a)
+    if k == 's':
+        return [], _atom_expr(a)
+    if k == 'b':
+        return _dom(a.arg, var)
+    if k == 'e':
+        poly, rest = {}, ZERO
+        for mono, c in a.arg.t.items():
+            if len(mono) == 1 and mono[0][0].kind == 's' and mono[0][0].name == var and mono[0][1].denominator == 1 and mono[0][1] >= 1:
+                poly[int(mono[0][1])] = poly.get(int(mono[0][1]), 0) + c
+            else:
+                rest = rest + Expr({mono: c})
+        Q = _pn([Fraction(0)] + [poly.get(i, Fraction(0)) for i in range(1, max(poly) + 1)]) if poly else []
+        return Q, _exp(rest)
+    qa, _ = _dom(a.arg, var)
+    if qa:
+        raise NotCovered('a function of an exponentially growing argument')
+    return [], _atom_expr(a)
+
+
+def _dom(e, var):
+    """(Q, S) with e = exp(Q(x)) * S(x) * (1 + o(1)) as x -> +oo, where S has no unbounded exp: terms exponentially smaller than the dominant class are dropped."""
+    classes = {}
+    for mono, c in e.t.items():
+        Q, S = [], _const(c)
+        for a, x in mono:
+            qa, sa = _dom_atom(a, var)
+            Q = _padd(Q, [q * x for q in qa])
+            S = S * _pow(sa, x)
+        key = tuple(Q)
+        classes[key] = classes.get(key, ZERO) + S
+    best = None
+    for key, S in classes.items():
+        if not S.t:
+            continue
+        if best is None or _poly_sign_inf(_psub(list(key), list(best))) > 0:
+            best = key
+    if best is None:
+        return [], ZERO
+    return list(best), classes[best]
+
+
+def _series_sign(e, var):
+    """Sign of e as x -> +oo from the leading term of its series in 1/x (NotCovered when the series is zero up to the order tried)."""
+    for cap in (6, 12, 24):
+        s = series_at(e, var, None, 1, cap)
+        if s.c:
+            k, lead = _l_top(s.c[s.val()])
+            return _const_sign(lead) * (-1) ** k
+    raise NotCovered('sign of the dominant part not found')
+
+
+def _limit_dominance(e, var, p, d):
+    """Limit through the dominant exponential class (see _dom): x -> p+- or +-oo is turned into y -> +oo."""
+    if p is None:
+        e2 = e if d > 0 else subs(e, var, -sym(var))
+    else:
+        e2 = subs(e, var, _const(p) + _pow(sym(var), Fraction(-1)) * d)
+    Q, S = _dom(e2, var)
+    if not Q:
+        return one_sided_limit(S, var, None, 1)
+    if _poly_sign_inf(Q) < 0:
+        return 'value', ZERO
+    return 'inf', _series_sign(S, var)
+
+
+def _side_limit(e, var, p, d):
+    try:
+        return one_sided_limit(e, var, p, d)
+    except NotCovered as first:
+        try:
+            return _limit_dominance(e, var, p, d)
+        except NotCovered:
+            raise first
+
+
 def limit_expr(e, var, point, direction='both'):
     """Limit as an Expr or the strings 'oo' / '-oo'. point: Fraction, or 'oo' / '-oo'."""
     if point in ('oo', '-oo'):
@@ -2073,7 +2169,7 @@ def limit_expr(e, var, point, direction='both'):
         pts = [(point, 1), (point, -1)] if direction == 'both' else [(point, 1 if direction == '+' else -1)]
     res = []
     for p, d in pts:
-        res.append(one_sided_limit(e, var, p, d))
+        res.append(_side_limit(e, var, p, d))
     first = res[0]
     for r in res[1:]:
         if r[0] != first[0] or (r[0] == 'inf' and r[1] != first[1]) or (r[0] == 'value' and not is_zero(r[1] - first[1])):
@@ -2186,10 +2282,17 @@ def _classify(v, var):
             return ('exp', a, pk)
         if a.kind == 'f' and x == 1 and a.name in ('sin', 'cos'):
             return ('trig', a, pk)
-        if a.kind == 'f' and x == 1 and a.name == 'log':
+        if a.kind == 'f' and x == 1 and a.name in ('log', 'atan'):
             return ('log', a, pk)
+        if a.kind == 'f' and x == 1 and a.name == 'abs':
+            return ('abs', a, pk)
         if a.kind == 'b' and x.denominator != 1:
             return ('lpow', a, pk, x)
+    if len(rest) == 2 and all(x == 1 for _, x in rest):
+        ea = [a for a, _ in rest if a.kind == 'e']
+        ta = [a for a, _ in rest if a.kind == 'f' and a.name in ('sin', 'cos')]
+        if len(ea) == 1 and len(ta) == 1:
+            return ('exptrig', ea[0], ta[0], pk)
     return None
 
 
@@ -2211,7 +2314,7 @@ def _poly_integral(P, var):
 def _int_group(G, var):
     """Antiderivative of an Expr G (rational coefficients) whose terms all depend on var."""
     rat = ZERO
-    exps, trigs, logs, lpows = {}, {}, {}, {}
+    exps, trigs, logs, lpows, exptrigs, abss = {}, {}, {}, {}, {}, {}
     out = ZERO
     x = sym(var)
     for v, c in G.t.items():
@@ -2235,6 +2338,12 @@ def _int_group(G, var):
         elif kind == 'lpow':
             d = lpows.setdefault((cls[1], cls[3]), ZERO)
             lpows[(cls[1], cls[3])] = d + _pow(x, cls[2]) * c
+        elif kind == 'exptrig':
+            d = exptrigs.setdefault((cls[1], cls[2].arg), [ZERO, ZERO])
+            d[0 if cls[2].name == 'sin' else 1] = d[0 if cls[2].name == 'sin' else 1] + _pow(x, cls[3]) * c
+        elif kind == 'abs':
+            d = abss.setdefault(cls[1], ZERO)
+            abss[cls[1]] = d + _pow(x, cls[2]) * c
     if rat.t:
         rf = _to_ratfunc(rat, var)
         if rf is None:
@@ -2283,11 +2392,18 @@ def _int_group(G, var):
         L = atom.arg
         Q = _poly_integral(P, var)
         out = out + Q * _atom_expr(atom)
-        rest = Q * diff(L, var) * _pow(L, Fraction(-1))
+        if atom.name == 'log':
+            rest = Q * diff(L, var) * _pow(L, Fraction(-1))                       # by parts: integral of Q * L'/L
+        else:
+            rest = Q * diff(L, var) * _pow(ONE + L * L, Fraction(-1))             # atan: integral of Q * L'/(1 + L^2)
         rf = _to_ratfunc(rest, var)
         if rf is None:
-            raise NotCovered('log of a non-polynomial argument')
+            raise NotCovered('log or atan of a non-polynomial argument')
         out = out - _int_ratfunc(rf[0], rf[1], var)
+    for (ea, theta), (Ps, Pc) in exptrigs.items():
+        out = out + _int_exptrig(ea, theta, Ps, Pc, var)
+    for atom, P in abss.items():
+        out = out + _int_abs(atom, P, var)
     for (atom, r), P in lpows.items():
         lin = _to_poly(atom.arg, var)
         if lin is None or len(lin) != 2:
@@ -2302,8 +2418,265 @@ def _int_group(G, var):
     return out
 
 
-def antiderivative(e, var):
-    """An antiderivative of the Expr e in var (no constant), verified by differentiating it back."""
+def _int_exptrig(ea, theta, Ps, Pc, var):
+    """Integral of exp(a x + b) * (Ps(x) sin(theta) + Pc(x) cos(theta)) with theta = w x + c: the answer is exp(.)(A sin + B cos) with polynomials A, B of the same
+    degree, found from the top degree down (each degree is a 2 x 2 system with determinant a^2 + w^2)."""
+    alpha, beta = diff(ea.arg, var), diff(theta, var)
+    if not alpha.t or alpha.has(var) or not beta.t or beta.has(var):
+        raise NotCovered('exp or sin/cos of a non-linear argument')
+    inv = _pow(alpha * alpha + beta * beta, Fraction(-1))
+    ps, pc = _to_poly(Ps, var) or [], _to_poly(Pc, var) or []
+    d = max(len(ps), len(pc)) - 1
+    a, b = [ZERO] * (d + 2), [ZERO] * (d + 2)
+    for k in range(d, -1, -1):
+        r1 = _const(ps[k] if k < len(ps) else 0) - a[k + 1] * (k + 1)
+        r2 = _const(pc[k] if k < len(pc) else 0) - b[k + 1] * (k + 1)
+        a[k] = (alpha * r1 + beta * r2) * inv
+        b[k] = (alpha * r2 - beta * r1) * inv
+    A, B = ZERO, ZERO
+    for k in range(d + 1):
+        A = A + a[k] * _pow(sym(var), k)
+        B = B + b[k] * _pow(sym(var), k)
+    return _atom_expr(ea) * (A * fn('sin', theta) + B * fn('cos', theta))
+
+
+def _int_abs(atom, P, var):
+    """Integral of P(x) * abs(L(x)) for a linear L: with u = L, the integral of u^j |u| du is u^(j+1) |u| / (j + 2), continuous through u = 0."""
+    lin = _to_poly(atom.arg, var)
+    if lin is None or len(lin) != 2:
+        raise NotCovered('abs of a non-linear argument')
+    beta, alpha = lin
+    pp = _to_poly(P, var)
+    if pp is None:
+        raise NotCovered('polynomial factor expected')
+    pu = _pn([])                                                # P((u - beta)/alpha) as a polynomial in u
+    for c in reversed(pp):
+        pu = _padd(_pmul(pu, [-beta / alpha, 1 / alpha]), [c])
+    u = atom.arg
+    out = ZERO
+    for j, q in enumerate(pu):
+        if q:
+            out = out + _pow(u, j + 1) * _atom_expr(atom) * (q / (alpha * (j + 2)))
+    return out
+
+
+# -- trigonometric product-to-sum (exact identities on the whole domain)
+
+def _gmul(p, q):
+    return (p[0] * q[0] - p[1] * q[1], p[0] * q[1] + p[1] * q[0])
+
+
+def _trig_fourier(name, m):
+    """sin(t)^m or cos(t)^m as {k: (re, im)}: the coefficient of exp(i k t)."""
+    base = {1: (Fraction(1, 2), Fraction(0)), -1: (Fraction(1, 2), Fraction(0))} if name == 'cos' else {1: (Fraction(0), Fraction(-1, 2)), -1: (Fraction(0), Fraction(1, 2))}
+    out = {0: (Fraction(1), Fraction(0))}
+    for _ in range(m):
+        nxt = {}
+        for k1, c1 in out.items():
+            for k2, c2 in base.items():
+                z = _gmul(c1, c2)
+                old = nxt.get(k1 + k2, (Fraction(0), Fraction(0)))
+                nxt[k1 + k2] = (old[0] + z[0], old[1] + z[1])
+        out = nxt
+    return out
+
+
+def _trig_reduce_mono(mono, c):
+    """The Expr of c * mono with every product of positive integer powers of sin/cos rewritten as a sum of sin/cos of integer combinations of the arguments; None when
+    the monomial has no such product of two or more trig factors or powers."""
+    trig = [(a, x) for a, x in mono if a.kind == 'f' and a.name in ('sin', 'cos')]
+    if not trig or any(x.denominator != 1 or x < 1 for _, x in trig) or sum(int(x) for _, x in trig) < 2 or sum(int(x) for _, x in trig) > 24:
+        return None
+    others = Expr({tuple((a, x) for a, x in mono if not (a.kind == 'f' and a.name in ('sin', 'cos'))): c})
+    thetas = []
+    for a, _ in trig:
+        if a.arg not in thetas:
+            thetas.append(a.arg)
+    # exp(i k . theta): a dict from the tuple k to a Gaussian rational
+    acc = {tuple(0 for _ in thetas): (Fraction(1), Fraction(0))}
+    for a, x in trig:
+        idx = thetas.index(a.arg)
+        four = _trig_fourier(a.name, int(x))
+        nxt = {}
+        for k1, c1 in acc.items():
+            for k2, c2 in four.items():
+                kk = list(k1)
+                kk[idx] += k2
+                key = tuple(kk)
+                z = _gmul(c1, c2)
+                old = nxt.get(key, (Fraction(0), Fraction(0)))
+                nxt[key] = (old[0] + z[0], old[1] + z[1])
+        acc = nxt
+    out = ZERO
+    for k, z in acc.items():
+        if z == (0, 0):
+            continue
+        first = next((v for v in k if v), 0)
+        if first < 0:
+            continue                                            # the partner of a positive k carries it
+        phi = ZERO
+        for kv, th in zip(k, thetas):
+            phi = phi + th * kv
+        if first == 0:
+            if z[1] != 0:
+                raise NotCovered('trig reduction: imaginary constant')
+            out = out + _const(z[0])
+        else:
+            out = out + fn('cos', phi) * (2 * z[0]) - fn('sin', phi) * (2 * z[1])
+    return others * out
+
+
+def _trig_reduce(e):
+    """e with products and powers of sin/cos replaced by sums of single sin/cos (e itself when there is none)."""
+    out, changed = ZERO, False
+    for mono, c in e.t.items():
+        r = _trig_reduce_mono(mono, c)
+        if r is None:
+            out = out + Expr({mono: c})
+        else:
+            changed = True
+            out = out + r
+    return out if changed else e
+
+
+def _tan_to_sincos(e):
+    """e with every tan(t) written sin(t)/cos(t) (an identity wherever tan is defined)."""
+    repl = {}
+    for a in e.atoms():
+        if a.kind == 'f' and a.name == 'tan':
+            repl[a] = fn('sin', a.arg) * _pow(fn('cos', a.arg), Fraction(-1))
+    return replace_atoms(e, repl) if repl else e
+
+
+def _spot_equal(e1, e2):
+    """True when the two Exprs agree numerically (40 digits) at three points; used to double-check a rewrite that is an identity by construction."""
+    syms = sorted(e1.symbols() | e2.symbols())
+    for shift in (Fraction(3, 7), Fraction(11, 5), Fraction(-5, 3)):
+        env = {s: shift + Fraction(i, 3) for i, s in enumerate(syms)}
+        try:
+            v1, v2 = _decimal_value(e1, env, 40), _decimal_value(e2, env, 40)
+        except (BadInput, NotCovered, ZeroDivisionError, InvalidOperation):
+            continue
+        if abs(v1 - v2) > Decimal(10) ** -25 * (1 + abs(v1)):
+            return False
+    return True
+
+
+# -- substitution u = g(x)
+
+_TV = '_t'
+
+
+def _poly_in(arg, g):
+    """The coefficient list c with arg = sum c[i] * g**i (polynomials in x), or None."""
+    out, rem = [], _pn(arg)
+    while rem:
+        q, r = _pdivmod(rem, g)
+        if len(r) > 1:
+            return None
+        out.append(r[0] if r else Fraction(0))
+        rem = q
+    return out
+
+
+def _to_t(h, var, g, gpoly):
+    """h(x) rewritten as a function of t = g(x), or NotCovered when it is not one."""
+    gatom = None
+    if len(g.t) == 1:
+        (gm, gc), = g.t.items()
+        if gc == 1 and len(gm) == 1 and gm[0][1] == 1 and gm[0][0].kind in 'fe':
+            gatom = gm[0][0]
+    if gatom is not None:                                    # g is one function atom: every occurrence of it (and, for exp, of its rational powers) becomes t
+        repl = {gatom: sym(_TV)}
+        if gatom.kind == 'e':
+            for a in h.atoms():
+                if a.kind == 'e' and a != gatom and a.arg.has(var):
+                    q = (a.arg * _pow(gatom.arg, Fraction(-1))).as_fraction()
+                    if q is not None:
+                        repl[a] = _pow(sym(_TV), q)
+        out = replace_atoms(h, repl)
+        if out.has(var):
+            raise NotCovered('substitution: x remains')
+        return out
+    if gpoly is None:
+        raise NotCovered('substitution: g is neither a polynomial nor one function atom')
+    groups = {}
+    for mono, c in h.t.items():
+        rat, oth = _transc_split(mono, var)
+        groups.setdefault(oth, []).append((rat, c))
+    out = ZERO
+    for oth, items in groups.items():
+        R = ZERO
+        for rat, c in items:
+            R = R + Expr({_sorted_mono(dict(rat)): c})
+        rf = _to_ratfunc(R, var)
+        if rf is None:
+            raise NotCovered('substitution: rational part')
+        num, den = rf
+        cn, cd = _poly_in(num, gpoly), _poly_in(den, gpoly)
+        if cn is None or cd is None:
+            raise NotCovered('substitution: the rational part is not a function of g')
+        term = _pexpr(_pn(cn), _TV) * _pow(_pexpr(_pn(cd), _TV), Fraction(-1))
+        for a, x in oth:
+            if not a.has(var):
+                term = term * _atom_expr(a, x)
+                continue
+            ap = _to_poly(a.arg, var)
+            co = _poly_in(ap, gpoly) if ap is not None else None
+            if co is None:
+                raise NotCovered('substitution: atom argument is not a function of g')
+            arg_t = _pexpr(_pn(co), _TV)
+            if a.kind == 'f':
+                base = fn(a.name, arg_t)
+            elif a.kind == 'e':
+                base = _exp(arg_t)
+            elif a.kind == 'b':
+                base = arg_t
+            else:
+                raise NotCovered('substitution: atom kind')
+            term = term * _pow(base, x)
+        out = out + term
+    if out.has(var):
+        raise NotCovered('substitution: x remains')
+    return out
+
+
+def _usub_try(e, var, g, depth):
+    d = diff(g, var)
+    if d.is_zero():
+        raise NotCovered('constant substitution')
+    h = e * _pow(d, Fraction(-1))
+    if len(h.symbols()) == 1:
+        h = simplify_expr(h)
+    gpoly = _to_poly(g, var)
+    ht = _to_t(h, var, g, gpoly)
+    Ft = _anti_all(ht, _TV, depth + 1)
+    return subs(Ft, _TV, g)
+
+
+def _usub(e, var, depth):
+    """Integral of e = f(g(x)) g'(x) by the substitution t = g(x): g runs over the arguments of the function atoms of e and over those atoms."""
+    if depth >= 2:
+        raise NotCovered('substitution too deep')
+    cands = {}
+    for a in e.atoms():
+        if a.kind in 'feb' and a.arg.has(var):
+            if a.kind != 'b' and not (a.kind == 'f' and a.name in ('abs', 'floor')):
+                cands[_atom_expr(a).key] = _atom_expr(a)
+            gp = _to_poly(a.arg, var)
+            if gp is None or len(gp) > 2:
+                cands[a.arg.key] = a.arg
+    last = NotCovered('no substitution found')
+    for g in sorted(cands.values(), key=lambda z: len(z.key))[:14]:
+        try:
+            return _usub_try(e, var, g, depth)
+        except NotCovered as ex:
+            last = ex
+    raise last
+
+
+def _anti_all(e, var, depth=0):
+    """An antiderivative of e by the classes of _int_group, falling back to a substitution for a group that no class covers (not yet verified)."""
     if not e.has(var):
         return e * sym(var)
     groups = {}
@@ -2314,11 +2687,37 @@ def antiderivative(e, var):
         g[v] = g.get(v, 0) + c
     total = ZERO
     for k, vs in groups.items():
-        part = _int_group(Expr({v: c for v, c in vs.items() if c}), var)
+        G = Expr({v: c for v, c in vs.items() if c})
+        try:
+            part = _int_group(G, var)
+        except NotCovered as first:
+            try:
+                part = _usub(G, var, depth)
+            except NotCovered:
+                raise first
         total = total + part * Expr({k: Fraction(1)})
-    if not is_zero(diff(total, var) - e):
-        raise NotCovered('antiderivative could not be verified by differentiation')
     return total
+
+
+def antiderivative(e, var):
+    """An antiderivative of the Expr e in var (no constant), verified by differentiating it back. Order of attempts: the classes of _int_group; a substitution; then the
+    same after rewriting products of sin/cos as sums (and tan as sin/cos), the rewritten integrand being the one the answer is checked against."""
+    if not e.has(var):
+        return e * sym(var)
+    last = None
+    for rewrite in (lambda z: _trig_reduce(_tan_to_sincos(z)), _trig_reduce, lambda z: z):
+        e2 = rewrite(e)
+        if e2 is not e and (e2 == e or not _spot_equal(e, e2)):
+            continue
+        try:
+            F = _anti_all(e2, var)
+        except NotCovered as ex:
+            last = last or ex
+            continue
+        if is_zero(diff(F, var) - e2):
+            return F
+        last = last or NotCovered('antiderivative could not be verified by differentiation')
+    raise last
 
 
 # ----------------------------------------------------------------------------------------------------------------------------- definite integrals
@@ -2357,30 +2756,96 @@ def _sturm_count(p, lo, hi):
     return a - b
 
 
+def _positive(e):
+    """True when the constant-free-of-doubt Expr e is shown to be > 0 for every real value of its symbols: a positive constant term plus terms that are never negative
+    (a positive coefficient times exp atoms, abs atoms, positive radicals, pi and even powers of anything)."""
+    c0 = e.t.get((), Fraction(0))
+    if c0 <= 0:
+        return False
+    for mono, c in e.t.items():
+        if mono == ():
+            continue
+        if c < 0:
+            return False
+        for a, x in mono:
+            if a.kind in 'ekr' or (a.kind == 'f' and a.name == 'abs'):
+                continue
+            if x.denominator == 1 and x.numerator % 2 == 0 and a.kind in 'sf':
+                continue
+            return False
+    return True
+
+
 def _singular_polys(e, var):
-    """Polynomials (in var) that must not vanish on the interior of an interval of integration: bases of negative or fractional powers and log arguments; None if one is not polynomial."""
+    """Polynomials (in var) that must not vanish on the interior of an interval of integration: bases of negative or fractional powers and log arguments. None when some
+    base or argument is neither a polynomial nor provably positive (a sin or cos in a denominator, a tan, a floor): then no pole check is possible."""
     out = []
     for a in e.atoms():
         if a.kind == 's' and a.name == var:
             continue
-        if a.kind == 'b' and a.arg.has(var):
+        if a.kind in 'ke' or not a.has(var):
+            continue
+        if a.kind == 'b' or (a.kind == 'f' and a.name == 'log'):
             p = _to_poly(a.arg, var)
-            if p is None:
+            if p is not None:
+                out.append(p)
+            elif not _positive(a.arg):
                 return None
-            out.append(p)
-        elif a.kind == 'f' and a.name == 'log' and a.arg.has(var):
-            p = _to_poly(a.arg, var)
-            if p is None:
-                return None
-            out.append(p)
-        elif a.kind == 'f' and a.name in ('tan', 'floor', 'abs', 'atan') and a.arg.has(var):
-            if a.name in ('tan', 'floor'):
-                return None
+        elif a.kind == 'f' and a.name in ('tan', 'floor'):
+            return None
     for mono in e.t:
         for a, x in mono:
-            if a.kind == 's' and a.name == var and (x < 0 or x.denominator != 1):
-                out.append([Fraction(0), Fraction(1)])
+            if x < 0 or x.denominator != 1:
+                if a.kind == 's' and a.name == var:
+                    out.append([Fraction(0), Fraction(1)])
+                elif a.kind in 'ke' or not a.has(var):
+                    continue
+                elif a.kind == 'b':
+                    continue                                   # its argument was checked above
+                else:
+                    return None                                # a function of x in a denominator or under a root
     return out
+
+
+def _definite_abs(e, var, lo, hi, absat):
+    """Integral over [lo, hi] of an integrand with abs(g(x)) for polynomials g: split at the rational zeros of every g inside the interval, replace abs(g) by +-g on
+    each piece (the sign at a rational point of the piece), and integrate the pieces; NotCovered when some g has a real zero inside that is not rational."""
+    qlo = lo.as_fraction() if lo is not None else None
+    qhi = hi.as_fraction() if hi is not None else None
+    if (lo is not None and qlo is None) or (hi is not None and qhi is None):
+        raise NotCovered('abs with irrational limits')
+    polys = []
+    for a in absat:
+        g = _to_poly(a.arg, var)
+        if g is None:
+            raise NotCovered('abs of a non-polynomial argument')
+        polys.append(g)
+    bps = set()
+    for g in polys:
+        roots, rest = _rational_roots(g)
+        if len(rest) > 1 and _sturm_count(rest, qlo, qhi) > 0:
+            raise NotCovered('abs argument with a real zero in the interval that is not rational')
+        for r, _ in roots:
+            if (qlo is None or r > qlo) and (qhi is None or r < qhi):
+                bps.add(r)
+    pts = ([qlo] + sorted(bps) + [qhi])
+    total = ZERO
+    for l, h in zip(pts, pts[1:]):
+        if l is None and h is None:
+            mid = Fraction(0)
+        elif l is None:
+            mid = h - 1
+        elif h is None:
+            mid = l + 1
+        else:
+            mid = (l + h) / 2
+        repl = {}
+        for a, g in zip(absat, polys):
+            v = _peval(g, mid)
+            repl[a] = a.arg * (1 if v > 0 else -1)
+        piece = replace_atoms(e, repl)
+        total = total + definite_integral(piece, var, None if l is None else _const(l), None if h is None else _const(h))
+    return total
 
 
 def definite_integral(e, var, lo, hi):
@@ -2393,6 +2858,9 @@ def definite_integral(e, var, lo, hi):
             return ZERO
         if _const_sign(d) < 0:
             return -definite_integral(e, var, hi, lo)
+    absat = [a for a in e.atoms() if a.kind == 'f' and a.name == 'abs' and a.arg.has(var)]
+    if absat:
+        return _definite_abs(e, var, lo, hi, absat)
     sing = _singular_polys(e, var)
     if sing is None:
         raise NotCovered('integrand with tan/floor or a non-polynomial base: pole check not covered')
@@ -2700,7 +3168,26 @@ def _solve_poly_q(p):
             out.append((_const(-b) + sq) * (1 / (2 * a)))
             out.append((_const(-b) - sq) * (1 / (2 * a)))
     elif len(rest) > 3:
-        raise NotCovered('polynomial of degree 3 or more without rational roots')
+        k = 0
+        for i, c in enumerate(rest):
+            if c:
+                k = gcd(k, i)
+        if k > 1:                                              # a polynomial in x^k: solve in y = x^k, then take k-th roots
+            for y in _solve_poly_q(rest[::k]):
+                q = y.as_fraction()
+                if q is None:
+                    raise NotCovered('polynomial in a power of x whose inner roots are irrational')
+                if q > 0:
+                    r = _num_pow(q, Fraction(1, k))
+                    out.append(r)
+                    if k % 2 == 0:
+                        out.append(-r)
+                elif q < 0 and k % 2 == 1:
+                    out.append(-_num_pow(-q, Fraction(1, k)))
+                elif q == 0:
+                    out.append(ZERO)
+        elif _sturm_count(rest, None, None) > 0:
+            raise NotCovered('polynomial of degree 3 or more with real roots that are not rational')
     return out
 
 
@@ -2866,6 +3353,42 @@ def _solve_abs(F, var):
     return out
 
 
+def _solve_radical(F, var):
+    """F = A + B*sqrt(g) with one square root of a polynomial g (or of x): square A = -B sqrt(g), solve the rational equation A^2 = B^2 g, and keep the roots that satisfy F
+    (squaring adds roots). Several radicals, or a root of another order, are NotCovered."""
+    rads = {}
+    for mono in F.t:
+        for a, x in mono:
+            if x.denominator != 1 and ((a.kind == 's' and a.name == var) or (a.kind == 'b' and a.has(var))):
+                if x.denominator != 2:
+                    raise NotCovered('root of an order other than 2')
+                rads[a.key] = a
+    if len(rads) != 1:
+        raise NotCovered('equation with several radicals of the unknown')
+    a = next(iter(rads.values()))
+    base = sym(var) if a.kind == 's' else a.arg
+    A, B = ZERO, ZERO
+    for mono, c in F.t.items():
+        ex = next((x for aa, x in mono if aa == a), None)
+        rest = Expr({tuple((aa, x) for aa, x in mono if aa != a): c})
+        if ex is None:
+            A = A + rest
+        else:
+            B = B + rest * _pow(base, ex - Fraction(1, 2))
+    keep = []
+    for r in _solve_equation_expr(A * A - B * B * base, var):
+        try:
+            bv = subs(base, var, r)
+            if not bv.is_zero() and _const_sign(bv) < 0:
+                continue
+            val = subs(F, var, r)
+        except (BadInput, NotCovered):
+            continue
+        if val.is_zero() or (not val.symbols() and abs(_decimal_value(val, {}, 60)) < Decimal(10) ** -35):
+            keep.append(r)
+    return keep
+
+
 def _solve_equation_expr(F, var):
     atoms = [a for a in F.atoms() if a.has(var)]
     kinds = {(a.kind, a.name if a.kind == 'f' else None) for a in atoms}
@@ -2880,7 +3403,7 @@ def _solve_equation_expr(F, var):
     for mono in F.t:
         for a, x in mono:
             if (a.kind == 's' and a.name == var and x.denominator != 1) or (a.kind == 'b' and a.has(var) and x.denominator != 1):
-                raise NotCovered('equation with a radical of the unknown')
+                return _solve_radical(F, var)
     return _solve_rational(F, var)
 
 
@@ -3009,7 +3532,17 @@ def evaluate_numeric(expr, values=None, digits=30, e_is_euler=False):
     for q in vals.values():
         if q.symbols():
             raise BadInput('values must be constants')
-    r = subs_many(e, vals)                         # exact substitution first, so floor(1/3*9) is floor(3), not floor(2.999...)
+    try:
+        r = subs_many(e, vals)                     # exact substitution first, so floor(1/3*9) is floor(3), not floor(2.999...)
+    except NotCovered as ex:
+        # log of a rational whose prime factors cannot be found in the bound: evaluate in Decimal instead (not with floor, which needs the exact value)
+        if 'too large to factor' not in str(ex) or any(a.kind == 'f' and a.name == 'floor' for a in e.atoms()):
+            raise
+        free = e.symbols() - set(vals)
+        if free:
+            raise BadInput('free symbols: ' + ', '.join(sorted(free)))
+        env = {k: _decimal_value(v, {}, digits + 15) for k, v in vals.items()}
+        return _decimal_value(e, env, digits)
     if r.symbols():
         raise BadInput('free symbols: ' + ', '.join(sorted(r.symbols())))
     return _decimal_value(r, {}, digits)
@@ -3047,15 +3580,43 @@ def rational_form(expr, var, e_is_euler=False):
     return to_text(_pexpr(n, var)), to_text(_pexpr(d, var))
 
 
+_WITNESS_POINTS = [Fraction(2), Fraction(-3), Fraction(1, 2), Fraction(-1, 3), Fraction(5), Fraction(-7, 2), Fraction(3, 4), Fraction(7), Fraction(-1, 5)]
+
+
+def _witness_nonzero(d):
+    """True when d is non-zero at a rational point where it is defined: an exact non-zero rational, or a constant with |value| >= 1e-12 in a 60-digit evaluation (whose error is
+    below 1e-50). A point where d is undefined (a log of a negative, a division by zero) is skipped, so a difference of domains is not taken for a difference of values."""
+    syms = sorted(d.symbols())
+    for j in range(len(_WITNESS_POINTS)):
+        env = {s_: _const(_WITNESS_POINTS[(j + i * 3) % len(_WITNESS_POINTS)]) for i, s_ in enumerate(syms)}
+        try:
+            r = subs_many(d, env)
+            q = r.as_fraction()
+            if q is not None:
+                if q != 0:
+                    return True
+                continue
+            if r.symbols():
+                continue
+            if abs(_decimal_value(r, {}, 60)) >= Decimal(10) ** -12:
+                return True
+        except (BadInput, NotCovered, ZeroDivisionError, InvalidOperation):
+            continue
+    return False
+
+
 @_sop('symbolic.equal', 'as symbolic.canon')
 def equal(a, b, e_is_euler=False):
-    """True when the two expressions are equal as functions. False only where the form is complete (polynomials, rational functions, radicals); NotCovered when
-    function atoms (sin, exp, log, ...) leave the difference non-zero, because an unknown identity might remove it.
+    """True when the two expressions are equal as functions. False where the form is complete (polynomials, rational functions, radicals) or where the difference is
+    non-zero at a rational point at which both are defined; NotCovered when function atoms (sin, exp, log, ...) leave the difference non-zero, because an unknown identity
+    might remove it (sin^2 + cos^2 = 1).
     equal('(x+1)^2', 'x^2+2x+1') -> True"""
     d = _expr(a, e_is_euler) - _expr(b, e_is_euler)
     if is_zero(d):
         return True
     if _is_free(d):
+        return False
+    if _witness_nonzero(d):
         return False
     raise NotCovered('not shown equal; an identity between function atoms may still hold')
 
@@ -3116,7 +3677,8 @@ def limit(expr, var, point, direction='both', e_is_euler=False):
     limit('sin(x)/x', 'x', 0) -> '1'"""
     if direction not in ('both', '+', '-'):
         raise BadInput('direction must be both, + or -')
-    r = limit_expr(_expr(expr, e_is_euler), _var(var), _point(point), direction)
+    ex = parse(expr, e_is_euler, general_pow=True) if isinstance(expr, str) else _expr(expr, e_is_euler)
+    r = limit_expr(ex, _var(var), _point(point), direction)
     return r if isinstance(r, str) else to_text(r)
 
 

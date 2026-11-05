@@ -269,6 +269,8 @@ def twelvefold_way(n, k, balls='labelled', boxes='labelled', rule='any'):
             return k ** n
         if rule == 'injective':
             return math.perm(k, n) if n <= k else 0
+        if k > n:                        # no onto function, and surjections() would refuse a k above its own bound of 2000
+            return 0
         return surjections(n, k)
     if balls == 'identical' and boxes == 'labelled':
         if rule == 'any':

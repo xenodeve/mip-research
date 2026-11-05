@@ -220,6 +220,10 @@ class MatrixTests(unittest.TestCase):
         s = r('solve_linear_str', ['2(x + y) = 6', '3x + 3y = 9'])
         self.assertEqual((s['status'], s['free']), ('infinite', ['y']))
         self.assertEqual(r('solve_linear_str', ['x = 1', 'x = 2'])['status'], 'none')
+        s = r('solve_linear_str', ['0 = 0*x'])
+        self.assertEqual((s['variables'], s['status'], s['solution']), (['x'], 'infinite', {'x': F(0)}))
+        with self.assertRaises(BadInput):
+            r('solve_linear_str', ['0 = 0'])
 
     def test_lu_eigen(self):
         res = r('mat_lu', [[0, 1], [1, 0]])

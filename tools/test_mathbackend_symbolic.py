@@ -111,6 +111,12 @@ class CanonicalFormTests(unittest.TestCase):
         self.assertTrue(run('symbolic.equal', '1/(x-1)-1/(x+1)', '2/(x^2-1)'))
         self.assertFalse(run('symbolic.equal', '1/(x-1)', '1/(x+1)'))
         self.assertTrue(run('symbolic.equal', 'sqrt(3)*sqrt(3)', '3'))
+        self.assertFalse(run('symbolic.equal', 'sqrt(x^2)', 'x'))                      # a rational witness: x = -3
+        self.assertFalse(run('symbolic.equal', 'exp(x)', '1+x'))
+        self.assertFalse(run('symbolic.equal', 'sqrt(x)^2', '-x'))                      # defined only for x >= 0: the witness must be a point where both are defined
+        for a_, b_ in [('log(x^2)', '2*log(x)'), ('sin(2*x)', '2*sin(x)*cos(x)')]:
+            with self.assertRaises(NotCovered):
+                run('symbolic.equal', a_, b_)                                           # true or false by the domain / an identity the form does not know
 
     def test_simplify_and_rational_form(self):
         self.assertEqual(run('symbolic.simplify', '(x^2-1)/(x-1)'), 'x + 1')
@@ -178,9 +184,21 @@ class CalculusTests(unittest.TestCase):
         with self.assertRaises(NotCovered):
             run('symbolic.limit', '1/x', 'x', 0)                                      # sides differ
         with self.assertRaises(NotCovered):
-            run('symbolic.limit', 'exp(x)/x', 'x', 'oo')                              # exp of a growing argument
-        with self.assertRaises(NotCovered):
             run('symbolic.limit', 'sin(1/x)', 'x', 0)
+        with self.assertRaises(NotCovered):
+            run('symbolic.limit', '(x-1)/abs(x-1)', 'x', 1)                           # sides differ
+        with self.assertRaises(NotCovered):
+            run('symbolic.limit', '(2^x+3^x)^(1/x)', 'x', 'oo')                       # exp with an irrational coefficient in the argument
+
+    def test_limits_through_the_dominant_exponential(self):
+        table = [('exp(x)/x', 'x', 'oo', 'oo'), ('x^x', 'x', 0, '1', '+'), ('(1+1/x)^x', 'x', 'oo', 'exp(1)'), ('(1+2/x)^(3*x)', 'x', 'oo', 'exp(6)'),
+                 ('(exp(x)-exp(-x))/(exp(x)+exp(-x))', 'x', 'oo', '1'), ('(exp(x)-exp(-x))/(exp(x)+exp(-x))', 'x', '-oo', '-1'), ('exp(-1/x^2)/x^3', 'x', 0, '0'),
+                 ('exp(1/x)', 'x', 0, 'oo', '+'), ('exp(1/x)', 'x', 0, '0', '-'), ('(x^2+exp(x))/(x+2*exp(x))', 'x', 'oo', '1/2'), ('exp(x)-x^100', 'x', 'oo', 'oo'),
+                 ('x^(1/x)', 'x', 'oo', '1'), ('x*log(x)^2', 'x', 0, '0', '+')]
+        for row in table:
+            f, v, p, want = row[:4]
+            d = row[4] if len(row) > 4 else 'both'
+            self.assertEqual(run('symbolic.limit', f, v, p, d), want, f)
 
     def test_integrate_verified_by_derivative(self):
         for f in ['3*x^2+2*x-1', 'x*exp(x)', 'x^2*sin(x)', 'x^3*exp(-2*x)', '1/(x^2-1)', '1/(x^2+1)', 'x/(x^2+x+1)', '1/(x^2+1)^2', 'log(x)', 'x*log(x+1)',
@@ -191,9 +209,22 @@ class CalculusTests(unittest.TestCase):
         self.assertEqual(run('symbolic.integrate', '1/x', 'x'), 'log(abs(x))')
 
     def test_integrate_refusals(self):
-        for f in ['exp(x^2)', 'sin(x)/x', 'tan(x)', 'sin(x)^2', 'exp(x)*sin(x)', '1/(x^4+1)', '1/(x^3+x+1)', 'abs(x)']:
+        for f in ['exp(x^2)', 'sin(x)/x', 'tan(x^2)', '1/(x^4+1)', '1/(x^3+x+1)', 'abs(x^2-1)', 'exp(x)/x']:
             with self.assertRaises(NotCovered, msg=f):
                 run('symbolic.integrate', f, 'x')
+
+    def test_integrate_rules(self):
+        for f in ['exp(x)*sin(x)', 'sin(x)^2', 'tan(x)', 'atan(x)', 'abs(x)', 'x*exp(x^2)', 'sin(x)*cos(x)', 'x*sqrt(x^2+1)', 'x^2*atan(x)', 'exp(x)/(1+exp(x))',
+                  'sin(3*x)*cos(2*x)', 'x*exp(2*x)*cos(3*x)', 'abs(2*x-1)*x', 'sin(x)^2*exp(x)', '(2*x+1)*exp(x^2+x)', 'cos(x)/(1+sin(x)^2)', 'cos(x)^4', 'log(x)^2/x',
+                  '1/(1+exp(x))', 'exp(x)*sqrt(1+exp(x))']:
+            F = run('symbolic.integrate', f, 'x')
+            d = run('symbolic.diff', F, 'x')
+            for xv in ['3/7', '11/5', '2/3']:
+                a = run('symbolic.evaluate_numeric', d, {'x': xv}, 30)
+                b = run('symbolic.evaluate_numeric', f, {'x': xv}, 30)
+                self.assertLess(abs(a - b), Decimal('1e-20'), (f, F, xv))
+        self.assertEqual(run('symbolic.integrate', 'tan(x)', 'x'), '-log(abs(cos(x)))')
+        self.assertEqual(run('symbolic.integrate', 'abs(x)', 'x'), 'x*abs(x)/2')
 
     def test_definite_integrals(self):
         self.assertEqual(run('symbolic.integrate_definite', 'x^2', 'x', 0, 3), '9')
@@ -204,6 +235,10 @@ class CalculusTests(unittest.TestCase):
         self.assertEqual(run('symbolic.integrate_definite', 'sin(x)', 'x', 0, 'pi'), '2')
         self.assertEqual(run('symbolic.integrate_definite', '1/(x*(x+1))', 'x', 1, 'oo'), 'log(2)')
         self.assertEqual(run('symbolic.integrate_definite', 'x', 'x', 3, 1), '-4')
+        self.assertEqual(run('symbolic.integrate_definite', 'abs(x)', 'x', -1, 2), '5/2')
+        self.assertEqual(run('symbolic.integrate_definite', 'abs(x^2-1)', 'x', 0, 3), '22/3')
+        self.assertEqual(run('symbolic.integrate_definite', 'exp(-abs(x))', 'x', '-oo', 'oo'), '2')
+        self.assertEqual(run('symbolic.integrate_definite', 'cos(x)^2', 'x', 0, 'pi'), 'pi/2')
 
     def test_definite_refusals(self):
         for f, lo, hi in [('1/x^2', -1, 1), ('1/x', 0, 1), ('1/x', -1, 1), ('1/(x-1)^2', 0, 3), ('1/x^2', 0, 1), ('sqrt(x-1)', 0, 2)]:
@@ -272,9 +307,19 @@ class SolveTests(unittest.TestCase):
         self.check('|x| = -1', [])
 
     def test_refusals(self):
-        for eq in ['x^5 - 1 = 0', 'sin(x) = 1/2', 'x*exp(x) = 1', 'sqrt(x) = 3', 'x = x', 'x^3 + x + 1 = 0', 'a*x + 1 = 0']:
+        for eq in ['sin(x) = 1/2', 'x*exp(x) = 1', 'x = x', 'x^3 + x + 1 = 0', 'a*x + 1 = 0', 'sqrt(x) + sqrt(x+1) = 2', 'x^4 - 2*x^2 - 1 = 0']:
             with self.assertRaises(NotCovered, msg=eq):
                 run('symbolic.solve', eq, 'x')
+
+    def test_radicals_and_powers_of_x(self):
+        self.check('sqrt(x) = 3', ['9'])
+        self.check('sqrt(x+1) = x - 1', ['3'])                                        # x = 0 is added by squaring and removed again
+        self.check('sqrt(x) + 3 = 0', [])
+        self.check('x^5 - 1 = 0', ['1'])
+        self.check('x^4 - 4 = 0', ['-2^(1/2)', '2^(1/2)'])
+        self.check('x^6 = 64', ['-2', '2'])
+        self.check('x^3 - 2 = 0', ['2^(1/3)'])
+        self.check('x^4 + x^2 + 1 = 0', [])
 
     def test_roots_satisfy_the_equation(self):
         for eq in ['x^2 - 2*x - 7 = 0', '2*x^2 + 3*x - 5 = 0', 'x^2 - 3|x| + 1 = 0']:

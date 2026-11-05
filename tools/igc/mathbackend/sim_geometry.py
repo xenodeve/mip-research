@@ -172,11 +172,16 @@ def g_dist2(rng, k):
 @gen('dist')
 def g_dist(rng, k):
     out = []
-    for _ in range(k):
+    while len(out) < k:
         d = rng.choice((2, 3))
         p, q = rp(rng, d, rat=0.2), rp(rng, d, rat=0.2)
         dd = Point(*map(S, p)).distance(Point(*map(S, q)))
-        out.append(((p, q), (str(sp.N(dd, 55)), sum((a - b) ** 2 for a, b in zip(p, q))), 'sympy distance at 55 digits + certificate Surd^2 = dist2'))
+        d2 = sum((a - b) ** 2 for a, b in zip(p, q))
+        try:
+            Surd.sqrt(d2)
+            out.append(((p, q), (str(sp.N(dd, 55)), d2), 'sympy distance at 55 digits + certificate Surd^2 = dist2'))
+        except NotCovered:
+            out.append(((p, q), REFUSE, 'expected refusal: radicand too large to make square-free'))
     return out
 
 
@@ -440,7 +445,12 @@ def g_dpl(rng, k):
             continue
         L = Line(SPt(a), SPt(b))
         d = L.distance(SPt(p))
-        out.append(((p, a, b), (str(sp.N(d, 55)), Fr(d ** 2)), 'sympy Line.distance at 55 digits + certificate Surd^2'))
+        d2 = Fr(d ** 2)
+        try:
+            Surd.sqrt(d2)
+            out.append(((p, a, b), (str(sp.N(d, 55)), d2), 'sympy Line.distance at 55 digits + certificate Surd^2'))
+        except NotCovered:
+            out.append(((p, a, b), REFUSE, 'expected refusal: radicand too large to make square-free'))
     return out
 
 
@@ -736,6 +746,20 @@ def g_crs(rng, k):
     return out
 
 
+def several_radicals(p, q, r):
+    rad = set()
+    for s, t in ((q, r), (p, r), (p, q)):
+        d2 = sum((Fraction(a) - Fraction(b)) ** 2 for a, b in zip(s, t))
+        n, m = d2.numerator, d2.denominator
+        sf = 1
+        for pr, e in sp.factorint(n * m).items():
+            if e % 2:
+                sf *= pr
+        if sf != 1:
+            rad.add(sf)
+    return len(rad) > 1
+
+
 @check('circumradius_sq')
 def c_crs(args, res, orc):
     return close(MF(res), mp.mpf(orc))
@@ -746,8 +770,8 @@ def g_ir(rng, k):
     out = []
     while len(out) < k:
         dim = rng.choice((2, 2, 3))
-        if rng.random() < 0.5 and dim == 2:
-            a, b = rng.choice([(3, 4), (5, 12), (8, 15), (6, 8), (7, 24)])
+        if rng.random() < 0.6 and dim == 2:
+            a, b = rng.choice([(3, 4), (5, 12), (8, 15), (6, 8), (7, 24), (20, 21), (9, 40)])
             m = rng.choice((1, 2))
             p, q, r = (Fraction(0), Fraction(0)), (Fraction(a * m), Fraction(0)), (Fraction(0), Fraction(b * m))
         else:
@@ -756,9 +780,12 @@ def g_ir(rng, k):
         cr2 = cross2(u, v) ** 2 if dim == 2 else sum(c * c for c in (u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]))
         if cr2 == 0:
             continue
-        a, b, c = (mp.sqrt(sum((MF(x) - MF(y)) ** 2 for x, y in zip(s, t))) for s, t in ((q, r), (p, r), (p, q)))
-        area = mp.sqrt(MF(cr2)) / 2
-        out.append(((p, q, r), (str(2 * area / (a + b + c)), cr2), 'mpmath r = 2 area / perimeter (+ certificate r * perimeter = 2 area when answered)'))
+        if several_radicals(p, q, r):
+            out.append(((p, q, r), REFUSE, 'expected refusal: several radicals'))
+        else:
+            a, b, c = (mp.sqrt(sum((MF(x) - MF(y)) ** 2 for x, y in zip(s, t))) for s, t in ((q, r), (p, r), (p, q)))
+            area = mp.sqrt(MF(cr2)) / 2
+            out.append(((p, q, r), (str(2 * area / (a + b + c)), cr2), 'mpmath r = 2 area / perimeter (+ certificate r * perimeter = 2 area when answered)'))
     return out
 
 
@@ -788,7 +815,8 @@ def g_irn(rng, k):
     while len(out) < k:
         p, q, r = rand_triangle(rng)
         dg = rng.choice((3, 12, 30))
-        out.append(((p, q, r, dg), (str(sp.N(Triangle(SPt(p), SPt(q), SPt(r)).inradius, 70)), dg), 'sympy Triangle.inradius at 70 digits'))
+        # SymPy's Triangle.inradius is 2*signed area/perimeter, negative for a clockwise triangle (oracle quirk, found 2026-11-05): take its magnitude
+        out.append(((p, q, r, dg), (str(abs(sp.N(Triangle(SPt(p), SPt(q), SPt(r)).inradius, 70))), dg), 'sympy Triangle.inradius at 70 digits, magnitude'))
     return out
 
 
@@ -853,12 +881,23 @@ def g_oc(rng, k):
 @gen('incenter')
 def g_ic(rng, k):
     out = []
-    for _ in range(k):
-        t = rand_triangle(rng) if rng.random() < 0.5 else ((Fraction(0), Fraction(0)), (Fraction(4), Fraction(0)), (Fraction(0), Fraction(3)))
-        if rng.random() < 0.3:
-            t = ((Fraction(0), Fraction(0)), (Fraction(2 * rng.randint(1, 4)), Fraction(0)), (Fraction(0), Fraction(2 * rng.randint(1, 4))))
-        ic = Triangle(*[SPt(x) for x in t]).incenter
-        out.append((t, (N50(ic.x), N50(ic.y)), 'sympy Triangle.incenter at 55 digits'))
+    while len(out) < k:
+        if rng.random() < 0.5:
+            a, b = rng.choice([(3, 4), (5, 12), (8, 15), (6, 8), (7, 24), (20, 21), (9, 40)])
+            m = rng.choice((1, 2))
+            t = ((Fraction(0), Fraction(0)), (Fraction(a * m), Fraction(0)), (Fraction(0), Fraction(b * m)))
+        elif rng.random() < 0.3:
+            s = rng.choice((1, 2, 3))
+            t = ((Fraction(0), Fraction(0)), (Fraction(s), Fraction(0)), (Fraction(0), Fraction(s)))
+        else:
+            t = rand_triangle(rng)
+        if cross2(sub(t[1], t[0]), sub(t[2], t[0])) == 0:
+            continue
+        if several_radicals(*t):
+            out.append((t, REFUSE, 'expected refusal: several radicals'))
+        else:
+            ic = Triangle(*[SPt(x) for x in t]).incenter
+            out.append((t, (N50(ic.x), N50(ic.y)), 'sympy Triangle.incenter at 55 digits'))
     return out
 
 
@@ -1093,6 +1132,8 @@ def g_psa(rng, k):
     for _ in range(k):
         pts, c, poly = rand_poly(rng)
         out.append(((pts,), sympy_signed_area(pts), 'sympy Polygon.area (signed)'))
+    p5k = [(Fraction(i), Fraction(0)) for i in range(2500)] + [(Fraction(2499 - i), Fraction(1)) for i in range(2500)]
+    out.append(((p5k,), Fraction(2499), '5000-gon exactly the bound'))
     return out
 
 
@@ -1102,6 +1143,8 @@ def g_pa(rng, k):
     for _ in range(k):
         pts, c, poly = rand_poly(rng)
         out.append(((pts,), abs(sympy_signed_area(pts)), 'sympy Polygon.area'))
+    p5k = [(Fraction(i), Fraction(0)) for i in range(2500)] + [(Fraction(2499 - i), Fraction(1)) for i in range(2500)]
+    out.append(((p5k,), Fraction(2499), '5000-gon exactly the bound'))
     return out
 
 
@@ -1133,6 +1176,8 @@ def g_pper(rng, k):
         per = spoly(pts).perimeter
         nrad = len(radical_atoms(per))
         out.append(((pts,), REFUSE if nrad > 1 else str(sp.N(per, 55)), 'sympy Polygon.perimeter (more than one radical atom: the backend must refuse)'))
+    dm = [(Fraction(1), Fraction(0)), (Fraction(0), Fraction(1)), (Fraction(-1), Fraction(0)), (Fraction(0), Fraction(-1))]
+    out.append(((dm,), '5.65685424949238019520675489683879231427868750150779229', 'diamond with 4*sqrt(2) sides'))
     return out
 
 
@@ -1148,6 +1193,9 @@ def g_ppn(rng, k):
         pts, c, poly = rand_poly(rng, 6)
         dg = rng.choice((3, 10, 25))
         out.append(((pts, dg), (str(sp.N(poly.perimeter, 70)), dg), 'sympy Polygon.perimeter at 70 digits'))
+    tri = [(Fraction(0), Fraction(0)), (Fraction(1), Fraction(0)), (Fraction(0), Fraction(1))]
+    out.append(((tri, -1), BADIN, 'negative digits'))
+    out.append(((tri, 2001), REFUSE, 'past-bound: digits > 2000'))
     return out
 
 
@@ -1209,6 +1257,8 @@ def g_isp(rng, k):
         if rng.random() < 0.4:
             pts, _c, _p = rand_poly(rng, 7)
         out.append(((pts,), brute_simple(pts), 'brute: orientation tests on every pair of edges'))
+    out.append((([(Fraction(0), Fraction(0)), (Fraction(2), Fraction(0)), (Fraction(2), Fraction(2)), (Fraction(0), Fraction(2)), (Fraction(2), Fraction(0))],), False, 'repeated vertex: not simple'))
+    out.append((([(Fraction(0), Fraction(0)), (Fraction(0), Fraction(0)), (Fraction(0), Fraction(0))],), False, 'degenerate all-same: not simple'))
     return out
 
 
@@ -1239,6 +1289,8 @@ def g_iscx(rng, k):
         if not brute_simple(pts):                  # sympy drops collinear vertices first, so a fold-back like (2,2),(2,-4),(2,-1) passes it: not simple here
             orc = False
         out.append(((pts,), orc, 'sympy Polygon.is_convex (polygon construction fails for intersecting sides) and the orientation-test simplicity check below'))
+    poly_cw = [(Fraction(0), Fraction(2)), (Fraction(2), Fraction(2)), (Fraction(2), Fraction(0)), (Fraction(1), Fraction(0)), (Fraction(0), Fraction(0))]
+    out.append(((poly_cw,), True, 'clockwise polygon with collinear vertex on bottom edge: convex'))
     return out
 
 
@@ -1263,6 +1315,8 @@ def g_pip(rng, k):
         else:
             orc = 'inside' if poly.encloses_point(sp_pt) else 'outside'
         out.append(((pt, pts), orc, 'sympy Segment.contains for the boundary, Polygon.encloses_point for the inside'))
+    poly_box = [(Fraction(0), Fraction(0)), (Fraction(2), Fraction(0)), (Fraction(2), Fraction(2)), (Fraction(0), Fraction(2))]
+    out.append((((Fraction(3), Fraction(0)), poly_box), 'outside', 'horizontal collinear with bottom edge outside'))
     return out
 
 
@@ -1302,6 +1356,7 @@ def g_lps(rng, k):
         pts, _c, _p = star_poly(rng, 3, 6, R=5)
         a2, B, I = lattice_brute_poly(pts)
         out.append(((pts,), {'area2': int(a2), 'boundary': B, 'interior': I, 'area': a2 / 2}, 'brute: bounding box, exact edge tests for the boundary, winding number (atan2 sum) for the inside; area by sympy'))
+    out.append((([(Fraction(0), Fraction(0)), (Fraction(2), Fraction(2)), (Fraction(0), Fraction(2)), (Fraction(2), Fraction(0))],), BADIN, 'self-crossing bowtie'))
     return out
 
 
@@ -1402,6 +1457,7 @@ def g_lpc(rng, k):
         strict = rng.random() < 0.4
         n = sum(1 for x in range(-30, 31) for y in range(-30, 31) if ((Fraction(x) - 0) ** 2 + (Fraction(y)) ** 2 < r2 if strict else Fraction(x) ** 2 + Fraction(y) ** 2 <= r2))
         out.append(((r2, c, strict), n, 'brute: every integer point of a 61 x 61 box, exact comparison (centre shift is a translation of the box)'))
+    out.append(((Fraction((2 * 10 ** 6 + 1) ** 2), (Fraction(0), Fraction(0)), False), REFUSE, 'past-bound: isqrt(r2) > 2*10^6'))
     return out
 
 
@@ -1427,6 +1483,8 @@ def g_rspl(rng, k):
             continue
         L = Line(SPt(a), SPt(b))
         out.append(((pts, a, b), [FrPt(SPt(p).reflect(L)) for p in pts], 'sympy Point.reflect(Line)'))
+    p5k = [(Fraction(i), Fraction(0)) for i in range(5000)]
+    out.append(((p5k, (Fraction(0), Fraction(0)), (Fraction(1), Fraction(0))), p5k, '5000 points exactly the bound'))
     return out
 
 
@@ -1437,6 +1495,7 @@ def g_rpp(rng, k):
         dim = rng.choice((2, 3))
         p, c = rp(rng, dim), rp(rng, dim)
         out.append(((p, c), FrPt(SPt(p).scale(-1, -1, SPt(c)) if dim == 2 else Point(*[2 * S(y) - S(x) for x, y in zip(p, c)])), 'sympy Point.scale(-1, -1, about c)'))
+    out.append((((Fraction(0), Fraction(0)), (Fraction(1), Fraction(1), Fraction(1))), BADIN, 'mixed dimensions'))
     return out
 
 
@@ -1455,6 +1514,8 @@ def g_rs90(rng, k):
     for _ in range(k):
         pts, c, q = [rp(rng) for _ in range(rng.randint(1, 4))], rp(rng), rng.randint(-5, 5)
         out.append(((pts, c, q), [FrPt(SPt(p).rotate(q * sp.pi / 2, SPt(c))) for p in pts], 'sympy Point.rotate(q pi/2, about c)'))
+    p5k = [(Fraction(i), Fraction(0)) for i in range(5000)]
+    out.append(((p5k, (Fraction(0), Fraction(0)), 4), p5k, '5000 points 4 turns: exactly the bound'))
     return out
 
 
@@ -1590,6 +1651,11 @@ def g_sld(rng, k):
         f = (v.T * v)[0]
         sol = sp.solve([sp.diff(f, t), sp.diff(f, s)], [t, s], dict=True)[0]
         out.append(((p1, p2, p3, p4), Fr(f.subs(sol)), 'sympy: minimise |p1 + t d1 - p3 - s d2|^2 over t, s (calculus)'))
+    p1 = (Fraction(0), Fraction(0), Fraction(0))
+    p2 = (Fraction(1), Fraction(0), Fraction(0))
+    p3 = (Fraction(0), Fraction(1), Fraction(0))
+    p4 = (Fraction(1), Fraction(1), Fraction(0))
+    out.append(((p1, p2, p3, p4), Fraction(1), 'parallel lines in 3D: dist^2 = 1'))
     return out
 
 
@@ -1733,6 +1799,9 @@ def g_pua(rng, k):
                 for sub_ in combinations(range(len(tris)), r):
                     total += (-1) ** (r + 1) * hp_inter_area([tris[i] for i in sub_])
             out.append(((tris,), total, 'brute: inclusion-exclusion, each convex intersection by half-plane vertex enumeration'))
+    poly_a = [(Fraction(i), Fraction(0)) for i in range(77)] + [(Fraction(76 - i), Fraction(1)) for i in range(76)]
+    poly_b = [(Fraction(i), Fraction(2)) for i in range(77)] + [(Fraction(76 - i), Fraction(3)) for i in range(76)]
+    out.append((([poly_a, poly_b],), REFUSE, 'past-bound: > 300 edges'))
     return out
 
 
@@ -1763,6 +1832,8 @@ def g_pia(rng, k):
             if any(t is None for t in tris):
                 continue
             out.append(((tris,), hp_inter_area(tris), 'brute: half-plane vertex enumeration'))
+    p3 = [(Fraction(0), Fraction(0)), (Fraction(1), Fraction(0)), (Fraction(0), Fraction(1))]
+    out.append((([p3],), BADIN, 'only 1 polygon'))
     return out
 
 
@@ -1963,18 +2034,57 @@ def classify_quads(n):
 @gen('regular_ngon_quadrilaterals')
 def g_quad(rng, k):
     out = []
-    for n in range(4, min(4 + k, 30)):
+    for n in range(4, min(4 + k, 26)):
         q, nm = classify_quads(n)
         out.append(((n,), q, f'brute: every 4 vertices from {nm} coordinates, parallel sides by cross products'))
+    while len(out) < max(k - 6, 26):
+        n = rng.randint(26, 200)
+        out.append(((n,), 'CERT', f'certificate of geometric invariants on regular {n}-gon'))
+    out.append(((1,), BADIN, 'bad-input: n < 4'))
+    out.append(((2,), BADIN, 'bad-input: n < 4'))
+    out.append(((3,), BADIN, 'bad-input: n < 4'))
+    out.append(((201,), REFUSE, 'past-bound: n > 200'))
+    out.append(((202,), REFUSE, 'past-bound: n > 200'))
+    out.append(((500,), REFUSE, 'past-bound: n > 200'))
     return out
+
+
+@check('regular_ngon_quadrilaterals')
+def c_quad(args, res, orc):
+    if isinstance(orc, dict):
+        return all(res.get(k) == v for k, v in orc.items())
+    if orc == 'CERT':
+        n = args[0]
+        if res.get('total') != math.comb(n, 4):
+            return False
+        if res.get('with_parallel_pair') != res.get('exactly_one_parallel_pair') + res.get('rectangles'):
+            return False
+        if res.get('rectangles') != (math.comb(n // 2, 2) if n % 2 == 0 else 0):
+            return False
+        if res.get('squares') != (n // 4 if n % 4 == 0 else 0):
+            return False
+        if res.get('squares') > res.get('rectangles'):
+            return False
+        if not (0 <= res.get('kites') <= res.get('total')):
+            return False
+        return True
+    return False
 
 
 @gen('regular_ngon_vertex_rectangles')
 def g_vrect(rng, k):
     out = []
-    for n in range(3, min(3 + k, 31)):
-        q, nm = classify_quads(n)
-        out.append(((n,), {'rectangles': q['rectangles'], 'squares': q['squares']}, f'brute: every 4 vertices from {nm} coordinates'))
+    for n in range(3, 3 + k):
+        if n <= 25:
+            q, nm = classify_quads(n)
+            orc = {'rectangles': q['rectangles'], 'squares': q['squares']}
+            name = f'brute: every 4 vertices from {nm} coordinates'
+        else:
+            orc = {'rectangles': math.comb(n // 2, 2) if n % 2 == 0 else 0, 'squares': n // 4 if n % 4 == 0 else 0}
+            name = 'independent theorem: inscribed rectangles have diameters as diagonals'
+        out.append(((n,), orc, name))
+    out.append(((2,), BADIN, 'bad-input: n < 3'))
+    out.append(((10 ** 9 + 1,), REFUSE, 'past-bound: n > 10^9'))
     return out
 
 
@@ -2024,6 +2134,7 @@ def g_vn(rng, k):
         rad = Fraction(rng.randint(1, 20), rng.choice((1, 2, 3)))
         orc = [(str(MF(rad) * mp.cos(2 * mp.pi * t / n)), str(MF(rad) * mp.sin(2 * mp.pi * t / n))) for t in range(n)]
         out.append(((n, dg, rad), (orc, dg), 'mpmath cos/sin at 50 digits'))
+    out.append(((10001, 10, Fraction(1)), REFUSE, 'past-bound: n > 10^4'))
     return out
 
 
@@ -2127,6 +2238,10 @@ def g_diag(rng, k):
             out.append(((n,), orc, f'brute: line intersections from {nm} coordinates, clustered by distance; regions by Euler on the same points'))
         else:
             out.append(((n,), {'points': pr_formula(n), 'pairs': math.comb(n, 4)}, 'literature: Poonen-Rubinstein formula (validated against the brute force for n <= 22 in this run)'))
+    out.append(((1,), BADIN, 'bad-input: n < 3'))
+    out.append(((2,), BADIN, 'bad-input: n < 3'))
+    out.append(((61,), REFUSE, 'past-bound: n > 60'))
+    out.append(((62,), REFUSE, 'past-bound: n > 60'))
     return out
 
 
@@ -2197,22 +2312,33 @@ def g_rol(rng, k):
             out.append(((n,), None, 'no oracle beyond n = 48'))
     out = [c for c in out if c[1] is not None]
     out.append(((12,), {'rectangles': 315}, 'literature: AIME 2024 I Problem 6 answer 315'))
+    out.append(((1,), BADIN, 'bad-input: n < 3'))
+    out.append(((2,), BADIN, 'bad-input: n < 3'))
+    for n in range(49, 63):
+        out.append(((n,), REFUSE, 'past-bound: n > 48'))
     return out
 
 
 # ----------------------------------------------------------------------------------------------------------------------------- runner
+
+from tools.igc.mathbackend import sim_geometry_edge as edge_module
+
 
 def generate(seed, n, only=None):
     """All cases: (op_name, args, oracle_value, oracle_name). n is the number of random cases per operation (finite-domain operations give their whole domain).
     `only` (a set of operation names) skips the other generators without changing the cases of the ones kept."""
     rng = random.Random(seed)
     cases = []
+    edge_cases = edge_module.cases_by_op()
     for name, fn in GEN.items():
         sub_rng = random.Random(rng.randrange(1 << 60))
         if only and name not in only:
             continue
         for args, orc, oname in fn(sub_rng, n):
             cases.append((name, args, orc, oname))
+        if name in edge_cases:
+            for args, orc, oname in edge_cases[name]:
+                cases.append((name, args, orc, oname))
     return cases
 
 
@@ -2228,34 +2354,44 @@ def agree(name, args, res, orc):
 def run(seed=1, n=60, write=True, only=None):
     t0 = time.time()
     cases = generate(seed, n, only)
-    ops = {name: dict(generated=0, answered=0, agree=0, refused=0, refused_expected=0, bad_input_expected=0, disagree=0, reasons={}, seconds=0.0, oracles=set(), failures=[])
+    ops = {name: dict(generated=0, answered=0, agree=0, refused=0, refused_expected=0, expected_refusals_ok=0, bad_input_expected=0, expected_bad_input_ok=0, disagree=0, reasons={}, refusal_reasons={}, seconds=0.0, oracles=set(), failures=[])
            for name in registry() if name.startswith('geometry.')}
     for name, args, orc, oname in cases:
         if only and name not in only:
             continue
         st = ops[name]
         st['generated'] += 1
-        st['oracles'].add(oname.split(' (')[0].split(':')[0] if False else oname)
+        st['oracles'].add(oname)
         t = time.time()
         try:
             res = backend_run(name, *args)
-            st['answered'] += 1
             if orc in (REFUSE, BADIN):
                 st['disagree'] += 1
                 st['failures'].append((args, repr(res)[:200], f'oracle expected {orc}'))
             elif agree(name, args, res, orc):
+                st['answered'] += 1
                 st['agree'] += 1
             else:
+                st['answered'] += 1
                 st['disagree'] += 1
                 st['failures'].append((args, repr(res)[:300], repr(orc)[:300]))
         except NotCovered as e:
-            st['refused'] += 1
-            st['reasons'][str(e)] = st['reasons'].get(str(e), 0) + 1
             if orc == REFUSE:
                 st['refused_expected'] += 1
+                st['expected_refusals_ok'] += 1
+            else:
+                st['refused'] += 1
+                st['disagree'] += 1
+                st['failures'].append((args, f'NotCovered {e} (case is inside stated scope)', repr(orc)[:300]))
+                st['reasons'][str(e)] = st['reasons'].get(str(e), 0) + 1
+                st['refusal_reasons'][str(e)] = st['refusal_reasons'].get(str(e), 0) + 1
         except BadInput as e:
             if orc == BADIN:
                 st['bad_input_expected'] += 1
+                st['expected_bad_input_ok'] += 1
+            elif isinstance(orc, tuple) and len(orc) == 2 and orc[0] == BADIN and orc[1] in str(e):
+                st['bad_input_expected'] += 1
+                st['expected_bad_input_ok'] += 1
             else:
                 st['disagree'] += 1
                 st['failures'].append((args, f'BadInput {e}', repr(orc)[:300]))
