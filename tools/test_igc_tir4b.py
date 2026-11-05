@@ -878,5 +878,31 @@ class RepeatedValues(unittest.TestCase):
         self.assertIn('42 ok</think>', r.text())
 
 
+class HeldOutInline(unittest.TestCase):
+    """#306: the inline values over arms and models not used before (4B arms with nothing put in, DeepSeek-R1, QwQ-32B), checked against
+    what each model wrote next. Each of these put a value the model did not mean there."""
+    def test_what_the_text_means_otherwise_is_left_alone(self):
+        for before in ('Right: cube root of 8^26',                                  # the argument of a root: 8^(26/3)
+                       'but on the left side, √2 raised to (3*0 -1)',              # an exponent
+                       'm=3, 64=8*8; m=4,512',                                      # m=4 and 512, not 4512
+                       'Then 9√2 -3',                                               # already the value, in another spelling
+                       'Total passed in Math:14 boys (10+4) +18 girls (12+6)',     # a bracket that counts the girls
+                       'A=24:576.5*7*6',                                            # 24^2 = 576. and its digits' product
+                       'Rightmost (10^-7): $0-4$. Borrow. Result **6**.\n10^-6: $0-1-8'):   # a column that borrows
+            for mb in (False, True):
+                with self.subTest(before=before, mathbackend=mb):
+                    self.assertIsNone(tir4b.inline_found(before, use_mathbackend=mb))
+
+    def test_the_neighbours_still_get_their_value(self):
+        for before, said in (('Divide by $2-1', '1'),                               # a step named, then its operand worked out
+                             ('then multiply by $7 \\times 2', '14'),
+                             ('So P = z1 z2 approaches (-0.5)(-1)', '0.5'),
+                             ('so b=(64 ±58)/2=(122)/2=61 or (6)/2', '3'),
+                             ('So 2.5*3', '7.5'),
+                             ('Sum: $3 + 4', '7')):
+            with self.subTest(before=before):
+                self.assertEqual(tir4b.inline_found(before, use_mathbackend=True)[1], said)
+
+
 if __name__ == '__main__':
     unittest.main()

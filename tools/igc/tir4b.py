@@ -182,7 +182,7 @@ def tedious(expr, value):
     return any(len(n) >= 3 for n in re.findall(r'\d+', expr)) or len(_OPS.findall(expr)) >= 3 or abs(Fraction(value)) >= 1000
 
 
-def inline_found(before, whole=False, use_mathbackend=False):
+def inline_found(before, whole=False, use_mathbackend=False, custom_ops=()):
     """(expression, spelled exact value) for the arithmetic that ends the text before an `=`, or None. The expression is read by
     tools.igc.mathexpr in every form a model writes (LaTeX at any depth, Unicode, ASCII); it refuses a symbol (algebra), a word, a mixed
     number, a root or power that is not exact. When `use_mathbackend` is True, also resolves exact calls to the 6-module mathbackend
@@ -204,11 +204,60 @@ def inline_found(before, whole=False, use_mathbackend=False):
         # an integer quotient that does not come out: the model is doing long division and wants a digit, not 21/19 (dm div_big). One
         # that reduces is a step of its own: `10044/42 = 1674/7`, `6/26 = 3/13` (ctrl traces of a100_262k)
         return None
-    if said == re.sub(r'[\s()]', '', expr):
-        return None   # nothing new, and `= 15/13 = 15/13 = ...` looped until stuck
-    if _meant_otherwise(expr, value, before):
+    if _bare(said) == _bare(expr):
+        return None   # nothing new, and `= 15/13 = 15/13 = ...` looped until stuck; `9√2 -3 =` is `9*sqrt(2) - 3` (#306, R1)
+    if re.fullmatch(r'\s*\(?\s*-?\d[\d,]*(?:\.\d+)?\s*\)?\s*', expr):
+        return None   # a number alone: `m=4,512=8*64` is m=4 and 512, not 4512 (#306, R1)
+    if _operand_of_more(expr, before):
+        return None
+    if _meant_otherwise(expr, value, before) or any(op in expr for op in custom_ops):
+        # `5 * (3 * 1)` where the question defined `a * b = a - b`: no product (#306, held-out)
         return None
     return expr, said
+
+
+def _bare(s):
+    """A spelling with its spacing, brackets, braces, `*` and `\\` taken out and `√` written `sqrt`: two spellings of one written form."""
+    return re.sub(r'[\s(){}*\\]', '', s.replace('√', 'sqrt').replace('\\sqrt', 'sqrt'))
+
+
+# words that make what follows the argument of a function or an exponent, whose own value is not the step: `cube root of 8^26 =
+# 8^(26/3)`, `√2 raised to (3*0 -1) = √2^(-1)` (R1 traces, #306 held-out). Not `multiply by`, `divide by`, `times`, `over`: there the
+# model names the step and then works out its operand, `Divide by $2-1 = 1$`, `multiply by $7 \times 2 = 14$` (60 such puts agreed)
+_OPERAND_WORDS = re.compile(
+    r'(?:\b(?:\w+th|square|cube)\s+root|\broot|\blog(?:arithm)?|\bln|\bsine|\bcosine|\btangent|\bfloor|\bceiling|\babsolute\s+value'
+    r'|\bfactorial|\breciprocal|\binverse|\bhalf|\bthird|\bquarter|\bdouble|\bnegative)\s+of(?:\s+the)?'
+    r'|\braised\s+to(?:\s+the(?:\s+power(?:\s+of)?)?)?|\bto\s+the\s+power(?:\s+of)?', re.I)
+
+
+def _operand_of_more(expr, before):
+    """The expression is a piece of a longer one the text began before it, so its own value is not what `=` gives:
+    - a word that makes it an argument or an exponent: `cube root of 8^26 =`, `raised to (3*0 -1) =`;
+    - a bracket that counts what a word names: `14 boys (10+4) +18 girls (12+6)=32` sums the counts, not 12+6;
+    - a number, its sentence's period and the next sentence: `A=24:576.5*7*6=210` is 24^2 = 576 and its digits' product."""
+    line = before.rsplit('\n', 1)[-1].rstrip()
+    e = expr.strip()
+    at = line.rfind(e)
+    if at < 0:
+        return False
+    head = re.sub(r'[\s$]+$|\\\($|\\\[$', '', line[:at]).rstrip()
+    if re.search(rf'(?:{_OPERAND_WORDS.pattern})$', head, re.I):
+        return True
+    count = re.search(r'(?<![\w.])\d+\s+([A-Za-z]{3,})$', head)
+    if count and re.fullmatch(r'\([^()]*\)', e) and count.group(1).lower() not in _LINK_WORDS:
+        return True   # not `z1 z2 approaches (-0.5)(-1)`, `61 or (26)/2`, `6^9 is (2*3)^9`
+    return _glued_period(e)
+
+
+# words between a number and a bracket that link a statement rather than name what the number counts
+_LINK_WORDS = {'and', 'are', 'was', 'were', 'the', 'then', 'becomes', 'gives', 'equals', 'from', 'than', 'with', 'into', 'times',
+               'plus', 'minus', 'over', 'divided', 'multiplied', 'approaches', 'yields', 'makes', 'leaves', 'means'}
+
+
+def _glued_period(e):
+    """`576.5*7*6`: a number, its sentence's period, and its digits' product."""
+    glued = re.match(r'(\d{2,})\.(\d)((?:\s*[*×x+]\s*\d(?!\d))+)', e)
+    return bool(glued) and list(glued.group(1)) == [glued.group(2)] + re.findall(r'\d', glued.group(3))
 
 
 _LONG_DIVISION = re.compile(r'\brem\b|remainder|bring(?:s|ing)? down|long division|\bquotient\b|\bcarry\b|\bborrow|\bdigit|\bcolumn', re.I)
@@ -236,7 +285,8 @@ def _meant_otherwise(expr, value, before):
     # one column of a written sum or difference: `$106029 - 76230$.` on a line above, then `$5-9=6$ (borrow)`, `$12 - 2 = 0$`. A column
     # gives a digit; a value under 0 or past 9 is a borrow or a carry the model is about to write
     column = _LONG_DIVISION.search(recent) or _COLUMN.search(before[-400:])
-    if q is not None and column and re.fullmatch(r'\s*\d{1,2}\s*[-−+]\s*\d{1,2}\s*', expr) and not 0 <= q <= 9:
+    # `0-1-8` takes the borrow from the column before it (`10^-6: $0-1-8 = 9-8 = 1$`, held-out a100r4 seal1)
+    if q is not None and column and re.fullmatch(r'\s*\d{1,2}(?:\s*[-−+]\s*\d{1,2}){1,2}\s*', expr) and not 0 <= q <= 9:
         return True
     if _PLACE.search(line):
         return True   # `Tens: $3 + 8 + 4 + 6 + 2 + 3 + 2 = 30$`: a column of a sum, its carry added in the head
@@ -321,6 +371,7 @@ class Rollout:
             self.phase = 'answer'
         self.whole_pending = False   # the next value is the whole step the --whole-hint asked for
         self.moduli = None   # --check-hand: the moduli the question and the answer so far name
+        self._custom, self._custom_at = None, 0   # operators the question or the answer defines (`a * b = a - b`), read as the text grows
         self.given = []      # --hand-off: the whole values software put in (Fractions)
         if arm.whole_hint:
             self.inject(WHOLE_HINT_PLAIN if arm.whole_plain else WHOLE_HINT, 'whole hint')
@@ -483,7 +534,8 @@ class Rollout:
         if (self.arm.inline_calc or self.arm.hint_calc or self.arm.logit_value) and last in self.ids.equals and self.phase in ('think', 'answer'):
             text = self.text()
             whole = self.whole_pending
-            found = inline_found(text[:text.rstrip().rfind('=')], whole=whole, use_mathbackend=self.arm.mathbackend) if self.arm.inline_calc or self.arm.logit_value else None
+            found = inline_found(text[:text.rstrip().rfind('=')], whole=whole, use_mathbackend=self.arm.mathbackend,
+                                 custom_ops=self.custom_ops(text)) if self.arm.inline_calc or self.arm.logit_value else None
             if found is not None and self.arm.logit_value and not self.arm.inline_calc:
                 self.start_plan(*found)   # the value is not put in: the model writes it, its prediction of each token raised
             elif found is not None:   # the value the model would have computed, computed: the reasoning goes on from it
@@ -744,6 +796,16 @@ class Rollout:
         self.given = []   # once: a second restatement is the model's own, the loop guard's
         return True
 
+    def custom_ops(self, text):
+        """The operator symbols the question or the answer so far defines as an operation of its own (`a * b = a - b`); read once over the
+        question and then only over what the answer added, so a long answer is not scanned again at every `=`."""
+        from tools.igc.mathexpr import custom_operators
+        if self._custom is None:
+            self._custom = custom_operators(prompt_text(self.row) if self.row.get('question') else '')
+        self._custom |= custom_operators(text[max(0, self._custom_at - 200):])
+        self._custom_at = len(text)
+        return self._custom
+
     def check_line(self):
         """The line that just ended, every relation on it checked (tools.igc.mathexpr.wrong_relations), and a correction after it for each
         wrong one. A correction the runner put in is not checked again."""
@@ -754,7 +816,7 @@ class Rollout:
         if line.startswith('Correction'):
             return
         self.moduli |= moduli_in(line)   # `12+3=15=2` is right in an answer working mod 13
-        for expr, wrote, right in wrong_relations(line, self.moduli):
+        for expr, wrote, right in wrong_relations(line, self.moduli, self.custom_ops(self.text())):
             self.inject(CORRECTION.format(expr=expr, right=right, wrote=wrote), 'hand check')
             self.events[-1].update(expr=expr[:200], value=right, wrote=wrote)
             # No falsification here: a wrong value of one step says nothing of the final answer, and marking it falsified for the whole

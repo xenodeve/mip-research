@@ -3,7 +3,7 @@ import sys, unittest
 from fractions import Fraction as F
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from tools.igc.mathexpr import evaluate, expression_before, wrong_relations
+from tools.igc.mathexpr import custom_operators, evaluate, expression_before, wrong_relations
 
 
 class Evaluate(unittest.TestCase):
@@ -211,6 +211,31 @@ class ReplayMisreads(unittest.TestCase):
         self.assertEqual(wrong_relations('$8+4+3 \\to 16$'), [('8+4+3', '16', '15')])   # an arrow that ends a sum is still checked
         got = wrong_relations('$12600 \\times 7000 = 882 \\times 10^6$.')
         self.assertEqual(got[0][2], '88.2 \\times 10^{6}')   # not `88 \times 10^6`, which is not the value either
+
+    def test_the_held_out_traces(self):
+        # --check-hand over arms and models not used before (#306): 4B arms with nothing put in, DeepSeek-R1 and QwQ-32B traces. Each
+        # of these was a correction where the model was right; each is red at e5737a27's mathexpr
+        for line, moduli in (
+                ('Total sum: 2+3+16+48+81+162= 2+3=5; 5+16=21; 21+48=69; 69+81=150; 150+162=312.', ()),   # a running total
+                ('3 + 2^{5}=32, +1^4=1, +2014*(2)^3=2014*8=16112.', ()),          # a plain line: `=` takes the nearest term
+                ('Total passed in Math:14 boys (10+4) +18 girls (12+6)=32. Not mentioned but checks out.', ()),   # a bracket notes a word
+                ('A=27:729.7*2*9=126.27-1=26.No.', ()),                            # sentences glued at their periods
+                ('y=3x: 3*4=12 mod5=2≠1.', ()),                                    # `mod5` glued
+                ('So $6/8 = 3:4$.', ()),                                           # a ratio
+                ('"Tens: $3 + 8 + 4 + 6 + 2 + 3 + 2 = 30$."', ()),               # a column, its carry added
+                ('*   $505 \\times 5148 = 2,600,000$.', ()),                       # a large number rounded
+                ('So 1.2*10^3*2 = 2.4 x 10^3.', ()),                               # scientific with an `x`
+                ('So $(1.15)^4 \\approx 1.7490 -0.575$.', ()),                     # its value to its places, then more
+                ('Second part: 33[2/(1.2)^2 +1/(1.6)^2] = 33[1.3889 +0.3906] =33[1.7795]≈58.7235.', ())):   # rounded parts
+            with self.subTest(line=line):
+                self.assertEqual(wrong_relations(line, set(moduli)), [])
+        self.assertEqual(wrong_relations('$5 * (3 * 1) = 5 * 2 = 3$.', custom_ops={'*'}), [])   # `a * b = a - b` in the question
+        self.assertTrue(wrong_relations('$5 * (3 * 1) = 5 * 2 = 3$.'))
+        self.assertEqual(custom_operators('Define $a * b = a - b$ for all $a, b$.'), {'*'})
+        # and the slips on such lines are still caught
+        self.assertEqual(wrong_relations('$25 \\times 2/3 + 25 \\times 2/3 = 50/3$.'), [('25 \\times 2/3 + 25 \\times 2/3', '50/3', '100/3')])
+        self.assertEqual(wrong_relations('Sum=14+7+4+3+2+2+2+1+1+1+1+1+1+1=40.'), [('14+7+4+3+2+2+2+1+1+1+1+1+1+1', '40', '41')])
+        self.assertEqual(wrong_relations('Sum of millions: $47 + 316 + 4742 = 4105$ million.'), [('47 + 316 + 4742', '4105', '5105')])
 
     def test_a_fraction_in_work_mod_m_is_an_inverse(self):
         self.assertEqual(wrong_relations('$1/2 = 3$.', {5}), [])            # 2^{-1} = 3 mod 5

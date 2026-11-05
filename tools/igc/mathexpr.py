@@ -103,6 +103,10 @@ class _Parser:
             right = self.term()
             loose = loose if self.loose is None else self.loose
             value = value + right if op == '+' else value - right
+        if self.peek()[1] == 'pmod':
+            # `9 + 54 \pmod{10}` is (9 + 54) mod 10 = 3, not 9 + (54 mod 10) = 13: \pmod takes all that comes before (#306, held-out)
+            self.take()
+            value = self.mod(value, self.argument())
         return value
 
     def term(self):
@@ -168,6 +172,8 @@ class _Parser:
             exponent = self.unary_exponent()
             if exponent.denominator != 1 or abs(exponent) > 64:
                 raise _NotExact('a power that is not a small integer one')
+            if base == 0 and exponent == 0:
+                raise _NotExact('0^0: 1 by one convention, undefined by another')   # `0^3 + 0^0 + 2014 \cdot 0^0 = 2014` (#306, held-out)
             if base == 0 and exponent < 0:
                 raise _NotExact('0 to a negative power')
             if abs(base.numerator) > 1 and abs(exponent) * max(len(str(abs(base.numerator))), len(str(base.denominator))) > 60:
@@ -183,7 +189,7 @@ class _Parser:
 
     def postfix(self):
         value = self.primary()
-        while self.peek()[1] in ('!', '%', 'pmod'):
+        while self.peek()[1] in ('!', '%'):
             op = self.take()[1]
             if op == '!' and self.peek()[1] == '!' and self.i not in self.spaced:   # `3!! = 3`: the double factorial (#306)
                 self.take()
@@ -197,8 +203,6 @@ class _Parser:
                 if value.denominator != 1 or not 0 <= value <= 30:
                     raise _NotExact('a factorial past 30!')
                 value = Fraction(factorial(int(value)))
-            elif op == 'pmod':
-                value = self.mod(value, self.argument())   # 2016 \pmod{1000} = 16
             else:
                 value = value / 100
         return value
@@ -326,6 +330,8 @@ def _tail(head):
     cmd = re.search(r'\\([A-Za-z]+)$', h)
     if cmd:
         return cmd.group(1) not in _NOT_AN_OPERAND and not _FUNCTION_BEFORE.search(h)
+    if re.search(r'(?<![A-Za-z])(?:lg|ln|log|sin|cos|tan|cot|sec|csc|exp|sqrt|arcsin|arccos|arctan)$', h):
+        return True   # `lg 5 + 1 ≈ 1.69897`: the argument of a function written as a word (#306, R1)
     # a symbol before it: `2 BX \cdot CX (3/5) = 576` read (3/5) as the left side (#306); a point's name, a single letter
     return re.search(r'(?<![A-Za-z\\])(?:[A-Z]{1,3}|[a-z])(?:_\{?\w+\}?|\^\{?\w+\}?|\')*$', h) is not None
 
@@ -395,7 +401,7 @@ def rounded(value, places):
 
 _RELATION = re.compile(r'(?<![<>!=])(=|\\approx|≈|\\to\b|\\rightarrow|→|->)(?!=)')
 _PLAIN = re.compile(r'-?\d[\d,]*(?:\.(\d+))?')
-_SCIENTIFIC = re.compile(r'-?\d+(?:\.(\d+))?\s*(?:\\times|×|\*|\\cdot)\s*(?:10\s*\^\s*\{?\s*(-?\d+)\s*\}?|1(0+)(?![\d.]))')
+_SCIENTIFIC = re.compile(r'-?\d+(?:\.(\d+))?\s*(?:\\times|×|\*|\\cdot|x)\s*(?:10\s*\^\s*\{?\s*(-?\d+)\s*\}?|1(0+)(?![\d.]))')
 _ROUGH = re.compile(r'\s*(?:\.\.\.|\\dots|\\ldots|…)')
 _FUNCTIONS = r'log|ln|lg|sin|cos|tan|cot|sec|csc|arcsin|arccos|arctan|exp|det|max|min|gcd|lcm|deg|operatorname|pi|mathrm|vec|mathbf|bar|hat'
 _GOES_ON = re.compile(r'\s*(?:[+\-*/^(×÷·⋅−]|\\times|\\cdot|\\div|\\d?t?frac|\\sqrt|\\left|\\binom|\\(?:' + _FUNCTIONS + r')\b)')
@@ -417,8 +423,11 @@ def _value_after(segment):
         rest = s[end:]
         if rest[:1].isalpha() or rest[:1] and rest[0] in '_\\' and not rest.startswith(('\\ne', '\\le', '\\ge', '\\quad', '\\text', '\\implies', '\\Rightarrow',
                                                                             '\\approx', '\\equiv', '\\pmod', '\\to', '\\rightarrow', '\\\\')) \
-                or _ROUGH.match(rest) or _GOES_ON.match(rest):
-            return None   # 4.8k; 20.1852...; `6^2 + (\frac{s-r}{2})^2` or `2(r^2 + s^2)`: algebra goes on, the number is no value
+                or _ROUGH.match(rest) or _GOES_ON.match(rest) \
+                or re.match(r'\s*(?::(?!=)|(?:million|billion|thousand|trillion|percent)\b|x\s*10\s*\^)', rest, re.I):
+            # 4.8k; 20.1852...; `6^2 + (\frac{s-r}{2})^2` or `2(r^2 + s^2)`: algebra goes on; `3/10 : 7/10` a ratio; `4.34 million`;
+            # `2.4 x 10^3` is scientific, not 2.4. Not past a `$`: `47 + 316 + 4742 = 4105$ million` counts in millions (dm-base)
+            return None
         return head.strip(), value, rest
     return None
 
@@ -447,6 +456,9 @@ def _unit(text):
         return Fraction(1, 10 ** len(run.group(1) if run else m.group(1)))
     zeros = len(digits) - len(digits.rstrip('0'))
     return Fraction(10 ** zeros) if zeros and digits.strip('0') else Fraction(1)   # 2190 is rounded to tens, 707889 is exact
+
+
+_WHOLE_WORK = re.compile(r'(?:[\d\s+\-−*×()]|\\times|\\cdot)+')
 
 
 def _tolerance(text, op):
@@ -519,7 +531,7 @@ def _decimals_slack(text, rough):
     return slack
 
 
-_MODULUS = re.compile(r'(?:\\pmod\s*\{?\s*|\\bmod\s*\{?\s*|\bmod(?:ulo)?\s+|\bdivided by\s+|\bremainder (?:when|of) .{0,60}?by\s+)\$?(\d[\d,]*)')
+_MODULUS = re.compile(r'(?:\\pmod\s*\{?\s*|\\bmod\s*\{?\s*|\bmod(?:ulo)?\s*(?=\d)|\bmod(?:ulo)?\s+|\bdivided by\s+|\bremainder (?:when|of) .{0,60}?by\s+)\$?(\d[\d,]*)')
 
 
 def moduli_in(text):
@@ -530,6 +542,75 @@ def moduli_in(text):
         if n >= 2:
             found.add(n)
     return found
+
+
+_CUSTOM_OP = re.compile(r'(?<![A-Za-z\\])[a-z]\s*(\*|\\ast|\\star|\\circ|\\diamond|\\triangle|\\oplus|\\otimes|\\odot|\\bullet|\\heartsuit|'
+                        r'\\spadesuit|\\clubsuit|\\diamondsuit|⊕|⊗|∘|★|♦|#|@)\s*[a-z]\s*(?:=|:=|\bis defined)\s*[^=\n]*[a-z]')
+
+
+def custom_operators(text):
+    """The operator symbols the text defines as a new operation (`a * b = a - b`, `x \\star y = 2x + y`): `5 * (3 * 1)` is no product there."""
+    return {m.group(1) for m in _CUSTOM_OP.finditer(text)}
+
+
+def _partial(base_text, text):
+    """The link is a leading part of the base, the start of a running total: `17 + 78` of `17 + 78 + 85`, `4*49` of `4*49*328`."""
+    a, b = re.sub(r'[\s()]', '', base_text), re.sub(r'[\s()]', '', text)
+    # a binary operator in it: `-\frac{15}{2}` of `-\frac{15}{2} + \frac{15}{2}` is a wrong value, not a step of a total
+    binary = re.search(r'[+\-*/×÷·−]|\\times|\\cdot|\\div', re.sub(r'\\d?t?frac', '', b.lstrip('-−')))
+    return len(b) < len(a) and a.startswith(b) and bool(binary) and not a[len(b)].isdigit()
+
+
+def _stated_later(line, at, right):
+    """The right value is written as a number later on the line, past the end of this chain (`.`, `,`, `;`, `?`, `≠`): the model has
+    it, a correction tells it nothing. Not the next link of the same chain: `9 \\cdot 21 + 7 = 189 + 17 = 196` still has a wrong rewrite."""
+    tail = line[at:]
+    sep = re.search(r'[.,;?≠]\s|\\neq?\b|\?|\bnot\b', tail)
+    if sep is None:
+        return False
+    rest = tail[sep.start():]
+    for m in re.finditer(r'(?<![\d.,])-?\d{1,3}(?:,\d{3})+(?:\.\d+)?(?![\d,])|(?<![\d.])-?\d+(?:\.(\d+))?(?!\d|\.\d)', rest):
+        if re.search(r'(?:\\neq?|\\le|\\ge|\\leq|\\geq|[≠<>≤≥])\s*\$?\s*$', rest[:m.start()]):
+            continue   # `= -5736 \neq 0`: the 0 is what it is compared with
+        try:
+            v = Fraction(m.group().replace(',', ''))
+        except (ValueError, ZeroDivisionError):
+            continue
+        places = len(m.group().split('.')[1]) if '.' in m.group() else 0
+        if abs(v - right) <= Fraction(1, 2 * 10 ** places) if places else v == right:
+            return True
+    return False
+
+
+def _last_term(expr):
+    """The value of the last term of a sum, or None: `3 + 2^{5}` -> 32."""
+    terms = re.split(r'(?<=[\d)}\]])\s*[+\-−]\s*(?=[\d(\[{-])', expr.strip())
+    return evaluate(terms[-1]) if len(terms) > 1 else None
+
+
+def _stated_anywhere(tail, right, near=False):
+    for m in re.finditer(r'(?<![\d.])-?\d[\d,]*(?:\.(\d+))?(?!\d|\.\d)', tail):
+        try:
+            v = Fraction(m.group().replace(',', '').rstrip('.'))
+        except (ValueError, ZeroDivisionError):
+            continue
+        places = len(m.group(1) or '')
+        if v == right or near and places and abs(v - right) <= Fraction(1, 10 ** places):
+            return True
+    return False
+
+
+def _substep(prev, value):
+    """A plain number that is the value of one term of the link before: `= 1001000 + 13*600 = 7800` is 13*600, worked out beside the
+    sum (R1 writes `=` for the nearest piece)."""
+    if prev is None:
+        return False
+    for term in re.split(r'\s[+\-−]\s|(?<=[\d)])\s*[+\-−]\s*(?=[\d(])', prev[0]):
+        if _OPERATOR.search(term.lstrip('-−')):
+            v = evaluate(term.strip())
+            if v is not None and v == value:
+                return True
+    return False
 
 
 def _arrow_sum(base, text, value):
@@ -548,7 +629,7 @@ _TERM = re.compile(r'\s*(\d+)\s*(?:\\times|\\cdot|\*|×)\s*(\d+)\s*')
 
 def _counts_items(expr, wrote):
     """`3 \\times 10 + 5 \\times 1 = 8`: the count of the items (3 tens and 5 ones are 8 coins), not their value."""
-    terms = re.split(r'\s*\+\s*', expr.strip(' $()'))
+    terms = re.split(r'\s*\+\s*', re.sub(r'[()]', ' ', expr).strip(' $'))
     pairs = [_TERM.fullmatch(t) or re.fullmatch(r'\s*(\d+)\s*', t) for t in terms]   # `1 \times 25 + 7 = 8`: seven ones (#306)
     if len(terms) < 2 or not all(pairs) or not any(p.re is _TERM for p in pairs):
         return False
@@ -563,22 +644,48 @@ def _conditions(line, base_text):
     return len(set(said)) > 1
 
 
-_REPEATING = re.compile(r'(?<![\d.])(\d+)\.(\d*?)(\d)\3{1,}(?![\d])')
+# a decimal cut from a repeating one: thirds, sixths and ninths end in 33, 66 or 99 (`1.66`, `8.1666`), any other digit in a run of three
+# (`0.7777`); `84.3488` and `0.843488` are written to their places (#306, held-out)
+_REPEATING = re.compile(r'(?<![\d.])(\d+)\.(\d*?)(?=[369]{2}(?!\d)|(\d)\3\3)(\d)\4+(?![\d])')
+
+
+def _nice(expr):
+    """Each 2-place decimal near a fraction of denominator 3, 6, 7, 9, 11 or 12 replaced by it: `1.33`, `1.67` are 4/3 and 5/3, rounded."""
+    def one(m):
+        x = Fraction(m.group())
+        for q in (3, 6, 7, 9, 11, 12):
+            f = Fraction(round(x * q), q)
+            if f != x and abs(f - x) <= Fraction(1, 200):
+                return f'({f})'
+        return m.group()
+    return re.sub(r'(?<![\d.])\d+\.\d{2}(?![\d])', one, expr)
 
 
 def _repeating_matches(expr, wrote, text, op):
     """`1563 - 8.1666 = 1554.8333`: 8.1666 is 8.1666..., cut; with it read as repeating the written value is right."""
+    def exact(m):
+        whole, head, digit = m.group(1), m.group(2), m.group(4)
+        return f'({Fraction(whole + "." + head if head else whole) + Fraction(int(digit), 9 * 10 ** len(head))})'
+    nice = _nice(expr)
+    # a cut repeating decimal is a short one: `42.66`, `1.33`, `8.1666`; `0.843488` or `1.36664166` are written to their places
+    cut_text = any(len(m.group(0).split('.', 1)[1]) <= 4 for m in _REPEATING.finditer(text))
+    if nice != expr or cut_text:   # `(0-1)/(1.33-1.67) = -1/-0.33 = 3`, `128/3 - 16 = 42.66 - 16` (#306, held-out)
+        a, b = evaluate(nice), evaluate(_REPEATING.sub(exact, text))
+        # within the places of a plain number written, or 0.5 % of an expression: an absolute half unit per decimal was 50 % of 0.01
+        tol = max(_tolerance(text, op), _unit(text) or 0) if _PLAIN.fullmatch(text.strip()) else abs(a or 0) / 200
+        if a is not None and b is not None and abs(a - b) <= tol:
+            return True
     if not _REPEATING.search(expr):
         return False
 
     def exact(m):
-        whole, head, digit = m.group(1), m.group(2), m.group(3)
+        whole, head, digit = m.group(1), m.group(2), m.group(4)
         return f'({Fraction(whole + "." + head if head else whole) + Fraction(int(digit), 9 * 10 ** len(head))})'
     value = evaluate(_REPEATING.sub(exact, expr))
     return value is not None and abs(value - wrote) <= max(_tolerance(text, op), _unit(text) or 0) + _decimals_slack(text, False)
 
 
-def wrong_relations(line, moduli=()):
+def wrong_relations(line, moduli=(), custom_ops=()):
     """[(expression, what was written, the right value)] for each relation on the line whose sides differ: `=` chains (each part against the
     first: `= 189 + 17 = 196` is a wrong rewrite of 196), \\approx and ≈ (to the places written), arrows (`7+3+5 \\to 15`), and congruences
     (`2016 \\equiv 16 \\pmod{1000}`). Not wrong: a long division's quotient digit (`13 \\div 2 = 6` remainder 1), rounding or cutting to the
@@ -586,6 +693,15 @@ def wrong_relations(line, moduli=()):
     statements on one line (`$x = 3$, $y = 5$`). A relation is checked only when one side computes something."""
     if re.search(r'borrow|carry', line, re.I):
         return []
+    division = re.search(r'(\d+)\s*(?:÷|/|\\div)\s*(\d+)\s*=\s*\d+\s*(?:\*|×|\\times|\\cdot)\s*(\d+)', line)
+    if division and division.group(2) == division.group(3):
+        return []   # `115542 ÷ 21609 = 5*21609 = 108045, remainder 7497`: a long division's notes, the product beside the quotient (#306)
+    if '$' not in line and '\\' not in line and re.search(r'\d\.[A-Za-z]', line):
+        return []   # `A=27:729.7*2*9=126.27-1=26.No.`: periods glued to the numbers, `729.` and `7` read as 729.7 (#306, R1)
+    if any(op in line for op in custom_ops):
+        return []   # `5 * (3 * 1) = 5 - (3 - 1)`: an operation the problem defined, written with `*` (#306, held-out)
+    if re.search(r'\b(?:units|ones|tens|hundreds|thousands)\s*(?:digit|place|column)?\s*:|10\s*\^\s*\{?\s*-?\d+\s*\}?\s*:', line, re.I):
+        return []   # `Tens: $3 + 8 + 4 + 6 + 2 + 3 + 2 = 30$`: one column of a sum, its carry added in the head (lb1-base livebench-88407ca2)
     moduli = set(moduli)
     if re.search(r'\bparity\b|\b(?:even|odd)\b', line, re.I):
         moduli.add(2)   # `The parity is $1 + 1 = 0$ (even)` (#306)
@@ -610,20 +726,33 @@ def wrong_relations(line, moduli=()):
     base = expression_before(line[:marks[0].start()])
     origin = base   # the chain's first expression, kept when an approximate chain moves its base on
     prev = None   # the last link that read: a chain that rounds as it goes is checked against it too
+    running = False   # this chain is a running total: its links are steps, not rewrites of the base
+    # a line with no LaTeX: R1 and QwQ write `=` for the nearest piece (`13*77600=1001000 + 13*600=7800 = 1008800`, `(1 -1.99 +1)=0.01/(...)`),
+    # so past its first link a plain chain says nothing checkable, and a value the line writes anyway needs no correction (#306)
+    plain = '$' not in line and '\\' not in line
+    links = 0   # links read since the base was set
+    clean = True   # every link compared so far on this chain was right: a plain chain that stays right can still be checked
     rough = False   # the chain has said \approx: its later `=` parts are approximate too
     for n, mark in enumerate(marks):
         end = marks[n + 1].start() if n + 1 < len(marks) else len(line)
         rough = rough or mark.group(1) in ('\\approx', '≈')
         got = _value_after(line[mark.end():end])
         if got is None:
-            base, rough = expression_before(line[:end]), False
+            base, rough, running, links, clean = expression_before(line[:end]), False, False, 0, True
             continue
         text, value, rest = got
+        compared = base is not None   # a link that sets the base is no link of the chain yet
         first = _PLAIN.match(text.lstrip('-−'))
+        if base is not None and (_partial(base[0], text) or prev is not None and _partial(prev[0], text)):
+            running = True   # `17 + 78 + 85 = 17 + 78 = 95; 95 + 85 = 180`: a running total, each link a step of it, not the whole (#306, R1)
+        # `= 1000 + 1)^4`: a bracket the model left open; `17*417=7, 089`: a thousands separator with a space after it
+        broken = rest.startswith(')') and text.count('(') <= text.count(')') or bool(
+            re.match(r',\s?\d{3}(?![\d^*=+\-/×.])', rest) and value.denominator == 1 and abs(value) < 1000 and not _OPERATOR.search(text))
         if base is None:
             base = (text, value)
-        if origin is None:
-            origin = base
+            origin = origin or base
+        elif running or broken or plain and links >= 1 and not clean:
+            pass
         elif _LONE.fullmatch(base[0].strip()) and _OPERATOR.search(text.lstrip('-−')) and not _LONE.fullmatch(text.strip()) \
                 and not _SCIENTIFIC.fullmatch(text.strip()):
             base = (text, value)   # `1/2 = \frac{(1/2)^2 - 3(1/2)}{...}`: f at x = 1/2, a substitution, not a claim that both are 1/2
@@ -636,7 +765,8 @@ def wrong_relations(line, moduli=()):
         elif _counts_items(base[0], value) or _COUNT_NOUN.match(rest) or _repeating_matches(base[0], value, text, mark.group(1)) \
                 or _conditions(line, base[0]):
             pass   # `3 \times 10 + 5 \times 1 = 8` coins; `1563 - 8.1666 = 1554.8333` with 8.1666... (#306)
-        elif _OPERATOR.search(text.lstrip('-−')) and first and Fraction(first.group().replace(',', '')) == abs(base[1]):
+        elif _OPERATOR.search(text.lstrip('-−')) and first and abs(Fraction(first.group().replace(',', '')) - abs(base[1])) <= (
+                Fraction(1, 10 ** len(first.group(1))) if first.group(1) else 0):
             base = (text, value)   # `5 \times 2 = 10 + 1 = 11`: the value, then a carry added to it, a new step and not a wrong rewrite
         elif _estimate(base[0], text) or (_OPERATOR.search(text.lstrip('-−')) and not _SCIENTIFIC.fullmatch(text.strip())
                                            and _digits(text) < _digits(base[0]) and base[1] and abs(value - base[1]) <= abs(base[1]) / 500):
@@ -654,15 +784,34 @@ def wrong_relations(line, moduli=()):
             tolerance = _tolerance(text, '\\approx' if rough else mark.group(1)) + _decimals_slack(text, rough)
             if unit == 1 and right.denominator != 1:
                 tolerance = max(tolerance, Fraction(1))   # 130.98 - 22.88 = 108: rounded or cut to an integer
+            if not rough and mark.group(1) == '=' and right.denominator == 1 and _WHOLE_WORK.fullmatch(base[0].strip(' $')) \
+                    and off > abs(right) / 1000:
+                # whole numbers added, taken away and multiplied give a whole number: `14+7+...+1=40` for 41 is a slip, not 41 rounded to
+                # the tens (R1, #306 held-out). Rounding is a large number's last places: `505 \times 5148 = 2,600,000` (out/base)
+                tolerance = Fraction(0)
+            # `33[2/(1.2)^2 +1/(1.6)^2] = 33[1.3889 +0.3906]`: rounded decimals inside a product, the rounding times what multiplies them
+            tolerance += abs(value) * sum(Fraction(1, 10 ** len(d)) / abs(Fraction(w + '.' + d))
+                                          for w, d in re.findall(r'(?<![\d.])(\d+)\.(\d{2,})', text) if Fraction(w + '.' + d)) \
+                if _OPERATOR.search(text.lstrip('-−')) else 0
+            if rough:
+                # `(0.707)^3 \approx 0.3535` for (\sqrt{2}/2)^3, `0.381 \times (-1.618) \approx -0.618`: the inputs are rounded, each by up
+                # to a unit of its last place, and the error grows by their ratio to the value (#306, R1)
+                tolerance += abs(right) * sum(Fraction(1, 10 ** len(d)) / abs(Fraction(w + '.' + d)) * (int(e) if e else 1)
+                                              for w, d, e in re.findall(r'(?<![\d.])(\d+)\.(\d{2,})\)?(?:\^\{?(\d)\}?)?', base[0])
+                                              if Fraction(w + '.' + d))
             if rough and _OPERATOR.search(text.lstrip('-−')) and not _SCIENTIFIC.fullmatch(text.strip()):
                 tolerance = max(tolerance, abs(right) / 10)   # `(39/2)^2 / 8 \approx 19^2 / 8`: an estimate on rounded numbers (#306)
             modular = right.denominator == value.denominator == 1 and any((right - value) % m == 0 for m in moduli)
             # one column of a written sum or difference: `0-4=6` borrows, `7+5=2` carries; a digit that is the value mod 10 (#306)
             column = right.denominator == 1 and value.denominator == 1 and 0 <= value <= 9 and (right - value) % 10 == 0 \
-                and re.fullmatch(r'\s*\d{1,2}\s*[-+−]\s*\d\s*', base[0]) is not None
+                and re.fullmatch(r'\s*\d{1,2}(?:\s*[-+−]\s*\d{1,2}){1,2}\s*', base[0]) is not None
             # in work mod m a fraction is a product by an inverse: `$1/2 = 3$` is 2^{-1} = 3 mod 5 (stdmath-d6e306c4, found by sim_replay)
             inverse = bool(moduli) and right.denominator != 1 and simple_quotient(base[0]) and re.fullmatch(r'-?\d+', text.strip()) is not None
-            modular = modular or column or inverse
+            # `2*3=6 mod5=1`: the link reduces the value mod m itself
+            reduced = re.search(r'(?:\\bmod|\\pmod\s*\{?|\bmod)\s*(\d+)', text)
+            reduces = bool(reduced) and right.denominator == value.denominator == 1 and int(reduced.group(1)) > 0 \
+                and (right - value) % int(reduced.group(1)) == 0
+            modular = modular or column or inverse or reduces
             # a chain that rounds as it goes: `= 91.26 + 9.56 - 101 = 100.82 - 101`, each link within its places of the last (#306)
             stepped = prev is not None and _decimals_slack(text, rough) and abs(prev[1] - value) <= tolerance
             # `360^{\circ} \approx 6.28`: degrees turned into radians (#306)
@@ -673,7 +822,32 @@ def wrong_relations(line, moduli=()):
             # `14 \times 1.732 / 3 \approx 24.2 / 3 \approx 8.08`: an approximate chain goes on from its last approximation, but a
             # value nearer the first is no slip (#306)
             near_first = rough and origin is not None and abs(origin[1] - value) <= tolerance
-            if off > tolerance and not quotient and not cut and not modular and not stepped and not radians and not nought and not near_first:   # `12+3=15=2` mod 13
+            # the model wrote the right value later on the line: `8 + 4 = 4*4 = 16. 12≠16`, `3*2*4*7=3*2=6, 6*4=24, 24*7=168` (#306, R1)
+            stated = _stated_later(line, mark.end() + len(text), right) or (
+                _substep(prev or base, value) and _stated_anywhere(line[mark.end() + len(text):], right))
+            # `(50 +25 +20)/3 ≈31.666%`: a percent of the same number
+            pc = re.fullmatch(r'(-?\d+(?:\.(\d+))?)\s*\\?%', text.strip())
+            percent = rest.lstrip().startswith(('%', '\\%')) and abs(value * 100 - right) <= tolerance * 100 or bool(pc) and abs(
+                Fraction(pc.group(1)) - right) <= Fraction(1, 10 ** len(pc.group(2) or ''))
+            if plain and _stated_anywhere(line[mark.end():], right, near=True):   # in the link too: `= 15,376,000,000 +496,004`
+                stated = True
+            # `- (-59)*167 = 59*167`: a minus opening the line, read as a list's bullet, is the sign the value differs by
+            head = line[:line.find(base[0])] if base[0] in line else ''
+            bullet_sign = value == -right and re.fullmatch(r'\s*[-−]\s*', head) is not None
+            stated = stated or bullet_sign
+            # `A=24:576.5*7*6=210.`: R1 glued a sentence's period to 576, and `5*7*6` read as `.5*7*6`
+            glued = plain and re.search(r'(?<![\d.])\d{3,}\.\d(?!\d)', base[0]) is not None and value.denominator == 1 and value                 and abs(right / value) > 10
+            stated = stated or glued
+            if plain:
+                # `18 girls (12+6)=32`: the bracket annotates a word and `=` takes the sum before it; `3 + 2^{5}=32, +1^4=1`: `=` takes
+                # the nearest term (#306, R1)
+                at = line.find(base[0])
+                annotated = base[0].lstrip().startswith('(') and at > 0 and re.search(r'[A-Za-z]\s*$', line[:at]) is not None
+                nearest = _last_term(base[0]) == value
+                stated = stated or annotated or nearest
+            clean = clean and not off > tolerance
+            if off > tolerance and not quotient and not cut and not modular and not stepped and not radians and not nought and not near_first \
+                    and not stated and not percent:   # `12+3=15=2` mod 13
                 m, sci = _PLAIN.fullmatch(text), _SCIENTIFIC.fullmatch(text)
                 places = len(m.group(1) or '') if m else 0
                 said = spelled(right)
@@ -692,12 +866,13 @@ def wrong_relations(line, moduli=()):
         # the last link that was right: one that follows a wrong link is not right by agreeing with it (`126 \times 70 / 19.6` after the
         # wrong `126 \times 700 / 196`)
         prev = (text, value) if not wrong or wrong[-1][1] != text else None
+        links += compared
         if rough:
             base = (text, value)   # an approximate chain goes on from its last approximation: `\approx 6.89 - 4 = 2.89`
         if rest.strip(' $.,;:') and not _RELATION.match(rest.strip()):
             # a new statement: `$x = 3$, $y = 5$` is two, not a chain. Its own expression is checked: `12 * 13 = 156 and 7 * 8 = 54` left the
             # second unread when the base was dropped (found by tools/igc/coverage.py's first test)
-            base, rough = _statement_start(line[:end]), False
+            base, rough, running, links, clean = _statement_start(line[:end]), False, False, 0, True
     return wrong
 
 
