@@ -17,7 +17,7 @@ _SPACE = re.compile(r'\\[,;:! ]|\\q?quad\b|~')
 _SIZES = re.compile(r'\\(?:left|right|[bB]ig{1,2}[lr]?|middle)\s*')
 _SUPERSCRIPT = {'⁰': '0', '¹': '1', '²': '2', '³': '3', '⁴': '4', '⁵': '5', '⁶': '6', '⁷': '7', '⁸': '8', '⁹': '9'}
 _WORDS = {r'\times': MUL, r'\cdot': MUL, r'\ast': MUL, r'\div': DIV, r'\frac': 'frac', r'\dfrac': 'frac', r'\tfrac': 'frac', r'\sqrt': 'sqrt',
-          r'\%': '%', r'\{': '(', r'\}': ')', r'\lbrace': '(', r'\rbrace': ')', r'\lparen': '(', r'\rparen': ')',
+          r'\%': '%', r'\lparen': '(', r'\rparen': ')',   # not `\{ \}`: a set (`\{2\} \times \{2\}` got 4 put in, #306)
           r'\bmod': 'mod', r'\mod': 'mod', r'\pmod': 'pmod', r'\lvert': 'abs', r'\rvert': 'abs', r'\vert': 'abs',
           r'\lfloor': 'lfloor', r'\rfloor': 'rfloor', r'\lceil': 'lceil', r'\rceil': 'rceil', r'\binom': 'binom', r'\dbinom': 'binom',
           r'\tbinom': 'binom'}
@@ -80,6 +80,7 @@ def _tokens(text):
 class _Parser:
     def __init__(self, tokens, spaced=frozenset()):
         self.t, self.i, self.spaced = tokens, 0, spaced
+        self.loose = None   # the last term had a spaced product or quotient
 
     def peek(self):
         return self.t[self.i] if self.i < len(self.t) else (None, None)
@@ -93,17 +94,25 @@ class _Parser:
 
     def expr(self):
         value = self.term()
+        loose = self.loose   # a spaced product or quotient in the first term
         while self.peek()[1] in ('+', '-'):
+            if loose is not None and not (self.i in self.spaced or self.i + 1 in self.spaced):
+                # `3+1 \times 1+1 = 8` meant (3+1)(1+1): a tight sum around a spaced product groups against the grammar (#306)
+                raise _NotExact('the spacing groups a sum inside a product')
             op = self.take()[1]
             right = self.term()
+            loose = loose if self.loose is None else self.loose
             value = value + right if op == '+' else value - right
         return value
 
     def term(self):
         value = self.unary()
         divided = None   # how the last division in this term was spaced
+        loose = None
         while True:
             kind, v = self.peek()
+            if v in (MUL, DIV) and (self.i in self.spaced or self.i + 1 in self.spaced):
+                loose = True
             if v in (MUL, DIV, 'mod'):
                 if v == DIV:
                     gap = self.i in self.spaced or self.i + 1 in self.spaced
@@ -131,12 +140,16 @@ class _Parser:
             elif kind == 'num' and self.i and self.t[self.i - 1][1] == ')':
                 value = value * self.unary()   # (2)3
             else:
+                self.loose = loose   # read by expr(), whose terms these are; a bracket inside set its own and is done
                 return value
             self.bound(value)
 
     def unary(self):
         if self.peek()[1] in ('-', '+'):
+            opened = self.i and self.t[self.i - 1][1] == '('
             sign = -1 if self.take()[1] == '-' else 1
+            if sign < 0 and opened and self.peek()[0] == 'num' and self.i + 1 < len(self.t) and self.t[self.i + 1][1] == POW:
+                raise _NotExact('(-66^2): -(66^2) by the grammar, (-66)^2 as written for m = -66')   # #306
             return sign * self.unary()
         return self.power()
 

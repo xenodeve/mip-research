@@ -206,7 +206,54 @@ def inline_found(before, whole=False, use_mathbackend=False):
         return None
     if said == re.sub(r'[\s()]', '', expr):
         return None   # nothing new, and `= 15/13 = 15/13 = ...` looped until stuck
+    if _meant_otherwise(expr, value, before):
+        return None
     return expr, said
+
+
+_LONG_DIVISION = re.compile(r'\brem\b|remainder|bring(?:s|ing)? down|long division|\bquotient\b|\bcarry\b|\bborrow|\bdigit|\bcolumn', re.I)
+_MOD_WORK = re.compile(r'\\equiv|≡|\\pmod|\\bmod|\bmod(?:ulo)?\b', re.I)
+_CUT_REPEATING = re.compile(r'(?<![\d.])\d+\.\d*?(?:(\d)\1{2,}|33|66)(?!\d)')
+_COLUMN = re.compile(r'\d{3,}\s*[-+−]\s*\d{3,}\s*\$?\s*[:.]?\s*\n')   # a written sum or difference set out on a line of its own
+_PLACE = re.compile(r'\b(?:units|ones|tens|hundreds|thousands)\s*(?:digit|place|column)?\s*:', re.I)
+_COINS = re.compile(r'\b(?:coins?|notes?|bills?|stamps?|cents?)\b', re.I)
+_AS_COUNT = re.compile(r'\s*\d+\s*(?:\\times|\\cdot|\*|×)\s*\d+(?:\s*\+\s*\d+(?:\s*(?:\\times|\\cdot|\*|×)\s*\d+)?)*\s*')
+
+
+def _meant_otherwise(expr, value, before):
+    """The value is right for the text but not for what the model is doing there (#306, the inline audit over seven stored control arms):
+    - a long division's step wants its digit: `1 \\div 2 = 0` (rem 1), `5 \\div 2 = 2` with a remainder of 1, not 0.5 or 2.5;
+    - a column of a subtraction borrows: `0-9 = 1` (borrow from 7), not -9;
+    - in work mod m a quotient is a product by an inverse: `3/2 = 3 \\cdot 3 = 9 \\equiv 4`, not 1.5;
+    - a cut repeating decimal means its fraction: `(0-1)/(3-1.66) = -1 / (4/3)`, not -50/67."""
+    from fractions import Fraction as _F
+    from tools.igc.mathexpr import simple_quotient, moduli_in
+    q = value if isinstance(value, _F) else None
+    recent = before[-600:]
+    line = before.rsplit('\n', 1)[-1]
+    if q is not None and q.denominator != 1 and simple_quotient(expr) and _LONG_DIVISION.search(recent):
+        return True
+    # one column of a written sum or difference: `$106029 - 76230$.` on a line above, then `$5-9=6$ (borrow)`, `$12 - 2 = 0$`. A column
+    # gives a digit; a value under 0 or past 9 is a borrow or a carry the model is about to write
+    column = _LONG_DIVISION.search(recent) or _COLUMN.search(before[-400:])
+    if q is not None and column and re.fullmatch(r'\s*\d{1,2}\s*[-−+]\s*\d{1,2}\s*', expr) and not 0 <= q <= 9:
+        return True
+    if _PLACE.search(line):
+        return True   # `Tens: $3 + 8 + 4 + 6 + 2 + 3 + 2 = 30$`: a column of a sum, its carry added in the head
+    mod = _MOD_WORK.search(before[-1500:])
+    if mod and (q is None or q.denominator != 1):
+        return True
+    if mod and q is not None:
+        # `$6^3 = 6 \cdot (-3) = -18 \equiv 8$`, `$(2^4)^2 = 3^2$`: in work mod m `=` is often `\equiv`; a value past the modulus is not the
+        # step the model takes
+        ms = moduli_in(before[-1500:])
+        if q < 0 or (ms and q >= min(ms)) or (not ms and abs(q) > 100):
+            return True
+    if _COINS.search(recent) and _AS_COUNT.fullmatch(expr.strip(' $')):
+        return True   # `$f(25) = 2 \times 10 + 5 \times 1 = 7$` coins: a count, not the value 25
+    if re.fullmatch(r'[^()]*[+\-−][^()]*\s/\s*\d+\s*', expr):
+        return True   # `400 - 1500 + 1080 / 27 = -120/27`: the numerators over 27, the brackets left out
+    return _CUT_REPEATING.search(expr) is not None
 
 
 def _reduces(expr, before=''):

@@ -90,23 +90,12 @@ class Values(unittest.TestCase):
         self.check([(r'\prod_{k=1}^{60} k', None), (r'\sqrt{10^{30}+1}', None)])
 
 
-class Definitions(unittest.TestCase):
-    def test_a_function_the_text_defined(self):
-        fs = x.definitions(r'Let $f(x) = x^2 + 3x - 1$. We also have $g(t) = 2t$, and solving $h(x) = 0$ gives')
-        self.assertEqual(sorted(fs), ['f', 'g'])   # h(x) = 0 is an equation
-        self.assertEqual(val('f(3)', fs), '17')
-        self.assertEqual(val('f(2) + g(5)', fs), '19')
-        self.assertIsNone(val('h(1)', fs))
-        self.assertEqual(x.definitions(r'Let $g(y) = y^3 - 3y + 1$. The roots of $g(y) = y$ are'), {})   # a fixed point voids g
-
-    def test_one_piece_of_a_function_is_not_the_function(self):
-        # livebench-652451e2 wrote `F(u) = 1-4u` for one interval and read F(1) = 1 from another; the bridge put in -3 there
-        self.assertEqual(x.definitions(r'$u \in [0, 1/4]$: $F(u) = 1-4u$. Then'), {})
-        self.assertEqual(x.definitions(r'$w(k) = 2^{k/2 - 1}$ for $k \ge 2$, $w(0)=1$'), {})
-
-    def test_a_definition_far_back_is_from_another_case(self):
-        text = r'$f(x) = x^3 + 1$.' + '\n' + 'q' * (x.WINDOW + 10) + '\n'
-        self.assertEqual(x.definitions(text), {})
+class NoDefinitions(unittest.TestCase):
+    def test_a_function_the_text_defined_is_not_read(self):
+        # #306: over the stored control answers the latest `f(x) = ...` put a wrong value in at 11 places (a redefined f, h defined
+        # by pieces), with no rule that told them from the right ones; a call is no value
+        self.assertIsNone(val('f(3)'))
+        self.assertIsNone(val('2f(1)'))
 
 
 class Bridge(unittest.TestCase):
@@ -156,14 +145,26 @@ class Bridge(unittest.TestCase):
         self.assertIsNone(self.found(r'$68 \div 58'))                   # dm div_big: a long division wants the digit 1
         self.assertIsNone(self.found('the mean is 8.33 and\n$100/12'))  # a text in decimals wants 8.33
         self.assertIsNone(self.found(r'$-192 + 6\sqrt{5}'))             # the same terms in another order
-        fs = 'Let $f(x) = x + 2$.\n'
-        self.assertEqual(self.found(fs + '$f(1)^2')[1], '9')            # (f(1))^2, not f(1^2)
-        self.assertEqual(self.found(fs + '$2f(1)')[1], '6')
+        self.assertIsNone(self.found('Let $f(x) = x + 2$.\n$f(1)^2'))     # a call is no value (#306)
+        self.assertIsNone(self.found('$3+1 \\times 1+1'))               # (3+1)(1+1) by its spaces
+        self.assertIsNone(self.found('$12(-66^2)'))                     # 12(-66)^2 as written for m = -66
+        self.assertIsNone(self.found('$-1/4 / 1/2'))                    # (-1/4)/(1/2) by its spaces
+        self.assertIsNone(self.found('$400/27 - 500/9 + 1080/27 = 400 - 1500 + 1080 / 27'))   # the numerators over 27
 
-    def test_a_function_call_needs_its_definition(self):
+    def test_what_the_model_is_doing_there(self):
+        # #306: the value is right for the text, not for the step: a long division's digit, a borrow, mod m, coins, a cut 5/3
+        self.assertIsNone(self.found('Bring down the 1. The remainder is 1.\n$1 \\div 2'))
+        self.assertIsNone(self.found('    *   $38115 - 29799$.\n    *   $5-9'))
+        self.assertIsNone(self.found('Work $\\pmod{13}$.\n$(2^4)^2'))
+        self.assertIsNone(self.found('In $\\mathbb{Z}_5$, $2^{-1} \\equiv 3$. So\n$3/2'))
+        self.assertIsNone(self.found('Using 10 cent and 1 cent coins: $2 \\times 10 + 5 \\times 1'))
+        self.assertIsNone(self.found('Tens: $3 + 8 + 4 + 6 + 2 + 3 + 2'))
+        self.assertIsNone(self.found('Slope $= (0-1)/(3-1.66)'))
+        self.assertEqual(self.found('$2 \\times 16')[1], '32')        # none of that around it: the value goes in
+
+    def test_a_function_call_is_not_read(self):
         text = 'We have $f(y) = 9y^4 - 18y^3 - 143y^2 - 84y + 96$.\n$f(2)'
-        self.assertEqual(self.found(text)[1], '-644')   # contest-4d9e52e5 wrote -744
-        self.assertIsNone(self.found('$f(2)'))
+        self.assertIsNone(self.found(text))   # #306: a redefined or piecewise f was misread at 11 places
 
 
 class GatedCalls(unittest.TestCase):

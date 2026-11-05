@@ -21,7 +21,9 @@ class Evaluate(unittest.TestCase):
     def test_brackets_of_every_kind(self):
         self.assertEqual(evaluate('(-1*-638*(-7)/(-7))/(((-62)/(-279))/(((-170)/3060)/(1/(-2))))'), 319)
         self.assertEqual(evaluate('\\left( 2 + 3 \\right) \\times [4 - 1]'), 15)
-        self.assertEqual(evaluate('\\bigl(1 + 1\\bigr) \\cdot \\{2\\}'), 4)
+        self.assertEqual(evaluate('\\bigl(1 + 1\\bigr) \\cdot 2'), 4)
+        # `\{ \}` is a set: over the stored control answers its one inline use was `\{2\} \times \{2\}`, a Cartesian product (#306)
+        self.assertIsNone(evaluate('\\{2\\} \\times \\{2\\}'))
         self.assertEqual(evaluate('{2 + 3}^{2}'), 25)
 
     def test_numbers_however_written(self):

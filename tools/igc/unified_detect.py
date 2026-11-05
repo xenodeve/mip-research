@@ -33,7 +33,7 @@ Implements the two core safeguards of `docs/plans/2026-11-05-mip-unified-detecti
    - Extends `mathexpr.py` with calls into the 6-module `mathbackend` (`\gcd`, `\lcm`, `\varphi`, `totient`, `comb`, `perm`,
      Stirling/Catalan/Bell/derangements, a modular inverse, one determinant; `C(n,k)`, `P(n,k)`, `\sigma`, `\tau`, `\phi`, `\mu` only
      where the text before names them) and with `exactexpr.py`: square roots kept as roots, trig at exact angles, logs that come out,
-     sums and products over a range, `a^b mod m`, a product with no sign, and a one-variable function the text defined.
+     sums and products over a range, `a^b mod m`, a product with no sign.
    - Measured against what the model wrote next (2026-11-06). The 48 control traces of a100_262k, where the rules were made (27,627
      `=`): a value at 6,032 against mathexpr's 5,197, none of those lost; of the 835 new, 746 are the model's next value, 78 have no
      value after, 11 differ (4 slips of the model the value corrects, 6 another form or a decimal it wanted, 1 wrong). Six control arms
@@ -290,13 +290,12 @@ def _rewrite_calls(s: str, context: str, line: str) -> Optional[str]:
 _DEGREE_TEXT = re.compile(r'\^\s*\{?\s*\\circ|°|\bdegrees?\b')
 
 
-def evaluate_exact(text: str, context: str = '', functions: Optional[dict] = None):
+def evaluate_exact(text: str, context: str = ''):
     """The exact value of `text`: a Fraction, an `exactexpr.Value` when it holds square roots, or None (never a guess).
 
     In order: a modular inverse `a^{-1} \\pmod{m}`; tools.igc.mathexpr; one determinant; number-function calls (`gcd`, `\\binom`, `comb`,
     and `C(n, k)`, `\\sigma(n)` ... only where `context`, the text before, says they are number functions) put in as values; then
-    tools.igc.exactexpr for roots, exact trig and logs, sums and products over a range, `a^b mod m`, a product with no sign, and the
-    one-variable functions in `functions` (`exactexpr.definitions` of the text before)."""
+    tools.igc.exactexpr for roots, exact trig and logs, sums and products over a range, `a^b mod m`, a product with no sign."""
     s = text.strip().strip('$').strip()
     if not s:
         return None
@@ -348,7 +347,7 @@ def evaluate_exact(text: str, context: str = '', functions: Optional[dict] = Non
             return val
     # `\tan(45) = 1`, `\cot 135`: a text that works in degrees writes some angles with no sign (livebench-c3cc0058, -41e8ed05)
     degrees = bool(_DEGREE_TEXT.search(context[-3000:]) or _DEGREE_TEXT.search(s))
-    v = exactexpr.evaluate(rewritten, functions, degrees=degrees)
+    v = exactexpr.evaluate(rewritten, degrees=degrees)
     if v is None:
         return None
     q = v.rational()
@@ -463,17 +462,14 @@ def expression_before_exact(text: str):
     if not _EXACT_HINT.search(line):
         return got
     base = text[:len(text) - len(text.rsplit('\n', 1)[-1])]   # the text before this line
-    functions = None
     for i in range(stop):
         if not line[i].strip() or line[i] in '$=,;:' or _start_refused(line, i):
             continue
         cand = line[i:].strip().strip('$').strip()
         if not cand or '$' in cand:
             continue   # `$2$ $\sqrt{8}$` is two values, not a product
-        if functions is None:
-            functions = exactexpr.definitions(text)
         try:
-            v = evaluate_exact(cand, (base[-6000:] + line[:i]), functions)
+            v = evaluate_exact(cand, (base[-6000:] + line[:i]))
         except RecursionError:
             v = None
         if v is None:

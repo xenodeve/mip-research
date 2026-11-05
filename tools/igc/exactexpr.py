@@ -1,18 +1,19 @@
 """Exact values a model writes past what tools.igc.mathexpr reads: square roots kept as roots, trig at exact angles, logs that come out,
-sums and products over a range, `a^b mod m`, a function the text defined, a product written with no sign, `\\binom` alone.
+sums and products over a range, `a^b mod m`, a product written with no sign, `\\binom` alone. Not a function the text defined: a model
+redefines f and defines it by pieces, and reading its latest `f(x) = ...` put a wrong value in at 11 places of the stored control
+answers (#306), with no rule that told them from the right ones.
 
 The model works these out by hand: `\\sqrt{1674} = 3\\sqrt{186}`, `\\sin 30^\\circ = 1/2`, `\\log_2 8 = 3`, `\\sum_{k=1}^{10} k^2 = 385`,
-`4(117) = 468`, `\\binom{10}{4} = 210`, `f(3) = ...`. Over the 48 control traces of a100_262k the bridge read none of them (2026-11-06).
+`4(117) = 468`, `\\binom{10}{4} = 210`. Over the 48 control traces of a100_262k the bridge read none of them (2026-11-06).
 
 A value is exact or there is none. A value is an element of Q(sqrt 2, sqrt 3, ...): a rational combination of square roots of squarefree
 integers, which spell one way only, so two values are equal exactly when their spellings are. Refused: a symbol nothing binds, a word,
 pi outside an angle, a root of a root, a cube root that does not come out, a decimal whose answer is irrational (the model wants a decimal
 there, not `\\frac{\\sqrt{3109666}}{100}`), a value past mathexpr.LIMIT, and anything slower than its worth.
 
-evaluate(text, functions=None) -> Value | None      the value of the whole text
+evaluate(text, degrees=False) -> Value | None      the value of the whole text
 Value.rational() -> Fraction | None                 the value when it is rational
 spell(value, latex=True) -> str                     `3\\sqrt{186}`, `\\frac{\\sqrt{6} - \\sqrt{2}}{4}`; or `3*sqrt(186)` in plain text
-definitions(text) -> {name: (param, tree)}          the one-variable functions the text defined (`f(x) = x^2 + 1`), the latest of each
 """
 import functools
 import math
@@ -331,7 +332,7 @@ _COMMANDS = {r'\times': ('op', '*'), r'\cdot': ('op', '*'), r'\ast': ('op', '*')
              r'\dfrac': ('frac',), r'\tfrac': ('frac',), r'\sqrt': ('sqrt',), r'\binom': ('binom',), r'\dbinom': ('binom',),
              r'\tbinom': ('binom',), r'\pi': ('pi',), r'\bmod': ('op', 'mod'), r'\mod': ('op', 'mod'), r'\pmod': ('pmod',),
              r'\lfloor': ('(', 'floor'), r'\rfloor': (')', 'floor'), r'\lceil': ('(', 'ceil'), r'\rceil': (')', 'ceil'),
-             r'\{': ('(', '{'), r'\}': (')', '{'), r'\lbrace': ('(', '{'), r'\rbrace': (')', '{'), r'\%': ('op', '%'),
+             r'\%': ('op', '%'),   # not `\{ \}`: a set, `\{2\} \times \{2\}` is no 4 (#306)
              r'\sum': ('big', 'sum'), r'\prod': ('big', 'prod'), r'\log': ('log', None), r'\ln': ('log', 'e'), r'\lg': ('log', 'lg'),
              r'\lvert': ('bar',), r'\rvert': ('bar',), r'\vert': ('bar',), r'\mid': ('bar',), r'\overline': ('overline',)}
 _COMMANDS.update({'\\' + t: ('trig', t) for t in _TRIG})
@@ -398,8 +399,9 @@ def _tokens(text):
 
 
 class _Parser:
-    def __init__(self, tokens, functions=()):
-        self.t, self.i, self.functions = tokens, 0, functions
+    def __init__(self, tokens):
+        self.t, self.i = tokens, 0
+        self.loose = False   # the last term had a spaced product or quotient
 
     def peek(self, k=0):
         j = self.i + k
@@ -416,11 +418,19 @@ class _Parser:
         tok = self.peek()
         return tok[0] == kind and (value is None or tok[1] == value)
 
+    def _gap(self):
+        """The operator ahead has a space on either side."""
+        return bool(self.peek()[-1]) or bool(self.peek(1)[-1])
+
     def expr(self):
         node = self.term()
+        loose = self.loose
         while self.at('op', '+') or self.at('op', '-'):
+            if loose and not self._gap():
+                raise NotExact('the spacing groups a sum inside a product')   # `3+1 \times 1+1` meant (3+1)(1+1) (#306)
             op = self.take()[1]
             node = ('+' if op == '+' else '-', node, self.term())
+            loose = loose or self.loose
         if self.at('pmod'):   # `2016 + 5 \pmod{1000}`: the whole of what comes before
             self.take()
             node = ('mod', node, self.group())
@@ -434,9 +444,17 @@ class _Parser:
     def term(self):
         node = self.unary()
         divided = False
+        slash_gap = None   # how the last `/` of this term was spaced
+        loose = False
         while True:
             tok = self.peek()
             if tok[0] == 'op' and tok[1] in ('*', '/', 'mod'):
+                gap = self._gap()
+                loose = loose or (gap and tok[1] != 'mod')
+                if tok[1] == '/':
+                    if slash_gap is not None and gap != slash_gap:
+                        raise NotExact('a/b / c/d: the spacing groups it')   # `-1/4 / 1/2` meant (-1/4)/(1/2) (#306)
+                    slash_gap = gap
                 self.take()
                 divided = divided or tok[1] == '/'
                 node = (tok[1], node, self.unary())
@@ -446,6 +464,7 @@ class _Parser:
                     raise NotExact('a/bc: a product after a division is read two ways')
                 node = ('*', node, self.unary())
                 continue
+            self.loose = loose
             return node
 
     def implicit_ok(self, left):
@@ -477,7 +496,10 @@ class _Parser:
 
     def unary(self):
         if self.at('op', '-') or self.at('op', '+'):
+            opened = self.i and self.t[self.i - 1][0] == '(' and self.t[self.i - 1][1] == '('
             sign = self.take()[1]
+            if sign == '-' and opened and self.at('num') and self.peek(1)[0] == '^':
+                raise NotExact('(-66^2) reads two ways')   # #306
             node = self.unary()
             return ('neg', node) if sign == '-' else node
         return self.power()
@@ -669,17 +691,12 @@ class _Parser:
             return ('big', tok[1], var, lo, hi, body)
         if kind == 'var':
             self.take()
-            if tok[1] in self.functions and self.at('(', '(') and not self.peek()[-1]:   # f(3), when the text defined f
-                self.take()
-                arg = self.expr()
-                self.take(')', '(')
-                return ('call', tok[1], arg)
             return ('var', tok[1])
         raise NotExact('expected a value, got ' + str(kind))
 
 
-def _parse(text, functions=()):
-    p = _Parser(_tokens(text), functions)
+def _parse(text):
+    p = _Parser(_tokens(text))
     if not p.t:
         raise NotExact('empty')
     node = p.expr()
@@ -689,8 +706,7 @@ def _parse(text, functions=()):
 
 
 class _Eval:
-    def __init__(self, functions, degrees=False):
-        self.functions = functions or {}
+    def __init__(self, degrees=False):
         self.degrees = degrees
         self.decimal = False
         self.irrational = False
@@ -712,10 +728,6 @@ class _Eval:
             if node[1] in env:
                 return env[node[1]]
             raise NotExact('a symbol: ' + node[1])
-        if k == 'call':
-            param, tree = self.functions[node[1]]
-            arg = self.ev(node[2], env, pi)
-            return self.ev(tree, {param: arg}, None)
         if k == 'pi':
             if pi is None:
                 raise NotExact('pi outside an angle')
@@ -838,66 +850,18 @@ def _has(node, kind):
     return any(_has(x, kind) for x in node[1:] if isinstance(x, tuple))
 
 
-def evaluate(text, functions=None, degrees=False):
+def evaluate(text, degrees=False):
     """The exact value of the whole text, or None. `degrees`: an angle with no unit is in degrees (`\\tan(45)`, `\\cot 135` in a text that
     works in degrees); without it only 0 has a unit-free value."""
     try:
-        tree = _parse(text, functions or {})
-        e = _Eval(functions, degrees)
+        tree = _parse(text)
+        e = _Eval(degrees)
         value = e.ev(tree, {})
         if e.decimal and value.rational() is None:
             return None   # `\sqrt{310.9666}`: the model wants a decimal
         return value
     except (NotExact, ValueError, ZeroDivisionError, OverflowError, RecursionError, KeyError, IndexError):
         return None
-
-
-_DEFINITION = re.compile(r'(?<![A-Za-z\\])([A-Za-z])\s*\(\s*([a-z])\s*\)\s*(?::=|=)\s*([^=$\n;]+?)(?=\s*(?:\$|\n|;|,\s|\.\s|\.$|\\quad|\\text|\\implies|\\Rightarrow|=|$))')
-
-
-WINDOW = 3000   # characters back: a definition further back is from another case of the work (livebench-ca697327 re-used f for another cubic)
-_DOMAIN = re.compile(r'\s*\$?\s*(?:,\s*)?(?:\\text\{\s*)?(?:for|if|when|where|on|with)\b|\s*\$?\s*(?:\\in|\\ge|\\le|\\geq|\\leq|<|>|≤|≥|\\quad\s*\(?\s*[a-z]\s*(?:\\ge|\\le|<|>))', re.I)
-
-_DOMAIN_BEFORE = re.compile(r'\\in\b|\\le|\\ge|[<>≤≥]|\b(?:if|for|when|case|on|interval|piece|region)\b', re.I)
-
-
-def definitions(text):
-    """{name: (param, tree)} for each `f(x) = <expression in x>` the text wrote, the latest of each. An expression in x only: `f(x) = 0` is an
-    equation to solve, not a definition, and one with another symbol in it has a value only with that symbol known."""
-    out = {}
-    for m in _DEFINITION.finditer(text, max(0, len(text) - WINDOW)):
-        name, param, body = m.group(1), m.group(2), m.group(3).strip()
-        if name == param:
-            continue
-        head = text[text.rfind('\n', 0, m.start()) + 1:m.start()]
-        if _DOMAIN.match(text, m.end()) or _DOMAIN_BEFORE.search(head):
-            out.pop(name, None)   # `F(u) = 1 - 4u` for `u \in [0, 1/4]`: one piece of a function, not the function
-            continue
-        try:
-            tree = _parse(body)
-        except (NotExact, ValueError, ZeroDivisionError, RecursionError, IndexError):
-            out.pop(name, None)   # a later definition we cannot read voids the earlier one: never call an old f
-            continue
-        names = _vars(tree)
-        if names != {param} or tree == ('var', param):   # `the roots of $g(y) = y$`: a fixed point to solve (stdmath-48fd3105)
-            out.pop(name, None)
-            continue
-        out[name] = (param, tree)
-    return out
-
-
-def _vars(node):
-    if not isinstance(node, tuple):
-        return set()
-    if node[0] == 'var':
-        return {node[1]}
-    if node[0] == 'big':
-        return (_vars(node[3]) | _vars(node[4]) | _vars(node[5])) - {node[2]}
-    out = set()
-    for x in node[1:]:
-        if isinstance(x, tuple):
-            out |= _vars(x)
-    return out
 
 
 # ---------------------------------------------------------------------------------------------------------------------------------
