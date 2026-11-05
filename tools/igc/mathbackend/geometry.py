@@ -50,6 +50,8 @@ def _q(x):
     if isinstance(x, float):
         raise BadInput('a float is not exact; pass an int, a Fraction or a string such as "1/3"')
     if isinstance(x, (Decimal, str)):
+        if isinstance(x, str) and (len(x) > 400 or len(x.lower().rpartition('e')[2].strip().lstrip('+-')) >= 4 and 'e' in x.lower()):
+            raise NotCovered('number string too long')   # Fraction('1e999999999') builds 10^999999999 and did not return in 240 s
         try:
             return Fraction(x)
         except (ValueError, ZeroDivisionError, ArithmeticError):
@@ -1880,9 +1882,10 @@ def disphenoid_inradius_from_edges_sq(a_sq, b_sq, c_sq):
     s_sq = t16_sq
     r_sq = 9 * v_sq / s_sq
     surd_r = Surd.sqrt(r_sq)
-    m = int(surd_r.q.numerator)
-    p = int(surd_r.q.denominator)
-    n = int(surd_r.d)
+    if surd_r.q:   # r = (m/p) * sqrt(n)
+        m, p, n = int(surd_r.q.numerator), int(surd_r.q.denominator), int(surd_r.d)
+    else:   # a rational inradius, r = m/p: read from q it gave m = 0 for r = 1 at (24, 24, 24)
+        m, p, n = int(surd_r.p.numerator), int(surd_r.p.denominator), 1
     return {
         'volume_sq': v_sq,
         'surface_area_sq': s_sq,
@@ -1904,6 +1907,11 @@ def tetrahedron_volume_from_edges_sq(d12_sq, d13_sq, d14_sq, d23_sq, d24_sq, d34
     for d in (d12, d13, d14, d23, d24, d34):
         if d <= 0:
             raise BadInput('edge squares must be positive')
+    # A positive Cayley-Menger determinant is not enough: (9, 1, 3, 3, 27, 8) has a face with sides 3, sqrt 3, sqrt 27 and got a volume.
+    # Each face must be a triangle: 16 * area^2 = 4xy - (x + y - z)^2 > 0 for its squared sides x, y, z.
+    for x, y, z in ((d12, d13, d23), (d12, d14, d24), (d13, d14, d34), (d23, d24, d34)):
+        if 4 * x * y - (x + y - z) ** 2 <= 0:
+            raise BadInput('a face is no triangle')
     cm = [
         [Fraction(0), Fraction(1), Fraction(1), Fraction(1), Fraction(1)],
         [Fraction(1), Fraction(0), d12, d13, d14],
@@ -1922,58 +1930,5 @@ def tetrahedron_volume_from_edges_sq(d12_sq, d13_sq, d14_sq, d23_sq, d24_sq, d34
     }
 
 
-@op('geometry.polar_triangle_chain', kind='polar geometry', bound='any size rational parameters')
-def polar_triangle_chain(area, cos_angle, n_triangles, perimeter):
-    """Solves a polar triangle chain recurrence where n adjacent triangles sharing a common vertex A1 have constant area
-    T = (1/2) r_i r_{i+1} sin(theta) and constant angle cosine cos(theta).
-    Law of cosines gives d^2 = S^2 - 2K(1+c) for alternating radius sum S = r_first + r_last and K = 2T/sin(theta).
-    Solves S + N*d = P for S = (m*sqrt(n) - p)/q. Returns dict(k_product, edge_sq_constant, m, n, p, q, m_plus_n_plus_p_plus_q).
-    polar_triangle_chain(1, 12/13, 9, 20) -> m=9, n=5, p=1, q=4, sum=19"""
-    T = _q(area)
-    c = _q(cos_angle)
-    if isinstance(n_triangles, Fraction):
-        if n_triangles.denominator != 1:
-            raise BadInput('n_triangles must be an integer')
-        n_triangles = int(n_triangles)
-    N = _int(n_triangles, 1, 10000, 'n_triangles')
-    P = _q(perimeter)
-    if T <= 0 or P <= 0:
-        raise BadInput('area and perimeter must be positive')
-    if abs(c) >= 1:
-        raise BadInput('cos_angle must be strictly between -1 and 1')
-    sin_sq = Fraction(1) - c * c
-    sin_surd = Surd.sqrt(sin_sq)
-    if sin_surd.d != 1:
-        raise NotCovered('sine is irrational surd; only rational sine currently covered')
-    sin_val = sin_surd.p
-    K = Fraction(2 * T, sin_val)
-    c_term = Fraction(2 * K * (Fraction(1) + c))
-
-    A_q = Fraction(N * N - 1)
-    B_q = Fraction(2 * P)
-    C_q = - (P * P + Fraction(N * N) * c_term)
-    disc = B_q * B_q - Fraction(4) * A_q * C_q
-    if disc <= 0:
-        raise BadInput('discriminant non-positive')
-
-    disc_surd = Surd.sqrt(disc)
-    num_q = disc_surd.q / 2
-    l = num_q.denominator * P.denominator // gcd(num_q.denominator, P.denominator)
-    m_raw = int(num_q.numerator * (l // num_q.denominator))
-    p_raw = int(P.numerator * (l // P.denominator))
-    q_raw = int(A_q * l)
-    g = gcd(gcd(abs(m_raw), abs(p_raw)), abs(q_raw))
-    m = m_raw // g
-    p = p_raw // g
-    q = q_raw // g
-    n = int(disc_surd.d)
-    return {
-        'k_product': K,
-        'edge_sq_constant': c_term,
-        'm': m,
-        'n': n,
-        'p': p,
-        'q': q,
-        'm_plus_n_plus_p_plus_q': m + n + p + q,
-    }
-
+# geometry.polar_triangle_chain is gone (scrutiny of 2026-11-05): written from one contest row, it returned that row's answer format and was
+# wrong for every even N, a rational root (S = -15/8 for the true 9/2), chains that cannot exist and N = 1.

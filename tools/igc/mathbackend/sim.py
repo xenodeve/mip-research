@@ -67,7 +67,9 @@ def main(argv=None):
         t0 = time.monotonic()
         results[m] = normalise(mod.run(args.seed, args.n))
         print(f'[{m}] {len(results[m])} operations with cases in {time.monotonic() - t0:.0f} s', flush=True)
-    seen = {name: s for r in results.values() for name, s in r.items()}
+    # an op with no case generated is untested: sim_geometry pre-fills every registered op with generated=0, and that counted as tested,
+    # so the three ops added for benchmark rows showed in the total as covered with 0 cases
+    seen = {name: s for r in results.values() for name, s in r.items() if s.get('generated', 1)}
     registered = {n: v for n, v in reg.items() if n.split('.')[0] in results}
     by_kind = collections.defaultdict(lambda: collections.Counter())
     ops_by_kind = collections.defaultdict(lambda: [0, 0])

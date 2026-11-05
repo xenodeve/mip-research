@@ -229,15 +229,23 @@ def evaluate_with_mathbackend(text: str) -> Optional[Fraction]:
     if m_det:
         # A matrix is not its determinant: only `\det`, `determinant` or bars (vmatrix) ask for one. A bare pmatrix before `=` got its
         # determinant put in, and `'det' in s` read `determine` as a request (#302).
-        is_det = bool(_DET_WORD.search(s)) or m_det.group('env').lower() == 'vmatrix'
-        if is_det:
+        # Vmatrix (double bars) is a norm, not a determinant: compared case-blind it put in 12 for the norm 5 of diag(3, 4).
+        is_det = bool(_DET_WORD.search(s)) or m_det.group('env') == 'vmatrix'
+        # One matrix only, and the determinant stands for its own span, not for the whole text: `\det M \cdot 2`, `\det M + \det I`
+        # and `\det(M M)` all got det M put in (scrutiny of 2026-11-05).
+        if is_det and s.count('\\begin{') == 1:
             mat = _parse_latex_matrix(m_det.group('body'))
             if mat is not None:
                 try:
-                    res = mathbackend.run('algebra.mat_det', mat)
-                    return Fraction(res)
+                    res = Fraction(mathbackend.run('algebra.mat_det', mat))
                 except (mathbackend.BadInput, mathbackend.NotCovered, ValueError, TypeError):
-                    pass
+                    res = None
+                # past the limit it is no step (a 20x20 determinant of 20-digit cells crashed str() at Python's 4300-digit limit)
+                if res is None or abs(res.numerator) > mathexpr.LIMIT or res.denominator > mathexpr.LIMIT:
+                    return None
+                # the value of the rest of the text with the determinant in its place; mathexpr refuses words
+                rest = (s[:m_det.start()] + f'({res})' + s[m_det.end():]).strip()
+                return mathexpr.evaluate(re.sub(r'^(?:\\det|\\operatorname\{det\})\s*', '', rest))
 
     # Rewrite known exact function calls (`gcd(...)`, `lcm(...)`, `C(n, k)`, `phi(n)`, etc.) into integer literals, then pass to mathexpr
     if not _FUNC_CALL.search(s):

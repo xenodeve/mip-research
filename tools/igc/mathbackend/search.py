@@ -1810,6 +1810,8 @@ def num_eval(expr, vars=None, digits=30):
     """Evaluate a text expression at the digits asked. vars: {'x': value} (int, Fraction or str). The error is the difference between two working precisions.
     num_eval('sin(pi/6)', digits=10) -> Numeric(value=Decimal('0.5000000000'), error=...)"""
     _check_digits(digits)
+    if vars is not None and not isinstance(vars, dict):
+        raise BadInput('vars must be a dict of name -> value')   # an int or a list raised AttributeError, which no caller catches
     vs = {k: _q(v, k) for k, v in (vars or {}).items()}
     names = tuple(sorted(vs))
     c = _dec_compile(expr, names)

@@ -394,7 +394,9 @@ def poly_compose(p, q):
 def poly_derivative(p, k=1):
     """k-th derivative. poly_derivative([1, 0, 0, 1]) -> [3, 0, 0]"""
     p = _poly(p)
-    for _ in range(k):
+    if isinstance(k, bool) or not isinstance(k, int) or k < 0:
+        raise BadInput('k must be an integer >= 0')   # a negative k returned p unchanged, and k = 10**30 looped without end
+    for _ in range(min(k, len(p))):
         p = _deriv(p)
     return p
 
@@ -1514,6 +1516,12 @@ def complex_roots(p, digits=15):
                     if zi <= 0:
                         raise NotCovered('refinement left the upper half plane')
                     found.append((zr.quantize(unit, ROUND_HALF_EVEN), zi.quantize(unit, ROUND_HALF_EVEN)))
+            # the roots of a square-free factor are distinct: two starts that Newton took to one root left another root out
+            # (x^40 - 2x^20 + 1 + 10^-20: 6 values twice and 6 roots missing, scrutiny of 2026-11-05)
+            for i in range(len(found)):
+                for j in range(i):
+                    if abs(found[i][0] - found[j][0]) + abs(found[i][1] - found[j][1]) <= 2 * unit:
+                        raise NotCovered('two complex roots did not separate')
             for zr, zi in found:
                 res += [(zr, zi)] * mult
                 res += [(zr, -zi)] * mult
@@ -2513,6 +2521,10 @@ def quartic_double_tangent_k(r1, r2, r3):
 
     r_pairs = _rational_roots(_poly(poly))
     all_roots = [root for root, _ in r_pairs]
+    # Only rational roots are read here: (1, 2, 3) has three irrational positive k and got valid_k = [], sum 0. A positive root that is not
+    # rational is not covered (scrutiny of 2026-11-05).
+    if count_real_roots(poly, 0) > sum(1 for k_val in all_roots if k_val > 0):
+        raise NotCovered('the quartic in k has an irrational positive root')
 
     valid_k = []
     for k_val in all_roots:
@@ -2569,7 +2581,19 @@ def _segment_intersection_2d(p1, p2, p3, p4):
     dx2, dy2 = x4 - x3, y4 - y3
     denom = dx1 * dy2 - dy1 * dx2
     if denom == 0:
-        return None
+        # Parallel. Collinear segments that touch at an end meet in that point; ones that overlap meet in a whole segment, which is
+        # no count. Before, every parallel pair gave no point: [(0,0),(1,0)] and [(1,0),(2,0)] counted 0 (scrutiny of 2026-11-05).
+        if (x3 - x1) * dy1 - (y3 - y1) * dx1 != 0:
+            return None
+        axis = 0 if dx1 != 0 or dx2 != 0 else 1
+        a0, a1 = sorted((p1[axis], p2[axis]))
+        b0, b1 = sorted((p3[axis], p4[axis]))
+        lo, hi = max(a0, b0), min(a1, b1)
+        if lo > hi:
+            return None
+        if lo < hi:
+            raise NotCovered('two segments overlap: infinitely many common points')
+        return next(q for q in (p1, p2, p3, p4) if q[axis] == lo)
     t = ((x3 - x1) * dy2 - (y3 - y1) * dx2) / denom
     s = ((x3 - x1) * dy1 - (y3 - y1) * dx1) / denom
     if 0 <= t <= 1 and 0 <= s <= 1:
@@ -2601,20 +2625,5 @@ def piecewise_linear_intersections(curve1, curve2):
     return {'intersections': sorted_pts, 'count': len(sorted_pts)}
 
 
-@op('algebra.triangle_wave_intersections', kind='piecewise curves', bound='integer swings up to 100000')
-def triangle_wave_intersections(swings1, swings2, boundary_count=1):
-    """Calculates the number of intersection points between two full-amplitude periodic/piecewise curves
-    y = f(x) and x = g(y) over the unit square [0, 1] x [0, 1].
-    With swings1 monotonic branches of f and swings2 monotonic branches of g, interior crossings equal swings1 * swings2.
-    Adding boundary_count gives the total intersection count.
-    triangle_wave_intersections(16, 24, boundary_count=1) -> 385"""
-    m = _int_val(swings1, 1, 100000, 'swings1')
-    n = _int_val(swings2, 1, 100000, 'swings2')
-    b = _int_val(boundary_count, 0, 10000, 'boundary_count')
-    interior = m * n
-    total = interior + b
-    return {
-        'interior_crossings': interior,
-        'boundary_intersections': b,
-        'total_intersections': total,
-    }
+# algebra.triangle_wave_intersections is gone (scrutiny of 2026-11-05): it returned swings1 * swings2 + boundary_count, a contest row's
+# formula with no curve in it; full zigzags cross m * n times, (1, 1) infinitely often, and a monotone pair can cross any number of times.

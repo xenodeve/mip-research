@@ -278,21 +278,9 @@ def analyze_replay():
     print('   Mechanism: Model entered an algebraic cubic loop (39,577 tok) attempting to find local minima.')
     print('              quartic_double_tangent_k evaluates ((k-B)^2 - 4A)^2 = 64Ck to isolate candidate k on the fly.\n')
 
-    # 4. contest-7068e4c9: Polar triangle spiral / recurrence
-    res_ptc = mathbackend.run('geometry.polar_triangle_chain', 1, Fraction(12, 13), 9, 20)
-    print(f'4. [contest-7068e4c9] (gold: {IC_262K["contest-7068e4c9"]["answer"]})')
-    print(f'   mathbackend.run("geometry.polar_triangle_chain", 1, 12/13, 9, 20) = {res_ptc["m_plus_n_plus_p_plus_q"]} (bit-exact gold match!)')
-    print(f'   Sub-steps: K = {res_ptc["k_product"]}, d^2 constant = {res_ptc["edge_sq_constant"]}, S = ({res_ptc["m"]}*sqrt({res_ptc["n"]}) - {res_ptc["p"]})/{res_ptc["q"]}')
-    print('   Mechanism: Model set up S + 9L = 20 correctly but made arithmetic errors on L^2 = S^2 - 20 (computed -2849), yielding 175.')
-    print('              polar_triangle_chain computes exact law-of-cosines parameter and closed-form sum.\n')
+    # 4. contest-7068e4c9: geometry.polar_triangle_chain was removed (wrong outside that row: even N, rational roots, impossible chains)
 
-    # 5. livebench-652451e2: Iterated triangle wave / piecewise intersections
-    res_tw = mathbackend.run('algebra.triangle_wave_intersections', 16, 24, 1)
-    print(f'5. [livebench-652451e2] (gold: {IC_262K["livebench-652451e2"]["answer"]})')
-    print(f'   mathbackend.run("algebra.triangle_wave_intersections", 16, 24, 1) = {res_tw["total_intersections"]} (bit-exact gold match!)')
-    print(f'   Sub-steps: 16 monotonic swings of h(sin(2pi x)) * 24 swings of h(cos(3pi y)) = {res_tw["interior_crossings"]} interior + 1 boundary = {res_tw["total_intersections"]}')
-    print('   Mechanism: Model got trapped in local piecewise case loops (|u| - 1/2 = -0.5, 12,153 tok).')
-    print('              triangle_wave_intersections counts branches and intersection grid atomically.\n')
+    # 5. livebench-652451e2: algebra.triangle_wave_intersections was removed (a contest formula, m * n + 1, no curve in it)
 
     # 6. livebench-c79b1bbf: Disphenoid inradius & Cayley-Menger metric
     res_disp = mathbackend.run('geometry.disphenoid_inradius_from_edges_sq', 41, 80, 89)

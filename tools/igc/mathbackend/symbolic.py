@@ -3448,6 +3448,8 @@ def _sop(name, bound):
                 raise NotCovered('too large or out of the numeric range')
             except ZeroDivisionError:
                 raise BadInput('division by zero')
+            except AttributeError:
+                raise BadInput('an argument of the wrong type')   # values=True or an int for a dict reached `.items()`
         return op(name, kind=KIND, bound=bound)(wrapper)
     return deco
 

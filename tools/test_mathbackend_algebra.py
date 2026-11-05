@@ -335,16 +335,26 @@ class AtomicAlgebraTests(unittest.TestCase):
         res_p = r('piecewise_linear_intersections', c3, c4)
         self.assertEqual(res_p['count'], 0)
 
-    def test_triangle_wave_intersections(self):
-        # 16 swings x 24 swings with 1 boundary intersection => 385
-        res = r('triangle_wave_intersections', 16, 24, boundary_count=1)
-        self.assertEqual(res['interior_crossings'], 384)
-        self.assertEqual(res['boundary_intersections'], 1)
-        self.assertEqual(res['total_intersections'], 385)
+    def test_no_triangle_wave_intersections(self):
+        with self.assertRaises(NotCovered):
+            run('algebra.triangle_wave_intersections', 16, 24, 1)
 
+    def test_quartic_double_tangent_refuses_an_irrational_k(self):
+        """(1, 2, 3): three irrational positive k (sum 6.80849); only rational roots were read, and it answered sum 0."""
+        with self.assertRaises(NotCovered):
+            r('quartic_double_tangent_k', 1, 2, 3)
+        self.assertEqual(r('quartic_double_tangent_k', 2, 8, 18)['sum_k'], F(40))
+
+    def test_collinear_segments(self):
+        self.assertEqual(r('piecewise_linear_intersections', [(0, 0), (1, 0)], [(1, 0), (2, 0)])['intersections'], [(F(1), F(0))])
+        with self.assertRaises(NotCovered):
+            r('piecewise_linear_intersections', [(0, 0), (2, 0)], [(1, 0), (3, 0)])
+        self.assertEqual(r('piecewise_linear_intersections', [(0, 0), (0, 1)], [(0, 1), (0, 3)])['count'], 1)
+
+    def test_poly_derivative_k(self):
+        self.assertEqual(r('poly_derivative', [1, 0, 0, 1], 10 ** 30), [])
         with self.assertRaises(BadInput):
-            r('triangle_wave_intersections', 0, 5)
-
+            r('poly_derivative', [1, 0, 0, 1], -1)
 
 if __name__ == '__main__':
     unittest.main()

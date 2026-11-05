@@ -499,15 +499,27 @@ class AtomicGeometryTests(unittest.TestCase):
         res_reg = r('tetrahedron_volume_from_edges_sq', 1, 1, 1, 1, 1, 1)
         self.assertEqual(res_reg['volume_sq'], F(1, 72))
 
-    def test_polar_triangle_chain(self):
-        res = r('polar_triangle_chain', 1, F(12, 13), 9, 20)
-        self.assertEqual(res['k_product'], F(26, 5))
-        self.assertEqual(res['edge_sq_constant'], F(20))
-        self.assertEqual(res['m'], 9)
-        self.assertEqual(res['n'], 5)
-        self.assertEqual(res['p'], 1)
-        self.assertEqual(res['q'], 4)
-        self.assertEqual(res['m_plus_n_plus_p_plus_q'], 19)
+    def test_disphenoid_with_a_rational_inradius(self):
+        """r = 1 at (24, 24, 24) and 1/2 at (6, 6, 6): read from the root's sqrt part it gave m = 0, n = 1, p = 1."""
+        res = r('disphenoid_inradius_from_edges_sq', 24, 24, 24)
+        self.assertEqual((res['m'], res['n'], res['p']), (1, 1, 1))
+        res = r('disphenoid_inradius_from_edges_sq', 6, 6, 6)
+        self.assertEqual((res['m'], res['n'], res['p']), (1, 1, 2))
+
+    def test_a_tetrahedron_with_a_face_that_is_no_triangle(self):
+        """(9, 1, 3, 3, 27, 8): Cayley-Menger is positive, but face 124 has sides 3, sqrt 3, sqrt 27."""
+        with self.assertRaises(BadInput):
+            r('tetrahedron_volume_from_edges_sq', 9, 1, 3, 3, 27, 8)
+
+    def test_no_polar_triangle_chain(self):
+        from tools.igc.mathbackend import NotCovered, run
+        with self.assertRaises(NotCovered):
+            run('geometry.polar_triangle_chain', 1, F(12, 13), 9, 20)
+
+    def test_a_huge_number_string_is_refused(self):
+        from tools.igc.mathbackend import NotCovered
+        with self.assertRaises(NotCovered):
+            r('dist', (0, 0), ('1e999999999', 0))
 
     def test_regular_ngon_rectangles_on_lines(self):
         res = r('regular_ngon_rectangles_on_lines', 12)
