@@ -128,7 +128,8 @@ class Bridge(unittest.TestCase):
     def test_lowest_terms_but_not_in_a_long_division(self):
         self.assertEqual(self.found('so $10044/42')[1], '1674/7')
         self.assertIsNone(self.found("Let's check $70308 / 6$:\n$70 / 6"))   # livebench-88407ca2: `= 11$ rem 4`
-        self.assertIsNone(self.found('Is 11718 divisible by anything else?\n$1302 / 9'))   # livebench-ce2f15a7: `= 144.66`
+        # livebench-ce2f15a7: `= 144.66`, a divisibility test wants the decimal (#306: software gives it, to 4 places)
+        self.assertEqual(self.found('Is 11718 divisible by anything else?\n$1302 / 9')[1], '144.6666...')   # cut and marked; '144.6667' for a model's profile
 
     def test_the_plain_arm_is_unchanged(self):
         # no --mathbackend: mathexpr alone, and a fraction that reduces is still left to the long division
@@ -158,7 +159,9 @@ class Bridge(unittest.TestCase):
         # seven other control arms (2026-11-06): each of these put in a value the model did not mean
         self.assertIsNone(self.found(r'$\cos \pi/4'))                   # cos(pi)/4 by the grammar, cos(pi/4) by the writer
         self.assertIsNone(self.found(r'$68 \div 58'))                   # dm div_big: a long division wants the digit 1
-        self.assertIsNone(self.found('the mean is 8.33 and\n$100/12'))  # a text in decimals wants 8.33
+        # a text in decimals: this model wrote 8.33, but over both sets a fraction that reduces was written reduced 159 times and as a
+        # decimal 105 even with decimals before it (#306), so the reduced fraction goes in
+        self.assertEqual(self.found('the mean is 8.33 and\n$100/12')[1], '25/3')
         self.assertIsNone(self.found(r'$-192 + 6\sqrt{5}'))             # the same terms in another order
         self.assertIsNone(self.found('Let $f(x) = x + 2$.\n$f(1)^2'))     # a call is no value (#306)
         self.assertIsNone(self.found('$3+1 \\times 1+1'))               # (3+1)(1+1) by its spaces
@@ -168,7 +171,7 @@ class Bridge(unittest.TestCase):
 
     def test_what_the_model_is_doing_there(self):
         # #306: the value is right for the text, not for the step: a long division's digit, a borrow, mod m, coins, a cut 5/3
-        self.assertEqual(self.found('Bring down the 1. The remainder is 1.\n$1 \\div 2')[1], '0')   # the quotient's digit, not 0.5
+        self.assertEqual(self.found('Bring down the 1. The remainder is 1.\n$1 \\div 2')[1], '0 \\text{ rem } 1')   # the quotient's digit and remainder, not 0.5
         self.assertIsNone(self.found('    *   $38115 - 29799$.\n    *   $5-9'))
         self.assertEqual(self.found('Work $\\pmod{13}$.\n$(2^4)^2')[1], '256')   # no `=` for `≡` written yet: the full value, a true equation
         self.assertIsNone(self.found('In $\\mathbb{Z}_5$, $2^{-1} \\equiv 3$. So\n$3/2'))

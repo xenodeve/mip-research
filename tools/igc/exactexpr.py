@@ -704,6 +704,8 @@ class _Parser:
                 self.take()
                 index = self.expr()
                 self.take(')', '[')
+                if not (self.at('(', 'g') or self.at('(', '(') or self.at('num')):
+                    return ('sqrt', index, None)   # `√[45*20*144]`: the bracket is the radicand, no index follows it (R1, #306)
             if self.at('num') and index is None:   # √2, \sqrt2, \sqrt 12
                 n = self.take()
                 return ('sqrt', ('num', n[1], n[2]), None)

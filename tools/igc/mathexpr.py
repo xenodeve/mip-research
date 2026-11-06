@@ -305,7 +305,7 @@ def evaluate(text):
 
 _OPERATOR = re.compile(r'[+\-*/^×÷·⋅∙−!%]|\\(?:times|cdot|ast|div|d?t?frac|sqrt)|[²³]')
 _START = re.compile(r'[\d.(\[{\\\-−]')
-_BOUNDARY = set(' \t$([{=:;,') | {'\\'}
+_BOUNDARY = set(' \t$([{=:;,~≈→⇒') | {'\\'}   # `~104 + 104 = 208`, `13→2+1+3 = 6` (#306 held-out, R1)
 
 
 # commands after which a new operand starts: operators, relations, spacing, words, brackets' sizes

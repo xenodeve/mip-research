@@ -194,7 +194,8 @@ def main():
     from transformers import AutoTokenizer
     tok = AutoTokenizer.from_pretrained(a.tokenizer)
     IDS = tir4b.Ids(tok, [tok.convert_tokens_to_ids('<|endoftext|>')])
-    arm_kw = {k: True for k in a.arm.split(',') if k}
+    arm_kw = {k: True for k in a.arm.split(',') if k and '=' not in k}
+    arm_kw.update(dict(k.split('=', 1) for k in a.arm.split(',') if '=' in k))   # `inline_style=qwen3.5-4b`
     recs = json.load(open(a.records, encoding='utf-8'))
     stored = {}
     if a.ids:

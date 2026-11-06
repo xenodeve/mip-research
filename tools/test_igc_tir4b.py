@@ -926,15 +926,30 @@ class HeldOutInline(unittest.TestCase):
         self.assertEqual(tir4b.inline_found('Total area is $\\frac{\\pi}{2} - \\frac{\\pi}{3}', use_mathbackend=True)[1], '\\frac{\\pi}{6}')
         self.assertEqual(tir4b.inline_found('so $160 (1 - 2/3)', use_mathbackend=True)[1], '160/3')
         self.assertEqual(tir4b.inline_found('so |4 - (-19)|', use_mathbackend=True)[1], '23')
+        self.assertEqual(tir4b.inline_found("Heron's formula: √[45*20*144]", use_mathbackend=True)[1], '360')   # the bracket is the radicand
+        self.assertEqual(tir4b.inline_found('so ~104 + 104', use_mathbackend=True)[1], '208')
+        self.assertEqual(tir4b.inline_found('- H=2:2:13→2+1+3', use_mathbackend=True)[1], '6')
 
     def test_mod_work_and_long_division(self):
-        # #306 held-out: what the model wrote at each refused `=`. A remainder's quotient; a residue only where its `=` already meant `≡`
-        self.assertEqual(tir4b.inline_found('Long division: 1091 rem 3. So 13 / 2', use_mathbackend=True)[1], '6')
-        self.assertEqual(tir4b.inline_found('7^10: 7^2=49≡-1 mod25. Then 7^4=(7^2)^2=(-1)^2=1 mod25. Then 7^5=7^4*7',
-                                            use_mathbackend=True)[1], '7')
-        self.assertEqual(tir4b.inline_found('Product $4 \\times 2 = 8 \\equiv 3 \\pmod 5$.\nSo $S \\equiv 4 \\times 2',
-                                            use_mathbackend=True)[1], '8')   # it writes the full value, then reduces
-        self.assertEqual(tir4b.inline_found('6^7=6*24=144≡144-4*29=144-116=28 mod29.6^8=6*28', use_mathbackend=True)[1], '168')
+        # #306 held-out. The general style writes what is true under every reading; a model's profile writes the form it was measured to
+        # want: a remainder's quotient alone, a residue only where its `=` already meant `≡`
+        def found(before, style='general'):
+            return tir4b.inline_found(before, use_mathbackend=True, style=style)[1]
+        chain = '7^10: 7^2=49≡-1 mod25. Then 7^4=(7^2)^2=(-1)^2=1 mod25. Then 7^5=7^4*7'
+        latex = 'Product $4 \\times 2 = 8 \\equiv 3 \\pmod 5$.\nSo $S \\equiv 4 \\times 2'
+        r1 = '6^7=6*24=144≡144-4*29=144-116=28 mod29.6^8=6*28'
+        self.assertEqual(found('Long division: 1091 rem 3. So 13 / 2'), '6 rem 1')
+        self.assertEqual(found(chain), '16807 ≡ 7')
+        self.assertEqual(found(latex), '8 \\equiv 3')
+        self.assertEqual(found(r1), '168 ≡ 23')
+        for style in ('qwen3.5-4b', 'deepseek-r1', 'qwq-32b'):
+            with self.subTest(style=style):
+                self.assertEqual(found('Long division: 1091 rem 3. So 13 / 2', style), '6')
+                self.assertEqual(found(chain, style), '7')
+                self.assertEqual(found(latex, style), '8')   # it writes the full value, then reduces
+                self.assertEqual(found(r1, style), '168')
+        with self.assertRaises(KeyError):
+            tir4b.inline_found('so 2+3', use_mathbackend=True, style='no-such-model')
         self.assertIsNone(tir4b.inline_found('    601 mod 7: $601 = 560 + 41', use_mathbackend=True))   # taking 601 apart
         self.assertEqual(tir4b.inline_found('the carry: $7+9', use_mathbackend=True)[1], '16')
         self.assertIsNone(tir4b.inline_found('borrow: $0-9', use_mathbackend=True))

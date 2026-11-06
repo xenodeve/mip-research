@@ -126,7 +126,7 @@ class Ids:
 class Arm:
     def __init__(self, force_after=0, execute=False, close_fit=False, loop_close=False, close_repeat=0, inline_calc=False, native_tool=False,
                  hint_calc=False, loop_hint=False, inline_plain=False, whole_hint=False, check_hand=False, whole_plain=False, hand_off=False, question_value=False,
-                 trust='cort', logit_value=0.0, suppress_recheck=0, mathbackend=False, candidate_close=False):
+                 trust='cort', logit_value=0.0, suppress_recheck=0, mathbackend=False, candidate_close=False, inline_style='general'):
         self.trust = trust   # the line after a hinted program that printed: 'cort' (the original), 'none', 'positive'
         self.suppress_recheck = suppress_recheck   # --suppress-recheck: this many steps after a value software gave, the re-check words' logits are lowered
         self.logit_value = logit_value   # --logit-value: the logit added to software's next value token while the model writes the value itself
@@ -135,6 +135,9 @@ class Arm:
         self.inline_plain, self.whole_hint, self.check_hand = inline_plain, whole_hint, check_hand
         self.whole_plain, self.hand_off, self.question_value = whole_plain, hand_off, question_value
         self.mathbackend, self.candidate_close = mathbackend, candidate_close
+        if inline_style not in INLINE_STYLES:
+            raise ValueError(f'--inline-style: one of {sorted(INLINE_STYLES)}')
+        self.inline_style = inline_style
 
 
 # --inline-calc: MIP Native's inline value (include/strata/core/igc_inline.hpp parse_inline / after_value) for a model the engine cannot run yet.
@@ -182,13 +185,32 @@ def tedious(expr, value):
     return any(len(n) >= 3 for n in re.findall(r'\d+', expr)) or len(_OPS.findall(expr)) >= 3 or abs(Fraction(value)) >= 1000
 
 
-def inline_found(before, whole=False, use_mathbackend=False, custom_ops=()):
+# How a value is written where the model's own `=` may mean something else (work mod m, a long division, a quotient in a text that works in
+# decimals). `general`, the default, writes what is true under every reading and guesses nothing, so it holds for any model and any
+# question: `16807 \equiv 7`, `6 rem 1`, `239.1428...` (cut, not rounded). A model's profile instead writes the one form that model was
+# measured to want there (developer 2026-11-06: keep the guesses, as the software optimised for that model):
+#   mod        'both': the value and its residue | 'habit': the residue only where the model's latest `=` near there meant `≡`, else the value
+#   remainder  'both': `q rem r` | 'quotient': q alone
+#   decimal    'cut': cut to 4 places and marked `...` | 'rounded': rounded to 4 places, no mark
+# The profiles were measured on stored answers (#306): Qwen3.5-4B on its seven control arms (563 rows) and four held-out arms (H1, 484 rows);
+# DeepSeek-R1 and QwQ-32B on the H2 traces (630 rows). Those sets were used to write the guesses, so they measure the profiles in sample.
+INLINE_STYLES = {
+    'general': {'mod': 'both', 'remainder': 'both', 'decimal': 'cut'},
+    'qwen3.5-4b': {'mod': 'habit', 'remainder': 'quotient', 'decimal': 'rounded'},
+    'deepseek-r1': {'mod': 'habit', 'remainder': 'quotient', 'decimal': 'rounded'},
+    'qwq-32b': {'mod': 'habit', 'remainder': 'quotient', 'decimal': 'rounded'},
+}
+
+
+def inline_found(before, whole=False, use_mathbackend=False, custom_ops=(), style='general'):
     """(expression, spelled exact value) for the arithmetic that ends the text before an `=`, or None. The expression is read by
     tools.igc.mathexpr in every form a model writes (LaTeX at any depth, Unicode, ASCII); it refuses a symbol (algebra), a word, a mixed
     number, a root or power that is not exact. When `use_mathbackend` is True, also resolves exact calls to the 6-module mathbackend
     (gcd, lcm, phi, C, P, catalan, derangements, modinv, 2x2 det). `whole`: the expression the --whole-hint asked for, whose value is
-    given even as an uneven quotient, since it is the step itself, not a piece of the model's long division."""
+    given even as an uneven quotient, since it is the step itself, not a piece of the model's long division. `style`: a key of
+    INLINE_STYLES, `general` unless the model is known."""
     from tools.igc.mathexpr import expression_before, simple_quotient
+    st = INLINE_STYLES[style]
     if use_mathbackend:   # it reads mathexpr's expression too, and a longer one ahead of it: `\sqrt{2} \cdot 4 + 1` is not 5
         from tools.igc.unified_detect import expression_before_with_mathbackend
         found = expression_before_with_mathbackend(before)
@@ -206,14 +228,21 @@ def inline_found(before, whole=False, use_mathbackend=False, custom_ops=()):
         # a long division wants its quotient: `13 \div 2 = 6` remainder 1. Where a remainder is being worked out the model wrote the
         # whole quotient 156 times in 165 (held-out) and 281 in 304 (seven 4B arms, #306). On this line or the one before only, and in
         # lowest terms: a divisibility check far from it writes `174/4 = 43.5`, and `10044 / 42 = 5022 / 21` reduces
-        return expr, str(value.numerator // value.denominator)
+        q, r = divmod(value.numerator, value.denominator)
+        if st['remainder'] == 'quotient':
+            return expr, str(q)
+        latex = '\\' in before.rsplit('\n', 1)[-1] or '$' in before.rsplit('\n', 1)[-1]
+        return expr, f'{q} \\text{{ rem }} {r}' if latex else f'{q} rem {r}'   # true however the `=` is read
     if '/' in said and simple_quotient(expr) and not (use_mathbackend and _reduces(expr, before)):
         # an integer quotient that does not come out: the model is doing long division and wants a digit, not 21/19 (dm div_big). One
         # that reduces is a step of its own: `10044/42 = 1674/7`, `6/26 = 3/13` (ctrl traces of a100_262k)
-        return None
+        decimal = _quotient_as_decimal(expr, value, before, st['decimal']) if use_mathbackend else None
+        if decimal is None:
+            return None
+        said = decimal
     if _decomposes(expr, value, before):
         return None
-    residue = _mod_residue(value, before)
+    residue = _mod_residue(value, before, st['mod'])
     if residue == '':
         return None   # `$2^{10} \equiv 1024 + 1 =`: a congruence with no modulus named, its residue cannot be told
     if residue is not None:
@@ -421,10 +450,11 @@ def _decomposes(expr, value, before):
     return bool(m) and isinstance(value, _F) and _F(m.group(1).replace(',', '')) == value
 
 
-def _mod_residue(value, before):
-    """On a line that works mod m, an integer outside 0..m-1 is given as its residue: `7^5 = 7^4*7 = 1*7 = 7 mod 25`, `4+4 = 3` (mod 5).
-    The model's own `=` there is a congruence (#306: modular power chains of R1 and QwQ). Only when the model has used `=` that way on
-    this line already, or writes no full value before a congruence sign there: `6*24=144≡144-4*29` keeps 144."""
+def _mod_residue(value, before, how='both'):
+    """On a line that works mod m, an integer outside 0..m-1. `both` (the general style) writes the value and its residue, true however
+    the model's `=` is read: `7^4*7 = 16807 \\equiv 7`, `4 \\times 2 = 8 \\equiv 3`. `habit` (a model's profile) writes the residue alone
+    where the model's latest `=` near there already meant `≡` (`7^4=(7^2)^2=(-1)^2=1 mod25`, R1 and QwQ), else nothing here, so the
+    value goes in (`6*24=144≡144-4*29`, 4B)."""
     from fractions import Fraction as _F
     if not isinstance(value, _F) or value.denominator != 1:
         return None
@@ -444,6 +474,9 @@ def _mod_residue(value, before):
     # the residue only where the model has already written `=` for `≡` near here: `7^4=(7^2)^2=(-1)^2=1 mod25`. Elsewhere it writes the
     # full value and then reduces it, `$4 \times 2 = 8 \equiv 3 \pmod 5$`, `6*24=144≡144-4*29`, and a residue there is a false equation
     # (seven 4B arms: 4 \times 2 = 3 was put 9 times on such lines, #306)
+    if how == 'both':
+        eq = ' \\equiv ' if '\\' in line or '$' in line else ' ≡ '
+        return f'{value}{eq}{value % m}'
     if re.search(r'\bparity\b', line, re.I):
         return str(value % 2)   # the line says what its `=` means
     return str(value % m) if _eq_means_congruence(near, m) else None
@@ -528,9 +561,43 @@ def _reduces(expr, before=''):
     recent = before[-400:]
     if re.search(r'\brem\b|remainder|long division|divisib|divides|\bdigit', recent, re.I):
         return False
-    if re.search(r'(?<![\d.])\d+\.\d+', before[-600:]):
-        return False
+    # decimals before no longer stop it: there the model still wrote the reduced fraction 159 times and a decimal 105 (#306, seven 4B
+    # arms and the held-out traces; `11718/294 = 1674/7`)
     return not re.search(rf'(?<!\d){a}\d+\s*(?:/|\\div|÷)\s*{b}(?!\d)', recent)   # the first piece of a long division of a{digits} by b
+
+
+def _quotient_as_decimal(expr, value, before, how='cut'):
+    """An integer quotient that does not come out, given as a decimal where the model wants one, else None:
+    - a divisibility test: `Is 4 a divisor of 174? $174/4 = 43.5$`, `1302 / 9 = 144.66` after `divisible by`;
+    - a quotient in lowest terms where the text before works in decimals: the model wrote a decimal 277 times and the fraction 59
+      (#306, both sets). Rounded to 4 places: the model writes 2 to 4 (2 most often), and rounds 133 times to 54 cut.
+    Not in a long division (`\\div`, a remainder near: it wants the digit), not a `\\frac`, not the first piece of a long division."""
+    if re.search(r'\\div|÷|\\frac|\\dfrac', expr) or value <= 0:
+        return None
+    nums = [int(x) for x in re.findall(r'\d+', expr)]
+    if len(nums) != 2:
+        return None
+    a, b = nums
+    recent = before[-400:]
+    if re.search(r'\brem\b|remainder|long division|bring(?:s|ing)? down|\bdigit', recent, re.I):
+        return None
+    if re.search(rf'(?<!\d){a}\d+\s*(?:/|\\div|÷)\s*{b}(?!\d)', recent):
+        return None
+    test = re.search(r'divisib|divides|divisor|\bfactor', recent, re.I)
+    if not test and (math.gcd(a, b) > 1 or not re.search(r'(?<![\d.])\d+\.\d+', before[-600:])):
+        return None
+    from fractions import Fraction as _F
+    exact = spelled(value)
+    if '/' not in exact:
+        return exact   # `174/4 = 43.5`: it terminates, the decimal is the value
+    if how == 'rounded':   # a model's profile: the form it writes, `1302 / 9 = 144.6667`
+        q = round(value * 10 ** 4)
+        whole, frac = divmod(abs(q), 10 ** 4)
+        return f"{'-' if q < 0 else ''}{whole}.{frac:04d}".rstrip('0').rstrip('.')
+    # the general style: cut, and marked as cut, so it is true as written: `1302 / 9 = 144.6666...`
+    q = value.numerator * 10 ** 4 // value.denominator
+    whole, frac = divmod(q, 10 ** 4)
+    return f'{whole}.{frac:04d}...'
 
 
 def inline_value(before, whole=False, use_mathbackend=False):
@@ -742,7 +809,7 @@ class Rollout:
             text = self.text()
             whole = self.whole_pending
             found = inline_found(text[:text.rstrip().rfind('=')], whole=whole, use_mathbackend=self.arm.mathbackend,
-                                 custom_ops=self.custom_ops(text)) if self.arm.inline_calc or self.arm.logit_value else None
+                                 custom_ops=self.custom_ops(text), style=self.arm.inline_style) if self.arm.inline_calc or self.arm.logit_value else None
             if found is not None and self.arm.logit_value and not self.arm.inline_calc:
                 self.start_plan(*found)   # the value is not put in: the model writes it, its prediction of each token raised
             elif found is not None:   # the value the model would have computed, computed: the reasoning goes on from it
@@ -1348,7 +1415,8 @@ def run(args):
     ids = Ids(tok, eos_ids(args.model, tok, GenerationConfig))
     arm = Arm(args.force_after, args.execute, args.close_fit, args.loop_close, args.close_repeat, args.inline_calc, args.native_tool, args.hint_calc, args.loop_hint, args.inline_plain,
               args.whole_hint, args.check_hand, args.whole_plain, args.hand_off, args.question_value, trust=args.trust_line, logit_value=args.logit_value,
-              suppress_recheck=args.suppress_recheck, mathbackend=args.mathbackend, candidate_close=args.candidate_close)
+              suppress_recheck=args.suppress_recheck, mathbackend=args.mathbackend, candidate_close=args.candidate_close,
+              inline_style=args.inline_style)
     if args.suppress_recheck and (args.server or not (args.inline_calc or args.logit_value)):
         raise SystemExit('--suppress-recheck lowers the re-check words after a value software gave: it needs --inline-calc or --logit-value, and vLLM (not --server)')
     if args.logit_value and (args.inline_calc or args.server or args.whole_hint or args.hand_off):
@@ -1556,6 +1624,9 @@ def main(argv=None):
     r.add_argument('--question-value', action='store_true', help='the whole value is the computation the question states, read by software')
     r.add_argument('--hand-off', action='store_true', help='a line that only restates a value software gave is cut, and the model is led to its answer')
     r.add_argument('--mathbackend', action='store_true', help='extend --inline-calc with the exact bridge (unified_detect.expression_before_exact): mathbackend calls, roots kept as roots, exact trig and logs, sums and products over a range, a^b mod m, lowest terms')
+    r.add_argument('--inline-style', default='general', choices=sorted(INLINE_STYLES),
+                   help="how a value is written where the model's `=` may mean something else (mod m, a long division, a decimal text): "
+                        "general (default, true under every reading) or a model's measured profile (#306)")
     r.add_argument('--candidate-close', action='store_true', help='close thinking on a reflection starter only when CandidateAnswerTracker confirms the answer across independent methods (never on same-assumption repeats)')
     r.add_argument('--box', action='store_true', help="blocks run in the OS isolation box (AppContainer) on this PC: D1, the developer's call")
     r.add_argument('--no-think', action='store_true', help='enable_thinking=False: the reply is the answer, as Qwenputer measures arithmetic')

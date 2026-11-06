@@ -57,7 +57,8 @@ class BridgeGuards(unittest.TestCase):
     def test_tails_and_lines_that_work_mod_m(self):
         self.assertIsNone(self.found("Let's find where $f(x) = 1/4$.\n$|x| - 1/2"))
         self.assertEqual(self.found('$b, c = 4\\sqrt{30} \\pm 2\\sqrt{12}')[1], '4\\sqrt{30} \\pm 4\\sqrt{3}')   # the whole `±`, not its tail
-        self.assertEqual(self.found('The parity is $1 + 1')[1], '0')   # its residue mod 2, as the model wrote (#306)
+        self.assertEqual(self.found('The parity is $1 + 1')[1], '2 \\equiv 0')   # the value and its residue mod 2 (#306)
+        self.assertEqual(inline_found('The parity is $1 + 1', use_mathbackend=True, style='qwen3.5-4b')[1], '0')   # as the model wrote
         self.assertIsNone(self.found('$2^{10} \\equiv 1024 + 1'))
         self.assertIsNone(self.found('$60^\\circ'))
 
