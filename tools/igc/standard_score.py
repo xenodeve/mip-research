@@ -73,10 +73,11 @@ def math_answer(text):
     # The base model copies the exemplars' `I hope it is correct.`; a post-trained model stops at the answer.
     said = reply(text)
     found = re.search(r'[Tt]he final answer is(.*?)(?:\.\s*I hope it is correct|\.?\s*(?:\n|$))', said, re.S)
-    # `The final answer is:` with the value on the next line captured only `:` and scored a right DeepMind answer wrong (dmx_div_big-1649)
-    if found and found.group(1).strip().lstrip(':').strip():
-        return found.group(1).strip().lstrip(':').strip()
     boxed = last_boxed(said)   # a reply with the thinking on ends in a box, not in the exemplars' sentence
+    # Whichever comes later is the answer: `the final answer is negative.` above `\boxed{-3387650}` was read as `negative` (#307,
+    # dm_div_big-6241). `The final answer is:` with the value on the next line captured only `:` (dmx_div_big-1649).
+    if found and found.group(1).strip().lstrip(':').strip() and (boxed is None or found.start() > said.rfind('\\boxed')):
+        return found.group(1).strip().lstrip(':').strip()
     if boxed is not None:
         return boxed
     # No box, when the prompt asked for none (m5o/m5t, #288): the last bold answer, else the last displayed line

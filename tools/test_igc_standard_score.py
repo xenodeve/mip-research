@@ -45,6 +45,16 @@ class Math(unittest.TestCase):
         from tools.igc.standard_score import math_right
         self.assertTrue(math_right('</think>\n\nThe final answer is 12. I hope it is correct.', '12'))
 
+    def test_a_sentence_before_the_box_does_not_take_the_answer(self):
+        """#307 rerun, dm_div_big-6241 s1: `the final answer is negative.` above `\\boxed{-3387650}` was read as `negative`."""
+        from tools.igc.standard_score import math_right
+        text = ('</think>\n\nSince the dividend is negative and the divisor is positive, the final answer is negative.\n\n'
+                '$$ -4,027,915,850 \\div 1,189 = -3387650 $$\n\n\\boxed{-3387650}<|im_end|>')
+        self.assertTrue(math_right(text, '-3387650'))
+        self.assertFalse(math_right(text, '3387650'))
+        # the later one wins either way: a sentence after the box is still the answer
+        self.assertTrue(math_right('</think>\n\n\\boxed{11}\n\nThe final answer is 12. I hope it is correct.', '12'))
+
     def test_the_same_number_written_as_another_expression(self):
         from tools.igc.standard_score import math_right
         self.assertTrue(math_right('</think>\n\n\\boxed{26! 2^{25}}<|im_end|>', '2^{25}\\cdot26!'))   # r1-ctrl a6f7b142
