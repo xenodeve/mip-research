@@ -564,10 +564,18 @@ def custom_operators(text):
         if op in ('*', '\\ast'):
             head = text[max(0, m.start() - 80):m.start()]
             a, b = re.match(r'([a-z])\s*\S+\s*([a-z])', text[m.start():m.end()]).groups()
-            rhs = re.split(r'=|:=|is defined(?: as| by)?', text[m.start():m.end()], 1)[-1].strip(' $.')
-            product = re.fullmatch(rf'\s*(?:{a}\s*\*?\s*{b}|{b}\s*\*?\s*{a})\s*', rhs) is not None
-            if not _DEFINES.search(head + text[m.start():m.end()]) or product or not (a in rhs and b in rhs):
+            rest = re.split(r'=|:=|is defined(?: as| by)?', text[m.start():], 1)[-1]
+            rhs = re.match(r'[\s$]*([^.,;:$\n]*)', rest).group(1).strip()   # the right side, to the end of its clause
+            if not _DEFINES.search(head + text[m.start():m.end()]):
                 continue
+            if a == b:   # `x * x = 0` among identities that define the operation
+                if not (re.match(r'-?\d+\b', rhs) and re.search(r'identit|for any|for all', head, re.I)):
+                    continue
+            else:
+                product = re.fullmatch(rf'(?:{a}\s*\*?\s*{b}|{b}\s*\*?\s*{a})', rhs) is not None
+                in_ab = re.fullmatch(rf'[\s{a}{b}\d+\-−*/^()·]+', rhs) is not None   # an expression in the two and numbers only
+                if product or not in_ab or not (a in rhs and b in rhs):
+                    continue
         out.add(op)
     return out
 

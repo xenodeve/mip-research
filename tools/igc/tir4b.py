@@ -332,11 +332,11 @@ def _general_quotient(expr, value, before):
     A proper fraction never gets `0 rem a`. Mod work (a quotient is an inverse there) is refused later, by `_meant_otherwise`."""
     nums = [int(x) for x in re.findall(r'\d+', expr)]
     if len(nums) != 2:
-        return None
+        return spelled(value)   # `99(1/18)` = 11/2: more than a quotient of two, its exact value
     a, b = nums
     line = before.rsplit('\n', 1)[-1]
     latex = '\\' in line or '$' in line
-    near = '\n'.join(before.split('\n')[-2:])[-600:]   # this line and the one before: where the division is worked (#307)
+    near ='\n'.join(before.split('\n')[-2:])[-600:]   # this line and the one before: where the division is worked (#307)
     division = _DIVISION_WORK.search(near) or re.search(r'\\div|÷', expr) \
         or re.search(rf'(?<!\d){a}\d+\s*(?:/|\\div|÷)\s*{b}(?!\d)', before[-400:])   # the first piece of a long division of a{digits} by b
     worked = re.search(r'\\div|÷', expr) or re.search(r'bring(?:s|ing)? down|long division', near, re.I)
