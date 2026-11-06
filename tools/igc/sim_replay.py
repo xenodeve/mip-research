@@ -28,7 +28,8 @@ from tools.igc import exactexpr  # noqa: E402
 from tools.igc.unified_detect import evaluate_exact  # noqa: E402
 
 _STOP = re.compile(r'\$|\n|,\s|;|\.\s|\.$|\\quad|\\text|\\implies|\\Rightarrow|\\approx|\\\\|\\]|\\\)|\?| or | and | so | which'
-                   r'|\\neq?\b|\\leq?\b|\\geq?\b|\\equiv|\\pmod|\\to\b|->|→|[<>≤≥≠]|\\pm|\s=|=')
+                   r'|\\neq?\b|\\leq?\b|\\geq?\b|\\equiv|\\pmod|\\to\b|->|→|[<>≤≥≠]|\\pm|\s=|='
+                   r'|≡|\s*\bmod\b|\s+(?:rem|remainder|R)\b|\s+[A-Za-z]{2,}')   # `16807≡7 mod25`, `6 remainder 1`, `1.4867 so` (#307)
 _RELATION = re.compile(r'(?<![<>!=\\])=(?!=)')
 _BOXED = re.compile(r'\\boxed\{([^{}]*(?:\{[^{}]*\}[^{}]*)*)\}')
 
@@ -40,6 +41,25 @@ def _value(text):
     if v is None:
         return None
     return v if isinstance(v, exactexpr.Value) else exactexpr.Value.of(v)
+
+
+def _as_values(said):
+    """The values a put stands for, any of which the model may write next: the General Style's `16807 ≡ 7` is 16807 or 7, `6 rem 1` is 6,
+    `1.4866...` is 1.4866 (cut) or 1.4867 (rounded) (#307). One value for every other put; [] when none can be read."""
+    m = re.fullmatch(r'(-?\d+)\s*(?:≡|\\equiv)\s*(-?\d+)', said)
+    if m:
+        return [exactexpr.Value.of(int(m.group(1))), exactexpr.Value.of(int(m.group(2)))]
+    m = re.fullmatch(r'(-?\d+)\s*(?:\\text\{\s*rem\s*\}|rem)\s*\d+', said)
+    if m:
+        return [exactexpr.Value.of(int(m.group(1)))]
+    m = re.fullmatch(r'(-?)(\d+)\.(\d+)\.\.\.', said)
+    if m:
+        cut = Fraction(m.group(2) + '.' + m.group(3))
+        up = cut + Fraction(1, 10 ** len(m.group(3)))
+        sign = -1 if m.group(1) else 1
+        return [exactexpr.Value.of(sign * cut), exactexpr.Value.of(sign * up)]
+    v = _as_value(said)
+    return [v] if v is not None else []
 
 
 def _as_value(said):
@@ -144,9 +164,10 @@ def replay(rec, ids, arm_kw, tok, IDS):
         for e in r.events[seen:]:
             ev = dict(kind=e['kind'], at=s.pos, expr=e.get('expr'), value=e.get('value'))
             if e['kind'] == 'inline value':
-                put = _as_value(str(e.get('value')))
+                puts = _as_values(str(e.get('value')))
+                put = puts[0] if puts else None
                 ahead = s.text_ahead(160)
-                cut = chain_skip(ahead, put) if put is not None else None
+                cut = next((c for c in (chain_skip(ahead, p) for p in puts) if c is not None), None)
                 ev['model'] = ahead.split('\n', 1)[0][:60]
                 if cut is None:
                     ev['verdict'] = stop_kind(ahead, put) if put is not None else 'unread'

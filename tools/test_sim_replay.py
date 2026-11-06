@@ -34,6 +34,19 @@ class Chain(unittest.TestCase):
         self.assertEqual(sr.stop_kind(' y + 4x$', V('448')), 'unread')
 
 
+class GeneralForms(unittest.TestCase):
+    """#307: the General Style's puts stand for more than one value; the replay follows the model when it writes any of them."""
+    def test_each_reading_is_followed(self):
+        def skip(said, after):
+            return next((c for c in (sr.chain_skip(after, p) for p in sr._as_values(said)) if c is not None), None)
+        self.assertEqual(skip('16807 ≡ 7', ' 16807≡7 mod25'), 6)
+        self.assertEqual(skip('16807 ≡ 7', ' 7 mod25'), 2)
+        self.assertEqual(skip('6 rem 1', ' 6 remainder 1'), 2)
+        self.assertEqual(skip('1.4866...', ' 1.4867 so'), 7)    # rounded
+        self.assertEqual(skip('1.4866...', ' 1.4866$'), 7)      # cut
+        self.assertIsNone(skip('6 rem 1', ' 7 remainder 0'))
+
+
 class Replay(unittest.TestCase):
     def test_follows_to_the_end_when_every_value_is_the_models(self):
         text = 'So $4 \\times 6 = 24$ and $24 + 1 = 25$.\n</think>\n\\boxed{25}<|im_end|>'
