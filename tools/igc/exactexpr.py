@@ -507,9 +507,10 @@ class _Parser:
                 gap = self._gap()
                 loose = loose or (gap and tok[1] != 'mod')
                 if tok[1] == '/':
-                    if slash_gap is not None and gap != slash_gap:
-                        raise NotExact('a/b / c/d: the spacing groups it')   # `-1/4 / 1/2` meant (-1/4)/(1/2) (#306)
-                    slash_gap = gap
+                    if slash_gap and not gap:
+                        # `-1/4 / 1/2` meant (-1/4)/(1/2) (#306); `3005/6 / 5` reads one way either way (#307)
+                        raise NotExact('a/b / c/d: the spacing groups it')
+                    slash_gap = bool(slash_gap) or gap
                 self.take()
                 divided = divided or tok[1] == '/'
                 node = (tok[1], node, self.unary())
@@ -910,6 +911,30 @@ def _has(node, kind):
     if node[0] == kind:
         return True
     return any(_has(x, kind) for x in node[1:] if isinstance(x, tuple))
+
+
+def decimal_value(text, degrees=False, places=4):
+    """The value cut to `places` and marked `...`, for what `evaluate` leaves to a decimal: a decimal under a root (`sqrt(1 +1.21)` =
+    1.4866...), a decimal with pi (`1.530996 / \\pi` = 0.4873...). True as written whatever the model meant (#307: the General Style).
+    None for anything else, and where the digits do not settle."""
+    try:
+        tree = _parse(text)
+        e = _Eval(degrees)
+        value = e.ev(tree, {})
+    except (NotExact, ValueError, ZeroDivisionError, OverflowError, RecursionError, KeyError, IndexError):
+        return None
+    if not (e.decimal and value.rational() is None and (e.decimal_root or value.has_pi())):
+        return None
+    try:
+        lo, hi = value.interval(30)
+    except NotExact:
+        return None
+    scale = 10 ** places
+    cut = [int(abs(x) * scale) for x in (lo, hi)]
+    if cut[0] != cut[1] or (lo < 0) != (hi < 0):
+        return None
+    whole, frac = divmod(cut[0], scale)
+    return f"{'-' if lo < 0 else ''}{whole}.{frac:0{places}d}..."
 
 
 def evaluate(text, degrees=False):

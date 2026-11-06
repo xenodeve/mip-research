@@ -474,6 +474,9 @@ def expression_before_exact(text: str):
         except RecursionError:
             v = None
         if v is None:
+            approx = exactexpr.decimal_value(cand)   # `sqrt(1 +1.21)` = 1.4866...: cut and marked, true as written (#307)
+            if approx is not None:
+                return cand, approx
             continue
         if isinstance(v, Fraction):
             said = mathexpr.spelled(v)

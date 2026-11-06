@@ -930,6 +930,19 @@ class HeldOutInline(unittest.TestCase):
         self.assertEqual(tir4b.inline_found('so ~104 + 104', use_mathbackend=True)[1], '208')
         self.assertEqual(tir4b.inline_found('- H=2:2:13→2+1+3', use_mathbackend=True)[1], '6')
 
+    def test_general_style_gaps_closed(self):
+        # #307: forms the General Style read nothing at, each closed by the meaning of the notation
+        def found(before):
+            got = tir4b.inline_found(before, use_mathbackend=True)
+            return got and got[1]
+        self.assertEqual(found("11: 11 mod25. Let's compute 11^2=121≡21, 11^4=21^2=441≡441-17*25"), '16')   # a relation sign ends it
+        self.assertEqual(found('so $3005/6 / 5'), '601/6')               # one reading, by the spaces or left to right
+        self.assertIsNone(found('so $-1/4 / 1/2'))                        # two readings
+        self.assertIsNone(found('x = 3 / 6/2'))
+        self.assertEqual(found('so sqrt(1 +1.21)'), '1.4866...')         # a decimal under a root: cut and marked
+        self.assertEqual(found('x = 1.530996 / \\pi'), '0.4873...')     # a decimal with pi
+        self.assertEqual(found('so sqrt(2.25)'), '1.5')                   # exact where it comes out
+
     def test_mod_work_and_long_division(self):
         # #306 held-out. The general style writes what is true under every reading; a model's profile writes the form it was measured to
         # want: a remainder's quotient alone, a residue only where its `=` already meant `≡`

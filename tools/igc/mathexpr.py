@@ -120,10 +120,11 @@ class _Parser:
             if v in (MUL, DIV, 'mod'):
                 if v == DIV:
                     gap = self.i in self.spaced or self.i + 1 in self.spaced
-                    if divided is not None and gap != divided:
-                        # `-1/4 / 1/2` meant (-1/4)/(1/2): the spaces group it; `(360/27)/4*(-5)/2`, spaced alike, reads left to right (#306)
+                    if divided and not gap:
+                        # `-1/4 / 1/2` meant (-1/4)/(1/2), `a / b/c` a/(b/c): a tight `/` after a spaced one is grouped by the spaces against
+                        # the grammar (#306). `3005/6 / 5` reads one way either way: the spaces and left to right agree (#307)
                         raise _NotExact('a/b / c/d: the spacing groups it, the grammar does not')
-                    divided = gap
+                    divided = bool(divided) or gap
                 self.take()
                 right = self.unary()
                 if v != MUL and right == 0:
@@ -305,7 +306,8 @@ def evaluate(text):
 
 _OPERATOR = re.compile(r'[+\-*/^×÷·⋅∙−!%]|\\(?:times|cdot|ast|div|d?t?frac|sqrt)|[²³]')
 _START = re.compile(r'[\d.(\[{\\\-−]')
-_BOUNDARY = set(' \t$([{=:;,~≈→⇒') | {'\\'}   # `~104 + 104 = 208`, `13→2+1+3 = 6` (#306 held-out, R1)
+# `~104 + 104 = 208`, `13→2+1+3 = 6`, `441≡441-11*37` (a relation sign ends what comes before, #306 / #307)
+_BOUNDARY = set(' \t$([{=:;,~≈→⇒≡≤≥<>≠') | {'\\'}
 
 
 # commands after which a new operand starts: operators, relations, spacing, words, brackets' sizes
@@ -784,10 +786,10 @@ def wrong_relations(line, moduli=(), custom_ops=()):
             tolerance = _tolerance(text, '\\approx' if rough else mark.group(1)) + _decimals_slack(text, rough)
             if unit == 1 and right.denominator != 1:
                 tolerance = max(tolerance, Fraction(1))   # 130.98 - 22.88 = 108: rounded or cut to an integer
-            if not rough and mark.group(1) == '=' and right.denominator == 1 and _WHOLE_WORK.fullmatch(base[0].strip(' $')) \
-                    and off > abs(right) / 1000:
-                # whole numbers added, taken away and multiplied give a whole number: `14+7+...+1=40` for 41 is a slip, not 41 rounded to
-                # the tens (R1, #306 held-out). Rounding is a large number's last places: `505 \times 5148 = 2,600,000` (out/base)
+            if not rough and mark.group(1) == '=' and right.denominator == 1 and _WHOLE_WORK.fullmatch(base[0].strip(' $')):
+                # whole numbers added, taken away and multiplied give a whole number, and `=` says it exactly: `14+7+...+1=40` for 41 is
+                # a slip, and so is `505 \times 5148 = 2,600,000` for 2,599,740, a rounding written as an equality (`\approx` keeps its
+                # slack). From the meaning of `=`, not from a threshold fitted to a set (#307)
                 tolerance = Fraction(0)
             # `33[2/(1.2)^2 +1/(1.6)^2] = 33[1.3889 +0.3906]`: rounded decimals inside a product, the rounding times what multiplies them
             tolerance += abs(value) * sum(Fraction(1, 10 ** len(d)) / abs(Fraction(w + '.' + d))

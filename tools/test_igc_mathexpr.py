@@ -223,7 +223,6 @@ class ReplayMisreads(unittest.TestCase):
                 ('y=3x: 3*4=12 mod5=2≠1.', ()),                                    # `mod5` glued
                 ('So $6/8 = 3:4$.', ()),                                           # a ratio
                 ('"Tens: $3 + 8 + 4 + 6 + 2 + 3 + 2 = 30$."', ()),               # a column, its carry added
-                ('*   $505 \\times 5148 = 2,600,000$.', ()),                       # a large number rounded
                 ('So 1.2*10^3*2 = 2.4 x 10^3.', ()),                               # scientific with an `x`
                 ('So $(1.15)^4 \\approx 1.7490 -0.575$.', ()),                     # its value to its places, then more
                 ('Second part: 33[2/(1.2)^2 +1/(1.6)^2] = 33[1.3889 +0.3906] =33[1.7795]≈58.7235.', ())):   # rounded parts
@@ -236,6 +235,9 @@ class ReplayMisreads(unittest.TestCase):
         self.assertEqual(wrong_relations('$25 \\times 2/3 + 25 \\times 2/3 = 50/3$.'), [('25 \\times 2/3 + 25 \\times 2/3', '50/3', '100/3')])
         self.assertEqual(wrong_relations('Sum=14+7+4+3+2+2+2+1+1+1+1+1+1+1=40.'), [('14+7+4+3+2+2+2+1+1+1+1+1+1+1', '40', '41')])
         self.assertEqual(wrong_relations('Sum of millions: $47 + 316 + 4742 = 4105$ million.'), [('47 + 316 + 4742', '4105', '5105')])
+        # `=` with whole numbers is exact: a rounding written as an equality is corrected, `\approx` keeps its slack (#307)
+        self.assertEqual(wrong_relations('*   $505 \\times 5148 = 2,600,000$.'), [('505 \\times 5148', '2,600,000', '2599740')])
+        self.assertEqual(wrong_relations('*   $505 \\times 5148 \\approx 2,600,000$.'), [])
 
     def test_a_fraction_in_work_mod_m_is_an_inverse(self):
         self.assertEqual(wrong_relations('$1/2 = 3$.', {5}), [])            # 2^{-1} = 3 mod 5
