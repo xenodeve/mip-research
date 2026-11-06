@@ -196,13 +196,84 @@ def tedious(expr, value):
 # DeepSeek-R1 and QwQ-32B on the H2 traces (630 rows). Those sets were used to write the guesses, so they measure the profiles in sample.
 INLINE_STYLES = {
     'general': {'mod': 'both', 'remainder': 'both', 'decimal': 'cut'},
+    # a family profile: the General Style, then at each decision point one of its true forms, chosen by simulation on the family's traces
+    # (tools/igc profile_sim: tune half of Qwen3.5-4B's stored traces, checked on the other half and on Qwen3-235B). `forms` maps
+    # (decision, latex, decimals) or decision to a form name of `true_forms`; a point the table does not name keeps the General form.
+    'qwen': {'base': 'general', 'mod': 'both', 'remainder': 'both', 'decimal': 'cut', 'forms': {}},
     'qwen3.5-4b': {'mod': 'habit', 'remainder': 'quotient', 'decimal': 'rounded'},
     'deepseek-r1': {'mod': 'habit', 'remainder': 'quotient', 'decimal': 'rounded'},
     'qwq-32b': {'mod': 'habit', 'remainder': 'quotient', 'decimal': 'rounded'},
 }
 
 
+def _cut4(v):
+    q = abs(v.numerator) * 10 ** 4 // v.denominator
+    w, f = divmod(q, 10 ** 4)
+    return f"{'-' if v < 0 else ''}{w}.{f:04d}..."
+
+
+def _frac(v, latex):
+    if v.denominator == 1:
+        return str(v.numerator)
+    sign = '-' if v < 0 else ''
+    return f'{sign}\\frac{{{abs(v.numerator)}}}{{{v.denominator}}}' if latex else f'{sign}{abs(v.numerator)}/{v.denominator}'
+
+
+def true_forms(expr, value, general, before):
+    """(decision, {form: spelling or None for no put}) of every form true for the expression at a point where the General Style has a
+    choice, or None. The decisions and their forms are the ones tools/igc profile_sim scores; a profile picks among them."""
+    from fractions import Fraction as _F
+    from tools.igc.mathexpr import simple_quotient
+    line = before.rsplit('\n', 1)[-1]
+    latex = '\\' in line or '$' in line
+    if '≡' in general or '\\equiv' in general:
+        return 'mod', {'both': general, 'value': re.match(r'(-?\d+)', general).group(1)}
+    if '\\approx' in general or '≈' in general:
+        e, d = re.split(r'\s*(?:\\approx|≈)\s*', general, 1)
+        return 'decimal-root', {'both': general, 'exact': e, 'decimal': d}
+    if not isinstance(value, _F) or value.denominator == 1:
+        return None
+    terminates = '/' not in spelled(value)
+    if simple_quotient(expr) and not re.search(r'\\d?frac', expr):
+        nums = [int(x) for x in re.findall(r'\d+', expr)]
+        if len(nums) != 2:
+            return None
+        a, b = nums
+        dec = spelled(value) if terminates else _cut4(value)
+        if 'rem' in general:
+            return 'quotient-division', {'rem': general, 'fraction': _frac(value, latex), 'decimal': dec}
+        if math.gcd(a, b) > 1:
+            return 'quotient-reduces', {'fraction': _frac(value, latex), 'decimal': dec}
+        if terminates:
+            return 'quotient-terminates', {'decimal': dec, 'fraction': _frac(value, latex)}
+        return 'quotient-lowest', {'decimal': dec, 'none': None}
+    forms = {'fraction': _frac(value, latex)}
+    if terminates:
+        forms['decimal'] = spelled(value)
+    return 'rational', forms
+
+
 def inline_found(before, whole=False, use_mathbackend=False, custom_ops=(), style='general'):
+    """The General Style's put (`_inline_general`), then a family profile's choice of form at a decision point."""
+    got = _inline_general(before, whole, use_mathbackend, custom_ops, style)
+    table = INLINE_STYLES[style].get('forms')
+    if not got or not table or whole or not use_mathbackend:
+        return got
+    from tools.igc.unified_detect import expression_before_with_mathbackend
+    raw = expression_before_with_mathbackend(before)
+    alt = true_forms(got[0], raw[1] if raw else None, got[1], before)
+    if alt is None:
+        return got
+    decision, forms = alt
+    line = before.rsplit('\n', 1)[-1]
+    key = (decision, '\\' in line or '$' in line, re.search(r'(?<![\d.])\d+\.\d+', before[-600:]) is not None)
+    pick = table.get(key, table.get(decision))
+    if pick is None or pick not in forms:
+        return got
+    return (got[0], forms[pick]) if forms[pick] is not None else None
+
+
+def _inline_general(before, whole=False, use_mathbackend=False, custom_ops=(), style='general'):
     """(expression, spelled exact value) for the arithmetic that ends the text before an `=`, or None. The expression is read by
     tools.igc.mathexpr in every form a model writes (LaTeX at any depth, Unicode, ASCII); it refuses a symbol (algebra), a word, a mixed
     number, a root or power that is not exact. When `use_mathbackend` is True, also resolves exact calls to the 6-module mathbackend
@@ -223,7 +294,7 @@ def inline_found(before, whole=False, use_mathbackend=False, custom_ops=(), styl
     if whole:
         return expr, said
     from fractions import Fraction as _F
-    general = style == 'general'
+    general = style == 'general' or INLINE_STYLES[style].get('base') == 'general'
     quotient = isinstance(value, _F) and value.denominator != 1 and simple_quotient(expr) and not re.search(r'\\d?frac', expr)
     if general and use_mathbackend and quotient:
         # the General Style: every uneven integer quotient gets a value true however `=` is read (#307), never a refusal by a habit

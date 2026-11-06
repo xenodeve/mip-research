@@ -998,5 +998,36 @@ class HeldOutInline(unittest.TestCase):
                 self.assertEqual(tir4b.inline_found(before, use_mathbackend=True)[1], said)
 
 
+class FamilyProfile(unittest.TestCase):
+    """#307: a family profile picks one of the General Style's true forms at a decision point; it never writes a value of its own."""
+    def setUp(self):
+        self.saved = dict(tir4b.INLINE_STYLES['qwen']['forms'])
+
+    def tearDown(self):
+        tir4b.INLINE_STYLES['qwen']['forms'] = self.saved
+
+    def test_each_form_is_the_same_value(self):
+        from fractions import Fraction
+        tir4b.INLINE_STYLES['qwen']['forms'] = {'mod': 'value', 'quotient-reduces': 'decimal', 'quotient-lowest': 'none',
+                                               'quotient-terminates': 'fraction'}
+        self.assertEqual(tir4b.inline_found('Product $8 \\equiv 3 \\pmod 5$.\nSo $S \\equiv 4 \\times 2', use_mathbackend=True,
+                                            style='qwen')[1], '8')
+        self.assertEqual(tir4b.inline_found('so $10044/42', use_mathbackend=True, style='qwen')[1], '239.1428...')
+        self.assertIsNone(tir4b.inline_found('so $21/19', use_mathbackend=True, style='qwen'))
+        self.assertEqual(tir4b.inline_found('so 3/8', use_mathbackend=True, style='qwen')[1], '3/8')
+        self.assertEqual(Fraction(10044, 42), Fraction(1674, 7))
+
+    def test_an_empty_table_is_the_general_style(self):
+        tir4b.INLINE_STYLES['qwen']['forms'] = {}
+        for before in ('so $10044/42', 'so $21/19', 'so 3+4', 'so 3/8'):
+            self.assertEqual(tir4b.inline_found(before, use_mathbackend=True, style='qwen'),
+                             tir4b.inline_found(before, use_mathbackend=True))
+
+    def test_a_context_key_wins_over_the_decision(self):
+        tir4b.INLINE_STYLES['qwen']['forms'] = {'quotient-reduces': 'decimal', ('quotient-reduces', True, False): 'fraction'}
+        self.assertEqual(tir4b.inline_found('so $10044/42', use_mathbackend=True, style='qwen')[1], '\\frac{1674}{7}')
+        self.assertEqual(tir4b.inline_found('so 10044/42', use_mathbackend=True, style='qwen')[1], '239.1428...')
+
+
 if __name__ == '__main__':
     unittest.main()
