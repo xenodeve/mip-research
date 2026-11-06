@@ -1020,6 +1020,29 @@ class NoDigitJoin(unittest.TestCase):
         self.assertGreater(r.request()[0], 1)
         self.assertEqual(r.record(lambda *_: True)['joins_held'], 1)
 
+    def test_a_slash_cannot_follow_either(self):
+        """`-23/11 + 12/11 =` put `-1`, then the model's planned `/11` read `-1/11` (#307)."""
+        r = self.put(no_digit_join=True)
+        self.assertEqual(r.bias()[1000 + ord('/')], tir4b.JOIN_BIAS)
+
+    def test_after_a_point_only_digits_are_held(self):
+        """`0` then `.75` read `0.75`; `= 42.` ends a sentence. The point is let through, then one token with digits held."""
+        r = self.put(no_digit_join=True)
+        r.take(TOK.encode('.'))
+        self.assertEqual(r.request()[0], 1)
+        bias = r.bias()
+        self.assertEqual(bias[1000 + ord('7')], tir4b.JOIN_BIAS)
+        self.assertNotIn(1000 + ord('/'), bias)
+        r.take(TOK.encode('\n'))
+        self.assertIsNone(r.bias())
+        self.assertGreater(r.request()[0], 1)
+
+    def test_no_point_hold_after_other_text(self):
+        r = self.put(no_digit_join=True)
+        r.take(TOK.encode('$'))
+        r.take(TOK.encode('.'))
+        self.assertIsNone(r.bias())
+
     def test_off_by_default(self):
         r = self.put()
         self.assertGreater(r.request()[0], 1)

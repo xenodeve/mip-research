@@ -123,6 +123,9 @@ class Ids:
         self.recheck = {i for i in range(len(tokenizer)) if tokenizer.decode([i]).strip().lower().rstrip('.,:!') in RECHECK_WORDS}
         # --no-digit-join: every token whose text starts with a digit, so none can run on a number software put
         self.digit_start = {i for i in range(len(tokenizer)) if tokenizer.decode([i])[:1].isdigit()}
+        # and every token that starts with `/`: `-23/11 + 12/11 =` put `-1`, the model's planned `/11` read `-1/11` (#307, 121 of 112,793 puts)
+        self.slash_start = {i for i in range(len(tokenizer)) if tokenizer.decode([i])[:1] == '/'}
+        self.point = {i for i in range(len(tokenizer)) if tokenizer.decode([i]) == '.'}   # `0` then `.75` read `0.75`: digits held after it
         self.tool_close = tokenizer.convert_tokens_to_ids('</tool_call>')
 
 
@@ -808,6 +811,8 @@ class Rollout:
         bias = {t: SUPPRESS_BIAS for t in self.ids.recheck} if self.window > 0 else {}
         if self.join_guard:
             bias.update({t: JOIN_BIAS for t in self.ids.digit_start})
+            if self.join_guard != 'point':   # right after the put; after its `.` only a digit would make it another number
+                bias.update({t: JOIN_BIAS for t in self.ids.slash_start})
         return bias or None
 
     def open_window(self):
@@ -917,7 +922,8 @@ class Rollout:
         """The tokens of one generation. True when a block waits to run."""
         self.out += new
         self.window = max(0, self.window - len(new))
-        self.join_guard = False
+        # a `.` straight after a put ends a sentence (`= 42.`) or starts a decimal (`0` then `.75`): one more token with digits held
+        self.join_guard = 'point' if self.join_guard is True and len(new) == 1 and new[0] in self.ids.point else False
         if self.phase != 'answer' and self.phase != 'block':
             self.thought += len(new)
         last = new[-1] if new else None
