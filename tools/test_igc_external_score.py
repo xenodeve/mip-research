@@ -58,5 +58,29 @@ class LineBackLoop(unittest.TestCase):
         self.assertTrue(repeating(tokens))
 
 
+class CountingProgress(unittest.TestCase):
+    """#307: with digits masked, trial division by one prime after another is one cycle; --guard-progress lets it go on when nearly every
+    round is new, and still stops rounds that come back."""
+    @staticmethod
+    def rounds(numbers):
+        out = []
+        for n in numbers:
+            out += [100] + [15 + int(d) for d in f'{n:03d}'] + [198]   # `x NNN\n`, digits as the engine's ids 15..24
+        return out
+
+    def test_trial_division_is_progress(self):
+        from tools.igc.external_score import counting
+        tokens = self.rounds(range(101, 101 + 70))
+        self.assertTrue(counting(tokens))
+        self.assertFalse(counting(tokens, progress=True))
+        self.assertFalse(repeating(tokens, progress=True))
+
+    def test_rounds_that_come_back_are_still_a_loop(self):
+        from tools.igc.external_score import counting
+        tokens = self.rounds([123, 456] * 35)
+        self.assertTrue(counting(tokens, progress=True))
+        self.assertTrue(repeating(tokens, progress=True))
+
+
 if __name__ == '__main__':
     unittest.main()

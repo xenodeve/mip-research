@@ -101,6 +101,7 @@ def shown_text(ok, shown):
     return data[:SHOWN].decode('utf-8', 'ignore') if len(data) > SHOWN else body
 
 
+JOIN_BIAS = -100.0   # --no-digit-join: a digit cannot follow a put that ends in one
 RECHECK_WORDS = {'wait', 'hmm', 'hmmm', 'verify', 'verifying', 'check', 'checking', 'double', 'recheck', 'rechecking', 'recalculate', 'recompute', 'again'}
 SUPPRESS_BIAS = -30.0   # added to those words' logits: -inf in NoWait, a finite number that no sampled logit climbs back from
 
@@ -120,14 +121,19 @@ class Ids:
         self.equals = {i for i in range(len(tokenizer)) if tokenizer.decode([i]).strip() == '='}   # the tokens an inline value follows
         # --suppress-recheck: the words a re-check starts with (NoWait / CGRS list, the same words the H-trust tests count)
         self.recheck = {i for i in range(len(tokenizer)) if tokenizer.decode([i]).strip().lower().rstrip('.,:!') in RECHECK_WORDS}
+        # --no-digit-join: every token whose text starts with a digit, so none can run on a number software put
+        self.digit_start = {i for i in range(len(tokenizer)) if tokenizer.decode([i])[:1].isdigit()}
         self.tool_close = tokenizer.convert_tokens_to_ids('</tool_call>')
 
 
 class Arm:
     def __init__(self, force_after=0, execute=False, close_fit=False, loop_close=False, close_repeat=0, inline_calc=False, native_tool=False,
                  hint_calc=False, loop_hint=False, inline_plain=False, whole_hint=False, check_hand=False, whole_plain=False, hand_off=False, question_value=False,
-                 trust='cort', logit_value=0.0, suppress_recheck=0, mathbackend=False, candidate_close=False, inline_style='general'):
+                 trust='cort', logit_value=0.0, suppress_recheck=0, mathbackend=False, candidate_close=False, inline_style='general',
+                 no_digit_join=False, guard_progress=False):
         self.trust = trust   # the line after a hinted program that printed: 'cort' (the original), 'none', 'positive'
+        self.no_digit_join = no_digit_join   # --no-digit-join: the token after a put that ends in a digit starts with no digit (#307)
+        self.guard_progress = guard_progress   # --guard-progress: the counting check lets a tail whose rounds are nearly all new go on (#307)
         self.suppress_recheck = suppress_recheck   # --suppress-recheck: this many steps after a value software gave, the re-check words' logits are lowered
         self.logit_value = logit_value   # --logit-value: the logit added to software's next value token while the model writes the value itself
         self.force_after, self.execute, self.close_fit, self.loop_close, self.close_repeat = force_after, execute, close_fit, loop_close, close_repeat
@@ -782,6 +788,8 @@ class Rollout:
         self.plan = None     # --logit-value: the token ids of the value being written, one biased request each
         self.plan_at, self.plan_own, self.plan_event, self.last_lp = 0, [], None, None
         self.window = 0   # --suppress-recheck: steps left in which the re-check words are held down
+        self.join_guard = False   # --no-digit-join: the next request is one token, digits held down
+        self.joins_held = 0
         self.echo = (None, 0, 0)   # (expression, its run of back-to-back values, model_tokens at the last): see echoing()
         self.loop_floor = 0   # the loop checks of the thinking read from here: a nudge starts them afresh (#304)
         self.loop_nudges = 0
@@ -797,9 +805,10 @@ class Rollout:
         --suppress-recheck: the re-check words, in the window after a value."""
         if self.plan is not None:
             return {self.plan[self.plan_at]: self.arm.logit_value}
-        if self.window > 0:
-            return {t: SUPPRESS_BIAS for t in self.ids.recheck}
-        return None
+        bias = {t: SUPPRESS_BIAS for t in self.ids.recheck} if self.window > 0 else {}
+        if self.join_guard:
+            bias.update({t: JOIN_BIAS for t in self.ids.digit_start})
+        return bias or None
 
     def open_window(self):
         self.window = self.arm.suppress_recheck
@@ -859,6 +868,8 @@ class Rollout:
         """(max_tokens, stop token ids) of the next generation, or None once it is done. In the --suppress-recheck window the request is no
         longer than what is left of it, so one static logit bias covers it."""
         q = self._request()
+        if q and self.join_guard:
+            return 1, q[1]   # one token carries the digit bias, then the request goes on as before
         if q and self.window > 0 and self.plan is None:
             return min(q[0], self.window), q[1]
         return q
@@ -906,6 +917,7 @@ class Rollout:
         """The tokens of one generation. True when a block waits to run."""
         self.out += new
         self.window = max(0, self.window - len(new))
+        self.join_guard = False
         if self.phase != 'answer' and self.phase != 'block':
             self.thought += len(new)
         last = new[-1] if new else None
@@ -939,6 +951,9 @@ class Rollout:
                     # the whole value ends its line: left open, an integer drew `.000...` from the model until the guard stopped it (pc4-whole dm div_big 7815)
                     self.inject((f' {value}' if self.arm.inline_plain else f' {value} (exact)') + ('\n' if whole else ''), 'inline value')
                     self.open_window()
+                    if self.arm.no_digit_join and self.arm.inline_plain and not whole and value[-1:].isdigit():
+                        self.join_guard = True   # `-5` then the model's own `75` read `-575` on the page (#307, 80 of 19,990 puts)
+                        self.joins_held += 1
                     self.events[-1].update(expr=expr[:200], value=value, whole=whole)
                     if whole:
                         self.give(value)
@@ -1045,10 +1060,10 @@ class Rollout:
         In the answer, over the answer alone: an answer restates lines of its thinking, and read with them line_back could end a right
         answer `stuck` (#305)."""
         if self.phase == 'think':
-            return looping(self.out[self.loop_floor:])
+            return looping(self.out[self.loop_floor:], self.arm.guard_progress)
         if self.phase == 'answer':
-            return looping(self.out[self.answer_start():])
-        return looping(self.out)
+            return looping(self.out[self.answer_start():], self.arm.guard_progress)
+        return looping(self.out, self.arm.guard_progress)
 
     def answer_start(self):
         """Where the answer begins: after the last `</think>` (the model's or the runner's close), or 0 when there is none."""
@@ -1334,7 +1349,7 @@ class Rollout:
                     prompt_tokens=len(self.prompt), thinking_tokens=self.thought, seconds=self.seconds, events=self.events,
                     runs=len(runs), runs_by_model=sum(e['by'] == 'model' for e in runs), runs_forced=sum(e['by'] == 'forced' for e in runs),
                     runs_by_tool=sum(e['by'] in ('tool', 'tool in thinking') for e in runs),
-                    inline_values=sum(e['kind'] == 'inline value' for e in self.events), loop_nudges=self.loop_nudges, echo_skips=self.echo_skips,
+                    inline_values=sum(e['kind'] == 'inline value' for e in self.events), loop_nudges=self.loop_nudges, echo_skips=self.echo_skips, joins_held=self.joins_held,
                     first_run_at=runs[0]['model_tokens'] if runs else None, tool_seconds=round(sum(e['seconds'] for e in runs), 3))
 
 
@@ -1347,9 +1362,9 @@ def kv_tokens(llm):
         return None
 
 
-def looping(tokens):
+def looping(tokens, progress=False):
     from tools.igc.external_score import repeating
-    return repeating(tokens)
+    return repeating(tokens, progress=progress)
 
 
 def eos_ids(model, tok, generation_config):
@@ -1534,7 +1549,9 @@ def run(args):
     arm = Arm(args.force_after, args.execute, args.close_fit, args.loop_close, args.close_repeat, args.inline_calc, args.native_tool, args.hint_calc, args.loop_hint, args.inline_plain,
               args.whole_hint, args.check_hand, args.whole_plain, args.hand_off, args.question_value, trust=args.trust_line, logit_value=args.logit_value,
               suppress_recheck=args.suppress_recheck, mathbackend=args.mathbackend, candidate_close=args.candidate_close,
-              inline_style=args.inline_style)
+              inline_style=args.inline_style, no_digit_join=args.no_digit_join, guard_progress=args.guard_progress)
+    if args.no_digit_join and (args.server or not (args.inline_calc and args.inline_plain)):
+        raise SystemExit('--no-digit-join holds digits down after a plain inline put: it needs --inline-calc --inline-plain, and vLLM (not --server)')
     if args.suppress_recheck and (args.server or not (args.inline_calc or args.logit_value)):
         raise SystemExit('--suppress-recheck lowers the re-check words after a value software gave: it needs --inline-calc or --logit-value, and vLLM (not --server)')
     if args.logit_value and (args.inline_calc or args.server or args.whole_hint or args.hand_off):
@@ -1737,6 +1754,12 @@ def main(argv=None):
     r.add_argument('--seal-alpha', type=float, default=1.0, help='the strength: the stream gets alpha * S (the paper: 1.0)')
     r.add_argument('--suppress-recheck', type=int, default=0,
                    help="for this many steps after a value software gave (inline or logit), the logits of the re-check words (wait, hmm, verify, check, double, again...) are lowered by 30 (vLLM)")
+    r.add_argument('--no-digit-join', action='store_true',
+                   help="after a put that ends in a digit, the model's next token cannot start with one, so it cannot run the number on (#307: "
+                        "80 of 19,990 puts were joined into another number, `-5` then `75`) (vLLM)")
+    r.add_argument('--guard-progress', action='store_true',
+                   help="the bench's counting check lets a tail whose rounds are nearly all new go on (trial division, a search), and stops only "
+                        "rounds that come back (#307: 3 of 38 `stuck` rows were still moving)")
     r.add_argument('--loop-hint', action='store_true', help='a loop in the thinking is cut to one round and a program opens to test the idea')
     r.add_argument('--server', default='', help='a llama-server URL (127.0.0.1) to run on in place of vLLM: this PC, on Windows')
     r.add_argument('--question-value', action='store_true', help='the whole value is the computation the question states, read by software')

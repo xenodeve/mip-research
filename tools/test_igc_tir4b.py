@@ -998,6 +998,40 @@ class HeldOutInline(unittest.TestCase):
                 self.assertEqual(tir4b.inline_found(before, use_mathbackend=True)[1], said)
 
 
+class NoDigitJoin(unittest.TestCase):
+    """#307: 80 of 19,990 A100 puts were run on by the model's own digits into another number (`-5` then `75`); --no-digit-join makes the
+    token after a put that ends in a digit a request of its own, every digit held down."""
+    def put(self, **arm):
+        r = rollout(inline_calc=True, inline_plain=True, **arm)
+        stream = TOK.encode('so $6 \\times 7 =')
+        r.take(stream)
+        return r
+
+    def test_the_next_token_cannot_be_a_digit(self):
+        r = self.put(no_digit_join=True)
+        self.assertIn('$6 \\times 7 = 42', r.text())
+        most, _ = r.request()
+        self.assertEqual(most, 1)
+        bias = r.bias()
+        self.assertEqual(bias[1000 + ord('5')], tir4b.JOIN_BIAS)
+        self.assertNotIn(1000 + ord('$'), bias)
+        r.take(TOK.encode('$'))
+        self.assertIsNone(r.bias())
+        self.assertGreater(r.request()[0], 1)
+        self.assertEqual(r.record(lambda *_: True)['joins_held'], 1)
+
+    def test_off_by_default(self):
+        r = self.put()
+        self.assertGreater(r.request()[0], 1)
+        self.assertIsNone(r.bias())
+
+    def test_a_cut_decimal_needs_no_hold(self):
+        r = rollout(inline_calc=True, inline_plain=True, mathbackend=True, no_digit_join=True)
+        r.take(TOK.encode('so $21/19 ='))
+        self.assertIn('1.1052...', r.text())
+        self.assertFalse(r.join_guard)
+
+
 class FamilyProfile(unittest.TestCase):
     """#307: a family profile picks one of the General Style's true forms at a decision point; it never writes a value of its own."""
     def setUp(self):

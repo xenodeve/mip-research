@@ -46,7 +46,7 @@ def final_number(text):
     return float(numbers[-1] if equation or not bold else numbers[0])
 
 
-def repeating(tokens, longest=4096, rounds=20):
+def repeating(tokens, longest=4096, rounds=20, progress=False):
     """Greedy text whose tail is one exact cycle, many rounds long, cannot leave it. Past 512 tokens eight rounds are enough, as in the
     engine: a longer cycle once ran to the end of the context, 31 minutes, because this stopped looking at 512."""
     for period in range(1, longest + 1):
@@ -56,17 +56,25 @@ def repeating(tokens, longest=4096, rounds=20):
         tail = tokens[-period * count:]
         if tail == tail[:period] * count:
             return True
-    return counting(tokens) or ((len(tokens) % 4096 == 0 or (bool(tokens) and tokens[-1] in (198, 271))) and line_back(tokens))
+    return counting(tokens, progress=progress) or ((len(tokens) % 4096 == 0 or (bool(tokens) and tokens[-1] in (198, 271))) and line_back(tokens))
 
 
-def counting(tokens, longest=128, rounds=64):
-    """The engine's check, for arms with no MIP: with digit tokens masked, counting by hand is one cycle."""
-    masked = [15 if 15 <= t <= 24 else t for t in tokens[-longest * rounds:]]
+def counting(tokens, longest=128, rounds=64, progress=False, new_share=7 / 8):
+    """The engine's check, for arms with no MIP: with digit tokens masked, counting by hand is one cycle.
+    progress (--guard-progress, #307): a masked cycle whose rounds, unmasked, are nearly all new (at least `new_share` of them) is work
+    going on, not a loop: trial division by one prime after another, a search over x. 3 of 38 rows the A100 General arm ended `stuck`
+    were that, every one of their last 64 lines different. A cycle that comes back to the same rounds is still stopped."""
+    window = tokens[-longest * rounds:]
+    masked = [15 if 15 <= t <= 24 else t for t in window]
     for period in range(1, longest + 1):
         if len(masked) < period * rounds:
             return False
         tail = masked[-period * rounds:]
         if tail[period:] == tail[:-period]:
+            if progress:
+                plain = window[-period * rounds:]
+                if len({tuple(plain[i:i + period]) for i in range(0, len(plain), period)}) >= new_share * rounds:
+                    return False
             return True
     return False
 
