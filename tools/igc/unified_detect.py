@@ -362,12 +362,13 @@ def evaluate_with_mathbackend(text: str, context: str = '') -> Optional[Fraction
 
 _TAIL_OF_MORE = re.compile(r'(?:[+*/^×÷·⋅]|\\times|\\cdot|\\div)')
 _TAIL_OF_MORE_BEFORE = re.compile(r'(?:[+\-*/^×÷·⋅−±∓)\]}\d|]|\\times|\\cdot|\\div|\\pm|\\mp)\s*$')
-_CONGRUENCE = re.compile(r'\\equiv|≡|\bparity\b', re.I)
+_CONGRUENCE = re.compile(r'(?!)')   # matches nothing now: tir4b._mod_residue gives a mod line its residue (#306, held-out)
 # What exactexpr reads and mathexpr does not: a line with none of these is left to mathexpr alone, so most `=` cost nothing more
 # (`\sum_`, `\log_2`: `_` is a word character, so the command names end at a non-letter, not at \b)
 _EXACT_HINT = re.compile(r'\\sqrt|√|\bsqrt\b|\\(?:sin|cos|tan|cot|sec|csc|log|ln|sum|prod|binom|dbinom|tbinom|pi|bmod|pmod|mod|lfloor|lceil)(?![A-Za-z])'
                          r'|\b(?:sin|cos|tan|log|ln|mod)(?![A-Za-z])|[πθ°]|\\circ|\d\s*\(|\)\s*\(|[A-Za-z]\(|\b(?:gcd|lcm|comb|perm|totient)\b|\\gcd|\\lcm|\\varphi'
-                         r'|\\det|\\begin\{|\^\s*\{\s*-1\s*\}|!!|\\overline|\d_\{?\d')
+                         r'|\\det|\\begin\{|\^\s*\{\s*-1\s*\}|!!|\\overline|\d_\{?\d'
+                         r'|\||\d\s*\[|\)\s*\[|\\lvert|\\vert')   # `|2-5|`, `10 [ -2 * 0 + 2 * 1 ]` (#306 held-out: 240 bars read nothing)
 _SPELL_SKIP = re.compile(r'\s|\\left|\\right|[{}()]|\\cdot|\*|\\,')
 
 
@@ -480,7 +481,9 @@ def expression_before_exact(text: str):
                 return None   # a lone number, `(3)`, `60^\circ`
             return (cand, v) if not _same_spelling(cand, said) else None
         latex = '\\' in cand or ('sqrt' not in cand and '$' in line)
-        said = exactexpr.spell(v, latex=latex)
+        said = exactexpr.spell(v, latex=latex, decimal=re.search(r'\d\.\d', cand) is not None)
+        if '√' in cand:   # the text writes `√3`: `49√3/2`, not `49*sqrt(3)/2`
+            said = re.sub(r'\*?sqrt\((\d+)\)', r'√\1', said)
         return None if _same_spelling(cand, said, v) else (cand, said)
     return got
 

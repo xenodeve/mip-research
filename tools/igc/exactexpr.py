@@ -76,11 +76,31 @@ def _factor(n):
     return out
 
 
+MOST_PI = 4   # the largest power of pi in one term, either sign: pi^2 in an area of a circle of radius pi, 1/pi in 128/pi
+# pi to 50 places, as bounds for the interval of a value with pi in it
+_PI_LO = Fraction(31415926535897932384626433832795028841971693993751, 10 ** 49)
+_PI_HI = _PI_LO + Fraction(1, 10 ** 49)
+
+
+def _key(k):
+    """A term's key: (squarefree radicand, power of pi). A bare integer is a radicand with no pi."""
+    return k if isinstance(k, tuple) else (k, 0)
+
+
 class Value:
+    """An element of Q(sqrt 2, sqrt 3, ...)[pi, 1/pi]: {(squarefree radicand, power of pi): rational coefficient}. Pi is transcendental, so
+    a value with pi in it is still spelled one way only: 3\\pi/4 + \\sqrt{2} is equal to another value exactly when their terms are."""
     __slots__ = ('t',)
 
     def __init__(self, terms):
-        t = {r: Fraction(c) for r, c in terms.items() if c}
+        t = {}
+        for k, c in terms.items():
+            if c:
+                k = _key(k)
+                if abs(k[1]) > MOST_PI:
+                    raise NotExact('a power of pi past 4')
+                t[k] = t.get(k, 0) + Fraction(c)
+        t = {k: c for k, c in t.items() if c}
         if len(t) > MOST_TERMS:
             raise NotExact('too many radicals')
         for c in t.values():
@@ -90,14 +110,17 @@ class Value:
 
     @staticmethod
     def of(x):
-        return Value({1: Fraction(x)})
+        return Value({(1, 0): Fraction(x)})
 
     def rational(self):
         if not self.t:
             return Fraction(0)
-        if set(self.t) == {1}:
-            return self.t[1]
+        if set(self.t) == {(1, 0)}:
+            return self.t[(1, 0)]
         return None
+
+    def has_pi(self):
+        return any(k for _, k in self.t)
 
     def __eq__(self, other):
         return isinstance(other, Value) and self.t == other.t
@@ -122,16 +145,16 @@ class Value:
 
     def __mul__(self, o):
         t = {}
-        for r1, c1 in self.t.items():
-            for r2, c2 in o.t.items():
+        for (r1, k1), c1 in self.t.items():
+            for (r2, k2), c2 in o.t.items():
                 g = math.gcd(r1, r2)
                 r = (r1 // g) * (r2 // g)   # both squarefree: sqrt(r1) sqrt(r2) = g sqrt(r1 r2 / g^2)
-                t[r] = t.get(r, 0) + c1 * c2 * g
+                t[(r, k1 + k2)] = t.get((r, k1 + k2), 0) + c1 * c2 * g
         return Value(t)
 
     def flip(self, p):
         """The conjugate that negates sqrt(p): self * self.flip(p) has no sqrt(p) left."""
-        return Value({r: (-c if r % p == 0 else c) for r, c in self.t.items()})
+        return Value({(r, k): (-c if r % p == 0 else c) for (r, k), c in self.t.items()})
 
     def inverse(self):
         q = self.rational()
@@ -139,6 +162,12 @@ class Value:
             if q == 0:
                 raise NotExact('division by zero')
             return Value.of(1 / q)
+        powers = {k for _, k in self.t}
+        if len(powers) > 1:
+            raise NotExact('pi and no pi in one denominator')   # 1/(1 + pi) has no value in this field
+        k = powers.pop()
+        if k:   # 1/(c pi^k) = (1/c) pi^-k
+            return Value({(r, 0): c for (r, _), c in self.t.items()}).inverse() * Value({(1, -k): 1})
         num, den = Value.of(1), self
         for _ in range(8):
             q = den.rational()
@@ -146,7 +175,7 @@ class Value:
                 if q == 0:
                     raise NotExact('division by zero')
                 return Value({r: c / q for r, c in num.t.items()})
-            r = max(x for x in den.t if x != 1)
+            r = max(x for x, _ in den.t if x != 1)
             p = _square_split(r)[2][0]
             conj = den.flip(p)
             num, den = num * conj, den * conj
@@ -159,12 +188,15 @@ class Value:
         """(lo, hi) Fractions around the value."""
         scale = 10 ** digits
         lo = hi = Fraction(0)
-        for r, c in self.t.items():
+        for (r, k), c in self.t.items():
             if r == 1:
-                lo, hi = lo + c, hi + c
-                continue
-            a = Fraction(math.isqrt(r * scale * scale), scale)
-            b = a + Fraction(1, scale)
+                a = b = Fraction(1)
+            else:
+                a = Fraction(math.isqrt(r * scale * scale), scale)
+                b = a + Fraction(1, scale)
+            if k:   # pi^k between the bounds of pi, both positive
+                pa, pb = (_PI_LO ** k, _PI_HI ** k) if k > 0 else (1 / _PI_HI ** -k, 1 / _PI_LO ** -k)
+                a, b = a * pa, b * pb
             lo, hi = (lo + c * a, hi + c * b) if c > 0 else (lo + c * b, hi + c * a)
         return lo, hi
 
@@ -193,12 +225,35 @@ class Value:
 
 
 ZERO, ONE = Value.of(0), Value.of(1)
+PI = Value({(1, 1): 1})
+
+
+def _denest(v):
+    """sqrt(a + b sqrt(r)) = sqrt(x) + sqrt(y) when x = (a + d)/2, y = (a - d)/2 with d = sqrt(a^2 - b^2 r) rational: sqrt(4 - 2\\sqrt{3})
+    = \\sqrt{3} - 1 (#306 held-out: `sqrt( (12 -6√3 +4 -2√3)/4 )`, `(sqrt(2 -√3)/2)^2`). Else NotExact."""
+    if v.has_pi() or len(v.t) != 2 or (1, 0) not in v.t:
+        raise NotExact('a root of a root')
+    a = v.t[(1, 0)]
+    (r, _), b = next(kv for kv in v.t.items() if kv[0] != (1, 0))
+    disc = a * a - b * b * r
+    if disc < 0:
+        raise NotExact('a root of a root')
+    d = _sqrt(Value.of(disc)).rational()
+    if d is None:
+        raise NotExact('a root of a root that does not denest')
+    x, y = (a + d) / 2, (a - d) / 2
+    if x < 0 or y < 0:
+        raise NotExact('a root of a root')
+    out = _sqrt(Value.of(x)) + (_sqrt(Value.of(y)) if b > 0 else -_sqrt(Value.of(y)))
+    if out.sign() < 0:
+        raise NotExact('a root of a root')
+    return out
 
 
 def _sqrt(v):
     q = v.rational()
     if q is None:
-        raise NotExact('a root of a root')
+        return _denest(v)
     if q < 0:
         raise NotExact('the root of a negative')
     n = q.numerator * q.denominator   # sqrt(a/b) = sqrt(ab)/b
@@ -478,7 +533,10 @@ class _Parser:
         if kind == '(':
             if tok[1] in ('floor', 'ceil', 'g'):
                 return not prev_num or not spaced
-            return not spaced and (prev_num or prev[0] in (')', '!', 'var', 'pi'))
+            if spaced and self.peek(1)[0] == 'num' and self.peek(2)[0] == ')':
+                return False   # `2 (2)`, `from 3 (1)`: a number and a label in brackets
+            # `160 (1 - 2/3)`, `\frac{78}{\sqrt{30}} (6\sqrt{30})`: a space before the bracket is still a product (#306 held-out)
+            return prev_num or prev[0] in (')', '!', 'var', 'pi', '}')
         if kind == 'bar':
             return False   # |a| |b| reads two ways
         if kind == 'frac' and prev_num and self._proper_fraction():
@@ -709,6 +767,7 @@ class _Eval:
     def __init__(self, degrees=False):
         self.degrees = degrees
         self.decimal = False
+        self.decimal_root = False
         self.irrational = False
         self.steps = 0
 
@@ -729,9 +788,7 @@ class _Eval:
                 return env[node[1]]
             raise NotExact('a symbol: ' + node[1])
         if k == 'pi':
-            if pi is None:
-                raise NotExact('pi outside an angle')
-            return pi
+            return PI if pi is None else pi   # outside an angle, pi itself: `\pi/2 - 5\pi/12 = \pi/12`, `\pi \cdot 1^2`
         if k == 'deg':
             v = self.ev(node[1], env, pi)
             return v if pi is None else v * pi / Value.of(180)
@@ -775,11 +832,14 @@ class _Eval:
                 raise NotExact('a factorial past 34!')
             return Value.of(math.factorial(n))
         if k == 'sqrt':
+            outer, self.decimal = self.decimal, False
             v = self.ev(node[1], env, pi)
+            inner, self.decimal = self.decimal, outer or self.decimal
             idx = 2 if node[2] is None else _integer(self.ev(node[2], env, pi))
             out = _root(v, idx)
             if out.rational() is None:
                 self.irrational = True
+                self.decimal_root = self.decimal_root or inner   # `\sqrt{310.9666}`: a decimal under the root
             return out
         if k == 'binom':
             n, r = _integer(self.ev(node[1], env, pi)), _integer(self.ev(node[2], env, pi))
@@ -857,8 +917,10 @@ def evaluate(text, degrees=False):
         tree = _parse(text)
         e = _Eval(degrees)
         value = e.ev(tree, {})
-        if e.decimal and value.rational() is None:
-            return None   # `\sqrt{310.9666}`: the model wants a decimal
+        if e.decimal and value.rational() is None and (e.decimal_root or value.has_pi()):
+            return None   # `\sqrt{310.9666}`, `1.530996 / \pi`: the model wants a decimal
+        # decimals only as coefficients keep the root: `0.4 \cdot 50\sqrt{10} = 20\sqrt{10}`, `7√3 + 17.5√3 = 24.5√3` (#306 held-out: the
+        # model wrote the exact root form at 89 of the 106 such `=` that have a number next, a decimal at 17)
         return value
     except (NotExact, ValueError, ZeroDivisionError, OverflowError, RecursionError, KeyError, IndexError):
         return None
@@ -868,18 +930,84 @@ def evaluate(text, degrees=False):
 # Spelling
 # ---------------------------------------------------------------------------------------------------------------------------------
 
-def spell(value, latex=True):
-    """One spelling per value: rational part first, then the roots by radicand; a common denominator under one fraction bar."""
+def _times_pi(g, k, latex):
+    """`g pi^k` spelled, g with no pi in it: `\\frac{3\\pi}{4}`, `3π/4`, `(1 + \\sqrt{2})\\pi`, `\\frac{128}{\\pi}`."""
+    s = spell(g, latex)
+    if k == 0:
+        return s
+    sym = '\\pi' if latex else 'π'
+    if abs(k) > 1:
+        sym = f'\\pi^{{{abs(k)}}}' if latex else f'π^{abs(k)}'
+    q = g.rational()
+    if q is not None:
+        sign, a, d = '-' if q < 0 else '', abs(q.numerator), q.denominator
+        if k > 0:
+            num = sym if a == 1 else f'{a}{sym}'
+            return sign + num if d == 1 else (f'{sign}\\frac{{{num}}}{{{d}}}' if latex else f'{sign}{num}/{d}')
+        den = sym if d == 1 else f'{d}{sym}'
+        return f'{sign}\\frac{{{a}}}{{{den}}}' if latex else f'{sign}{a}/' + (den if d == 1 else f'({den})')
+    if len(g.t) == 1 and k > 0:   # one root: `\frac{36\sqrt{5}\pi}{25}`, `36*sqrt(5)*π/25`
+        ((r, _), c), = g.t.items()
+        sign, a, d = '-' if c < 0 else '', abs(c.numerator), c.denominator
+        root = f'\\sqrt{{{r}}}' if latex else f'sqrt({r})'
+        num = (f'{a}' if a != 1 else '') + (root + sym if latex else root + '*' + sym)
+        if not latex and a != 1:
+            num = f'{a}*{root}*{sym}'
+        return sign + num if d == 1 else (f'{sign}\\frac{{{num}}}{{{d}}}' if latex else f'{sign}{num}/{d}')
+    single = ' ' not in s and '/' not in s and not s.startswith(('\\frac', '-\\frac'))
+    if k > 0:
+        if latex:
+            return f'{s}{sym}' if single else f'({s}){sym}'
+        return f'{s}*{sym}' if single else f'({s})*{sym}'
+    return f'\\frac{{{s}}}{{{sym}}}' if latex else f'({s})/{sym}'
+
+
+def _terminates(c):
+    d = c.denominator
+    for p in (2, 5):
+        while d % p == 0:
+            d //= p
+    return d == 1
+
+
+def spell(value, latex=True, decimal=False):
+    """One spelling per value: rational part first, then the roots by radicand; a common denominator under one fraction bar. `decimal`:
+    the text works in decimals, so coefficients that terminate are written as decimals."""
     q = value.rational()
     if q is not None:
         return mathexpr.spelled(q)
+    if value.has_pi():
+        groups = {}
+        for (r, k), c in value.t.items():
+            groups.setdefault(k, {})[(r, 0)] = c
+        # the part with no pi first, then pi, pi^2, ..., then 1/pi: `\frac{\pi}{12}`, `5 + \frac{\pi}{4}`, `\frac{128}{\pi}`
+        order = sorted(groups, key=lambda k: (k != 0, k < 0, abs(k)))
+        text = ''
+        for k in order:
+            part = _times_pi(Value(groups[k]), k, latex)
+            text = part if not text else text + (' - ' + part[1:] if part.startswith('-') else ' + ' + part)
+        return text
     if all(c < 0 for c in value.t.values()):   # `-\frac{1 + \sqrt{5}}{4}`; with no denominator `-2 - \sqrt{3}` below
         inner = spell(-value, latex)
         if latex and inner.startswith('\\frac'):
             return '-' + inner
         if not latex and '/' in inner:
             return f'-({inner})' if ' ' in inner else '-' + inner
-    terms = sorted(value.t.items())
+    terms = sorted((r, c) for (r, _), c in value.t.items())   # no pi here: the radicand alone
+    if decimal and all(_terminates(c) for _, c in terms):
+        # the text works in decimals: `24.5\sqrt{3}`, not `\frac{49\sqrt{3}}{2}` (`7√3 + 17.5√3 = 24.5√3`, #306 held-out)
+        parts = []
+        for r, c in terms:
+            a = mathexpr.spelled(abs(c))
+            root = f'\\sqrt{{{r}}}' if latex else f'sqrt({r})'
+            body = a if r == 1 else (root if a == '1' else (f'{a}{root}' if latex else f'{a}*{root}'))
+            parts.append(('-' if c < 0 else '+', body))
+        lead = next((j for j, (sign, _) in enumerate(parts) if sign == '+'), 0)
+        parts = [parts[lead]] + parts[:lead] + parts[lead + 1:]
+        text = ('-' if parts[0][0] == '-' else '') + parts[0][1]
+        for sign, body in parts[1:]:
+            text += f' {sign} {body}'
+        return text
     den = 1
     for _, c in terms:
         den = den * c.denominator // math.gcd(den, c.denominator)

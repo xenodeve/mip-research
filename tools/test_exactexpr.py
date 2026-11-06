@@ -48,9 +48,24 @@ class Values(unittest.TestCase):
                     (r'\cos(-60^\circ)', '0.5'), ('sin(60°)', r'\frac{\sqrt{3}}{2}'), (r'180^\circ - 30^\circ', '150')])
 
     def test_trig_with_no_exact_value(self):
-        # `\sin 30` has no unit (30 radians or 30 degrees); 18 degrees' cosine is a root of a root; pi alone is no value
-        self.check([(r'\sin 30', None), (r'\tan 90^\circ', None), (r'\cos 18^\circ', None), (r'\sin 10^\circ', None), (r'\sin x', None),
-                    (r'\pi', None), (r'2\pi', None)])
+        # `\sin 30` has no unit (30 radians or 30 degrees); 18 degrees' cosine is a root of a root
+        self.check([(r'\sin 30', None), (r'\tan 90^\circ', None), (r'\cos 18^\circ', None), (r'\sin 10^\circ', None), (r'\sin x', None)])
+
+    def test_a_root_of_a_root_that_denests(self):
+        # #306 held-out: sqrt(a + b sqrt r) = sqrt x + sqrt y when a^2 - b^2 r is a square
+        self.check([('sqrt(4 - 2√3)', r'\sqrt{3} - 1'), ('sqrt( (12 -6√3 +4 -2√3)/4 )', r'\sqrt{3} - 1'),
+                    ('(sqrt(2 -√3)/2)^2', r'\frac{2 - \sqrt{3}}{4}'), ('sqrt(2 - √3)', r'\frac{\sqrt{6} - \sqrt{2}}{2}'),
+                    (r'\sqrt{3 + 2\sqrt{2}}', r'1 + \sqrt{2}'), ('sqrt(7 - 4√3)', r'2 - \sqrt{3}'), ('sqrt(1 + √2)', None), ('sqrt(√2)', None)])
+
+    def test_pi_is_a_value(self):
+        # #306 held-out: 455 `=` with pi in them read nothing; pi is transcendental, so a value with it still spells one way
+        self.check([(r'\pi', r'\pi'), (r'2\pi', r'2\pi'), ('π/2 - 5π/12', r'\frac{\pi}{12}'), ('(π - 3π/4) +5', r'5 + \frac{\pi}{4}'),
+                    ('2π/12 + π/12 + 9π/12', r'\pi'), ('8*sqrt(5) * (9/(10*sqrt(5))) * π', r'\frac{36\pi}{5}'),
+                    ('π*(6/5)*(6/sqrt(5))', r'\frac{36\sqrt{5}\pi}{25}'), ('128/π', r'\frac{128}{\pi}'), (r'\pi \cdot 3^2', r'9\pi'),
+                    ('(1+√2)π', r'(1 + \sqrt{2})\pi'), ('π^2/π', r'\pi'), ('1/(1+π)', None), (r'\pi r^2', None)])
+        self.assertEqual(x.spell(x.evaluate('π/2 - 5π/12'), latex=False), 'π/12')
+        self.assertEqual(x.evaluate("3π/4").sign(), 1)
+        self.assertEqual(x.evaluate("π - 3").floor(), x.Value.of(0))
 
     def test_logs_that_come_out(self):
         self.check([(r'\log_2 8', '3'), (r'\log_{10} 1000', '3'), (r'\log_4 2', '0.5'), (r'\log_8 \frac{1}{4}', '-2/3'), (r'\ln 1', '0'),
@@ -153,9 +168,9 @@ class Bridge(unittest.TestCase):
 
     def test_what_the_model_is_doing_there(self):
         # #306: the value is right for the text, not for the step: a long division's digit, a borrow, mod m, coins, a cut 5/3
-        self.assertIsNone(self.found('Bring down the 1. The remainder is 1.\n$1 \\div 2'))
+        self.assertEqual(self.found('Bring down the 1. The remainder is 1.\n$1 \\div 2')[1], '0')   # the quotient's digit, not 0.5
         self.assertIsNone(self.found('    *   $38115 - 29799$.\n    *   $5-9'))
-        self.assertIsNone(self.found('Work $\\pmod{13}$.\n$(2^4)^2'))
+        self.assertEqual(self.found('Work $\\pmod{13}$.\n$(2^4)^2')[1], '256')   # no `=` for `≡` written yet: the full value, a true equation
         self.assertIsNone(self.found('In $\\mathbb{Z}_5$, $2^{-1} \\equiv 3$. So\n$3/2'))
         self.assertIsNone(self.found('Using 10 cent and 1 cent coins: $2 \\times 10 + 5 \\times 1'))
         self.assertIsNone(self.found('Tens: $3 + 8 + 4 + 6 + 2 + 3 + 2'))

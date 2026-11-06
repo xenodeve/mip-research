@@ -195,15 +195,29 @@ def inline_found(before, whole=False, use_mathbackend=False, custom_ops=()):
     else:
         found = expression_before(before)
     if found is None:
-        return None
+        return (_tuple_found(before) or _pm_found(before)) if use_mathbackend else None
     expr, value = found
     said = spelled(value)
     if whole:
         return expr, said
+    from fractions import Fraction as _F
+    if isinstance(value, _F) and value.denominator != 1 and value > 0 and simple_quotient(expr) and _lowest(expr) \
+            and _REMAINDER_WORK.search('\n'.join(before.split('\n')[-2:])):
+        # a long division wants its quotient: `13 \div 2 = 6` remainder 1. Where a remainder is being worked out the model wrote the
+        # whole quotient 156 times in 165 (held-out) and 281 in 304 (seven 4B arms, #306). On this line or the one before only, and in
+        # lowest terms: a divisibility check far from it writes `174/4 = 43.5`, and `10044 / 42 = 5022 / 21` reduces
+        return expr, str(value.numerator // value.denominator)
     if '/' in said and simple_quotient(expr) and not (use_mathbackend and _reduces(expr, before)):
         # an integer quotient that does not come out: the model is doing long division and wants a digit, not 21/19 (dm div_big). One
         # that reduces is a step of its own: `10044/42 = 1674/7`, `6/26 = 3/13` (ctrl traces of a100_262k)
         return None
+    if _decomposes(expr, value, before):
+        return None
+    residue = _mod_residue(value, before)
+    if residue == '':
+        return None   # `$2^{10} \equiv 1024 + 1 =`: a congruence with no modulus named, its residue cannot be told
+    if residue is not None:
+        return expr, residue
     if _bare(said) == _bare(expr):
         return None   # nothing new, and `= 15/13 = 15/13 = ...` looped until stuck; `9√2 -3 =` is `9*sqrt(2) - 3` (#306, R1)
     if re.fullmatch(r'\s*\(?\s*-?\d[\d,]*(?:\.\d+)?\s*\)?\s*', expr):
@@ -214,6 +228,130 @@ def inline_found(before, whole=False, use_mathbackend=False, custom_ops=()):
         # `5 * (3 * 1)` where the question defined `a * b = a - b`: no product (#306, held-out)
         return None
     return expr, said
+
+
+_PM = re.compile(r'±|\\pm(?![A-Za-z])')
+
+
+def _pm_found(before):
+    """(expression, spelled value) for one `±` worked out as its two values a, b and written back as P ± Q (P = (a+b)/2, Q = (a-b)/2), the
+    form the model keeps: `[6 ± sqrt(32)] / 2 = 3 ± 2√2`, `\\frac{16 \\pm \\sqrt{256 - 240}}{2} = 8 \\pm 2` (#306 held-out: 417 `=` after
+    a `±`; the model wrote the simplified `±` form next, then the two values)."""
+    from fractions import Fraction as _F
+    from tools.igc import exactexpr
+    from tools.igc.unified_detect import evaluate_exact
+    line = before.rsplit('\n', 1)[-1].rstrip()
+    s = line.rstrip(' $')
+    cut = max([m.end() for m in re.finditer(r'(?<![<>!\\])=|\$|\\\(|\\\[|:\s|⇒|\\implies|\\Rightarrow', s)] + [0])
+    expr = s[cut:].strip()
+    if len(_PM.findall(expr)) != 1 or not re.search(r'\d', expr):
+        return None
+    if re.fullmatch(r'(?:±|\\pm)\s*-?\d+(?:\.\d+)?(?:\s*/\s*\d+)?', expr):
+        return None   # `g=±1/2`: a value already
+    vals = []
+    for sign in '+-':
+        v = evaluate_exact(_PM.sub(sign, expr), before)
+        if v is None:
+            return None
+        vals.append(v if isinstance(v, exactexpr.Value) else exactexpr.Value.of(v) if isinstance(v, _F) else None)
+    if None in vals:
+        return None
+    a, b = vals
+    p, q = (a + b) * exactexpr.Value.of(_F(1, 2)), (a - b) * exactexpr.Value.of(_F(1, 2))
+    try:
+        if q.sign() < 0:
+            q = -q
+    except exactexpr.NotExact:
+        return None
+    if q == exactexpr.ZERO:
+        return None
+    latex = '\\' in line or '$' in line
+    pm = ' \\pm ' if latex else ' ± '
+    d = 1
+    for c in list(p.t.values()) + list(q.t.values()):
+        d = d * c.denominator // math.gcd(d, c.denominator)
+    pn, qn = p * exactexpr.Value.of(d), q * exactexpr.Value.of(d)
+
+    def sp(v):
+        r = v.rational()
+        t = spelled(r) if r is not None else exactexpr.spell(v, latex)
+        return re.sub(r'\*?sqrt\((\d+)\)', r'√\1', t) if '√' in expr else t
+    if p == exactexpr.ZERO:
+        said = pm.strip() + ' ' + sp(q)   # `\pm \frac{5\sqrt{69}}{12}`
+    else:
+        body = sp(pn) + pm + sp(qn)
+        said = body if d == 1 else (f'\\frac{{{body}}}{{{d}}}' if latex else f'({body})/{d}')
+    return None if _bare(said) == _bare(expr) else (expr, said)
+
+
+def _lowest(expr):
+    """The integer quotient `a / b` (or `a \\div b`) is written in lowest terms."""
+    nums = [int(x) for x in re.findall(r'\d+', expr)]
+    return len(nums) == 2 and math.gcd(*nums) == 1
+
+
+def _tuple_found(before):
+    """(expression, spelled value) for a point or vector worked out component by component, or None: `(5 -35/13, 12 -84/13) =` is
+    `(30/13, 72/13)`, `M - A = (0, 1 - (-1.5), 0 - (-0.5)) =` is `(0, 2.5, 0.5)` (#306 held-out: 359 such `=` read nothing). Not after a
+    letter: `g(0, 1/2)` is a function's value and `Q(2, 3)` names a point."""
+    from fractions import Fraction as _F
+    from tools.igc import exactexpr
+    from tools.igc.unified_detect import evaluate_exact
+    line = before.rsplit('\n', 1)[-1].rstrip()
+    s = line.rstrip(' $')
+    close = '\\right)' if s.endswith('\\right)') else ')' if s.endswith(')') else None
+    if close is None:
+        return None
+    depth, j = 0, len(s) - len(close)
+    open_at = None
+    while j > 0:
+        j -= 1
+        ch = s[j]
+        if ch in ')]}':
+            depth += 1
+        elif ch in '([{':
+            if depth == 0:
+                open_at = j if ch == '(' else None
+                break
+            depth -= 1
+    if open_at is None:
+        return None
+    start = open_at - 5 if close == '\\right)' and s[:open_at].endswith('\\left') else open_at
+    head = s[:start].rstrip()
+    if re.search(r'[A-Za-z_\d]$|\\[A-Za-z]+$', head) and not re.search(r'\\(?:cdot|times|quad|left)$', head):
+        return None   # a call or a point's name; `= (` or `$(` is a vector
+    inner, parts, depth, cur = s[open_at + 1:len(s) - len(close)], [], 0, ''
+    for ch in inner:
+        if ch in '([{':
+            depth += 1
+        elif ch in ')]}':
+            depth -= 1
+        if ch == ',' and depth == 0:
+            parts.append(cur)
+            cur = ''
+        else:
+            cur += ch
+    parts.append(cur)
+    if len(parts) < 2 or len(parts) > 6 or any(not p.strip() for p in parts):
+        return None
+    if all(re.fullmatch(r'\s*-?\d+(?:\.\d+)?\s*', p) for p in parts):
+        return None   # a point already: nothing to work out
+    latex = '\\' in line or '$' in line
+    said = []
+    for p in parts:
+        v = evaluate_exact(p, before)
+        if v is None:
+            return None
+        if isinstance(v, exactexpr.Value):
+            q = v.rational()
+            said.append(spelled(q) if q is not None else exactexpr.spell(v, latex))
+        elif isinstance(v, _F):
+            said.append(spelled(v))
+        else:
+            return None
+    expr = s[start:]
+    out = '(' + ', '.join(said) + ')'
+    return None if _bare(out) == _bare(expr) else (expr, out)
 
 
 def _bare(s):
@@ -260,6 +398,78 @@ def _glued_period(e):
     return bool(glued) and list(glued.group(1)) == [glued.group(2)] + re.findall(r'\d', glued.group(3))
 
 
+_REMAINDER_WORK = re.compile(r'\brem\b|remainder|bring(?:s|ing)? down|long division', re.I)
+# the modulus a line works in: `≡ 7 mod 25`, `\pmod{29}`, `(mod 11)`, `mod25`
+_LINE_MODULUS = re.compile(r'(?:\\pmod\s*\{?\s*|\\bmod\s*\{?\s*|\(\s*mod\s*|\bmod(?:ulo)?\s*)\$?(\d+)')
+
+
+def _decomposes(expr, value, before):
+    """The expression rewrites the number its chain opened with: `601 = 560 + 41 =`, `225 = 15^2 = (3 \\times 5)^2 =`. Its value is that
+    number, already written; the model is taking it apart (for a remainder, a factorisation), not computing (#306: 45 such `=` in the
+    mod-work refusals, the model wrote the next piece of the decomposition in every one)."""
+    line = before.rsplit('\n', 1)[-1]
+    at = line.rfind(expr.strip())
+    if at < 0:
+        return False
+    head = line[:at]
+    cut = max(head.rfind(c) for c in '$:;(') if not head.rstrip().endswith('(') else -1
+    parts = head[cut + 1:].split('=')
+    if len(parts) < 2:
+        return False
+    m = re.fullmatch(r'\s*(-?\d[\d,]*(?:\.\d+)?)\s*', parts[0])
+    from fractions import Fraction as _F
+    return bool(m) and isinstance(value, _F) and _F(m.group(1).replace(',', '')) == value
+
+
+def _mod_residue(value, before):
+    """On a line that works mod m, an integer outside 0..m-1 is given as its residue: `7^5 = 7^4*7 = 1*7 = 7 mod 25`, `4+4 = 3` (mod 5).
+    The model's own `=` there is a congruence (#306: modular power chains of R1 and QwQ). Only when the model has used `=` that way on
+    this line already, or writes no full value before a congruence sign there: `6*24=144≡144-4*29` keeps 144."""
+    from fractions import Fraction as _F
+    if not isinstance(value, _F) or value.denominator != 1:
+        return None
+    lines = before.split('\n')
+    line = lines[-1][-500:]
+    near = '\n'.join(lines[-2:])[-700:]   # `Work $\pmod{13}$.` then `$(2^4)^2 = 3^2$` on the next line
+    mods = [int(x) for x in _LINE_MODULUS.findall(near)]
+    if re.search(r'\bparity\b', line, re.I):
+        mods.append(2)   # `The parity is $1 + 1 = 0$` (contest-ab7dcc84)
+    if not re.search(r'≡|\\equiv|\\pmod|\bmod\b|mod\s*\d|\bparity\b', line, re.I):
+        return None   # the line itself works mod m: `Number of such u is 81 - 27 = 54` after a line mod 27 counts, it does not reduce
+    if not mods:
+        return '' if re.search(r'≡|\\equiv', line) else None
+    m = mods[-1]
+    if m < 2 or 0 <= value < m:
+        return None
+    # the residue only where the model has already written `=` for `≡` near here: `7^4=(7^2)^2=(-1)^2=1 mod25`. Elsewhere it writes the
+    # full value and then reduces it, `$4 \times 2 = 8 \equiv 3 \pmod 5$`, `6*24=144≡144-4*29`, and a residue there is a false equation
+    # (seven 4B arms: 4 \times 2 = 3 was put 9 times on such lines, #306)
+    if re.search(r'\bparity\b', line, re.I):
+        return str(value % 2)   # the line says what its `=` means
+    return str(value % m) if _eq_means_congruence(near, m) else None
+
+
+def _eq_means_congruence(text, m):
+    """Whether the model's latest `=` in `text` that tells links an expression to its residue mod m rather than to its full value past m."""
+    from tools.igc.mathexpr import evaluate, expression_before
+    last = None
+    for e in list(re.finditer(r'(?<![<>!=\\])=(?!=)', text))[-10:]:
+        got = expression_before(text[:e.start()])
+        # what the model set it equal to: a number or an expression, up to the next relation or the end of the statement
+        right = re.split(r'(?<![<>!=\\])=|≡|\\equiv|\\pmod|\bmod\b|mod\s*\d|\$|,\s|;|\.\s|\.$|\n|\\quad|\\text|\?', text[e.end():], 1)[0]
+        w = evaluate(right.strip()) if right.strip() else None
+        if not got or w is None or not hasattr(got[1], 'denominator') or got[1].denominator != 1 \
+                or not hasattr(w, 'denominator') or w.denominator != 1:
+            continue
+        v, w = got[1].numerator, w.numerator
+        if w == v and not 0 <= v < m and re.fullmatch(r'\s*-?\d+\s*', right):
+            last = 'full'      # `7^2=49`, then `≡ -1`: the full value written out (a rewrite `7^5=7^4*7` says nothing)
+        elif w != v and (v - w) % m == 0:
+            last = 'residue'   # `(7^2)^2=(-1)^2`, `23^4=4^2`
+    # the latest use decides: R1 writes a small power out (`7^2=49≡-1`) and then works in residues
+    return last == 'residue'
+
+
 _LONG_DIVISION = re.compile(r'\brem\b|remainder|bring(?:s|ing)? down|long division|\bquotient\b|\bcarry\b|\bborrow|\bdigit|\bcolumn', re.I)
 _MOD_WORK = re.compile(r'\\equiv|≡|\\pmod|\\bmod|\bmod(?:ulo)?\b', re.I)
 _CUT_REPEATING = re.compile(r'(?<![\d.])\d+\.\d*?(?:(\d)\1{2,}|33|66)(?!\d)')
@@ -286,19 +496,16 @@ def _meant_otherwise(expr, value, before):
     # gives a digit; a value under 0 or past 9 is a borrow or a carry the model is about to write
     column = _LONG_DIVISION.search(recent) or _COLUMN.search(before[-400:])
     # `0-1-8` takes the borrow from the column before it (`10^-6: $0-1-8 = 9-8 = 1$`, held-out a100r4 seal1)
-    if q is not None and column and re.fullmatch(r'\s*\d{1,2}(?:\s*[-−+]\s*\d{1,2}){1,2}\s*', expr) and not 0 <= q <= 9:
+    # a carry is written after its sum (`7+9=16`, then `write 6 carry 1`: the model wrote the sum in 1,520 of 1,540 such `=`, held-out);
+    # a borrow is not: `0-9 = 1`
+    if q is not None and column and re.fullmatch(r'\s*\d{1,2}(?:\s*[-−+]\s*\d{1,2}){1,2}\s*', expr) and q < 0:
         return True
     if _PLACE.search(line):
         return True   # `Tens: $3 + 8 + 4 + 6 + 2 + 3 + 2 = 30$`: a column of a sum, its carry added in the head
-    mod = _MOD_WORK.search(before[-1500:])
-    if mod and (q is None or q.denominator != 1):
-        return True
-    if mod and q is not None:
-        # `$6^3 = 6 \cdot (-3) = -18 \equiv 8$`, `$(2^4)^2 = 3^2$`: in work mod m `=` is often `\equiv`; a value past the modulus is not the
-        # step the model takes
-        ms = moduli_in(before[-1500:])
-        if q < 0 or (ms and q >= min(ms)) or (not ms and abs(q) > 100):
-            return True
+    if (q is None or q.denominator != 1) and _MOD_WORK.search('\n'.join(before.split('\n')[-2:])):
+        return True   # `$3/2 = 3 \cdot 3$` mod 7: a quotient is a product by an inverse there
+    # a mod word further back no longer refuses: past it the model wrote the plain value in 1,531 of 1,982 `=` (held-out) and 814 of
+    # 1,152 (seven 4B arms); on the line itself `_mod_residue` gives the residue where the model's `=` means `≡`
     if _COINS.search(recent) and _AS_COUNT.fullmatch(expr.strip(' $')):
         return True   # `$f(25) = 2 \times 10 + 5 \times 1 = 7$` coins: a count, not the value 25
     if re.fullmatch(r'[^()]*[+\-−][^()]*\s/\s*\d+\s*', expr):

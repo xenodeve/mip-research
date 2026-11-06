@@ -893,6 +893,53 @@ class HeldOutInline(unittest.TestCase):
                 with self.subTest(before=before, mathbackend=mb):
                     self.assertIsNone(tir4b.inline_found(before, use_mathbackend=mb))
 
+    def test_a_point_or_vector_gets_each_component(self):
+        for before, said in (('Moving 7 units from A: (5 -35/13, 12 -84/13)', '(30/13, 72/13)'),
+                             ('So M - A = (0, 1 - (-1.5), 0 - (-0.5))', '(0, 2.5, 0.5)'),
+                             ('Midpoint M: ((2 + 1.5)/2, (0 +1)/2)', '(1.75, 0.5)'),
+                             ('$R_2 - 2 R_3 = (4+6, -4-8, -2+4)', '(10, -12, 2)')):
+            with self.subTest(before=before):
+                self.assertEqual(tir4b.inline_found(before, use_mathbackend=True)[1], said)
+        for before in ('    $g(0, 1/2)', 'Q(12-10, 2(10)-6)', 'A is (2, 0)'):   # a call, a named point, a point already
+            with self.subTest(before=before):
+                self.assertIsNone(tir4b.inline_found(before, use_mathbackend=True))
+
+    def test_a_plus_minus_is_written_back_simplified(self):
+        for before, said in (('roots: [6 ± sqrt(36 - 4*1*1)] / 2 = [6 ± sqrt(32)] / 2', '3 ± 2*sqrt(2)'),
+                             ('are $d = \\frac{16 \\pm \\sqrt{256 - 240}}{2}', '8 \\pm 2'),
+                             ('u=(16 ±√(256 -64))/32=(16 ±√192)/32', '(2 ± √3)/4'),
+                             ('dratic formula: x = [-3 ± sqrt(9 + 160)] / 2', '(-3 ± 13)/2'),
+                             ('So $y_X = \\pm \\frac{\\sqrt{575}}{\\sqrt{48}}', '\\pm \\frac{5\\sqrt{69}}{12}')):
+            with self.subTest(before=before):
+                self.assertEqual(tir4b.inline_found(before, use_mathbackend=True)[1], said)
+        for before in ('Then g=±1/2', 'b = [ (k -1) ± sqrt(D) ] / 2', ' = \\frac{-6 \\pm \\sqrt{-108}}{2}'):   # alone, a symbol, no real root
+            with self.subTest(before=before):
+                self.assertIsNone(tir4b.inline_found(before, use_mathbackend=True))
+
+    def test_decimal_coefficients_keep_the_root(self):
+        self.assertEqual(tir4b.inline_found('so 7√3 + 17.5√3', use_mathbackend=True)[1], '24.5√3')
+        self.assertEqual(tir4b.inline_found('then $0.4 \\cdot 50 \\sqrt{10}', use_mathbackend=True)[1], '20\\sqrt{10}')
+        self.assertIsNone(tir4b.inline_found('so $\\sqrt{310.9666}', use_mathbackend=True))   # a decimal under the root wants a decimal
+
+    def test_pi_and_spaced_products(self):
+        self.assertEqual(tir4b.inline_found('so E = π/2 - 5π/12', use_mathbackend=True)[1], 'π/12')
+        self.assertEqual(tir4b.inline_found('Total area is $\\frac{\\pi}{2} - \\frac{\\pi}{3}', use_mathbackend=True)[1], '\\frac{\\pi}{6}')
+        self.assertEqual(tir4b.inline_found('so $160 (1 - 2/3)', use_mathbackend=True)[1], '160/3')
+        self.assertEqual(tir4b.inline_found('so |4 - (-19)|', use_mathbackend=True)[1], '23')
+
+    def test_mod_work_and_long_division(self):
+        # #306 held-out: what the model wrote at each refused `=`. A remainder's quotient; a residue only where its `=` already meant `≡`
+        self.assertEqual(tir4b.inline_found('Long division: 1091 rem 3. So 13 / 2', use_mathbackend=True)[1], '6')
+        self.assertEqual(tir4b.inline_found('7^10: 7^2=49≡-1 mod25. Then 7^4=(7^2)^2=(-1)^2=1 mod25. Then 7^5=7^4*7',
+                                            use_mathbackend=True)[1], '7')
+        self.assertEqual(tir4b.inline_found('Product $4 \\times 2 = 8 \\equiv 3 \\pmod 5$.\nSo $S \\equiv 4 \\times 2',
+                                            use_mathbackend=True)[1], '8')   # it writes the full value, then reduces
+        self.assertEqual(tir4b.inline_found('6^7=6*24=144≡144-4*29=144-116=28 mod29.6^8=6*28', use_mathbackend=True)[1], '168')
+        self.assertIsNone(tir4b.inline_found('    601 mod 7: $601 = 560 + 41', use_mathbackend=True))   # taking 601 apart
+        self.assertEqual(tir4b.inline_found('the carry: $7+9', use_mathbackend=True)[1], '16')
+        self.assertIsNone(tir4b.inline_found('borrow: $0-9', use_mathbackend=True))
+        self.assertEqual(tir4b.inline_found('We need it mod 7. Earlier.\n\n$12^2', use_mathbackend=True)[1], '144')
+
     def test_the_neighbours_still_get_their_value(self):
         for before, said in (('Divide by $2-1', '1'),                               # a step named, then its operand worked out
                              ('then multiply by $7 \\times 2', '14'),
