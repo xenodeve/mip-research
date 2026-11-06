@@ -62,6 +62,17 @@ class Math(unittest.TestCase):
         self.assertFalse(math_right('</think>\n\n\\boxed{45\\sqrt{13} + 5}', '-5 + 45*sqrt(13)'))
         self.assertFalse(math_right('</think>\n\n\\boxed{10\\sqrt{17}}', '10*sqrt(13)'))
 
+    def test_a_set_of_answers_in_any_order(self):
+        """#307 A100 General arm: `-2, 1` for gold `1,-2` and both roots for `1\\pm\\sqrt{19}` were right and scored wrong."""
+        from tools.igc.standard_score import math_right
+        self.assertTrue(math_right('</think>\n\n\\boxed{-2, 1}', '1,-2'))
+        self.assertTrue(math_right('</think>\n\n\\boxed{1-\\sqrt{19}, 1+\\sqrt{19}}', '1\\pm\\sqrt{19}'))
+        self.assertTrue(math_right('</think>\n\n\\boxed{1 \\pm \\sqrt{19}}', '1\\pm\\sqrt{19}'))
+        self.assertFalse(math_right('</think>\n\n\\boxed{-2}', '1,-2'))            # half the set
+        self.assertFalse(math_right('</think>\n\n\\boxed{-2, 1, 3}', '1,-2'))      # one too many
+        self.assertFalse(math_right('</think>\n\n\\boxed{1+\\sqrt{19}}', '1\\pm\\sqrt{19}'))
+        self.assertFalse(math_right('</think>\n\n\\boxed{2, -1}', '1,-2'))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -136,7 +136,31 @@ def math_right(text, gold):
                 return v
         return None
     a, b = value(got, answer), value(want, gold)
-    return a is not None and a == b
+    if a is not None and a == b:
+        return True
+    # A set of answers: `-2, 1` for `1,-2`, `1-\sqrt{19}, 1+\sqrt{19}` for `1\pm\sqrt{19}` (#307 A100 General arm, 3 rows right and scored
+    # wrong). Each side is a list of exact values, ± spelled out as both signs; the two lists must hold the same values, in any order.
+    def values(text):
+        out = []
+        for part in re.split(r',(?![^{]*\})', text):
+            part = part.strip()
+            if not part:
+                return None
+            pm = re.split(r'\\pm|±', part)
+            spelled = [pm[0] + '+' + pm[1], pm[0] + '-' + pm[1]] if len(pm) == 2 else [part] if len(pm) == 1 else None
+            if spelled is None:
+                return None
+            for s in spelled:
+                v = value(s)
+                if v is None:
+                    return None
+                out.append(v)
+        return out
+
+    if ',' not in got + want and not re.search(r'\\pm|±', got + want):
+        return False
+    a, b = values(got), values(want)
+    return a is not None and b is not None and len(a) == len(b) and all(x in b for x in a) and all(y in a for y in b)
 
 
 def bbh_answer(text):
