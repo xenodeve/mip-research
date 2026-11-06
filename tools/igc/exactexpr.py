@@ -457,6 +457,7 @@ class _Parser:
     def __init__(self, tokens):
         self.t, self.i = tokens, 0
         self.loose = False   # the last term had a spaced product or quotient
+        self.in_abs = 0      # bars open: a bar after a factor inside one closes it
 
     def peek(self, k=0):
         j = self.i + k
@@ -516,7 +517,9 @@ class _Parser:
                 node = (tok[1], node, self.unary())
                 continue
             if self._starts_factor() and self.implicit_ok(node):
-                if divided:
+                ahead = self.peek()
+                spaced_bar = ahead[0] == 'bar' and ahead[-1] is True and slash_gap is False
+                if divided and not spaced_bar:   # `1/2 |x|` is (1/2)|x|: a tight fraction, then a space and a bar (the shoelace area)
                     raise NotExact('a/bc: a product after a division is read two ways')
                 node = ('*', node, self.unary())
                 continue
@@ -539,7 +542,9 @@ class _Parser:
             # `160 (1 - 2/3)`, `\frac{78}{\sqrt{30}} (6\sqrt{30})`: a space before the bracket is still a product (#306 held-out)
             return prev_num or prev[0] in (')', '!', 'var', 'pi', '}')
         if kind == 'bar':
-            return False   # |a| |b| reads two ways
+            # `1/2 |42√5 - 6√5|`, `4 |1/4 - 1/4|`: a factor then an opening bar (the shoelace area, #307). Inside a bar the next bar closes
+            # it, and after a closing bar `|a| |b|` reads two ways
+            return not self.in_abs and (prev_num or prev[0] in (')', '}')) and prev[0] != 'bar'
         if kind == 'frac' and prev_num and self._proper_fraction():
             raise NotExact('a mixed number: 2\\frac{1}{3} is 2 1/3 or 2/3')
         return True
@@ -689,7 +694,11 @@ class _Parser:
             return node
         if kind == 'bar':
             self.take()
-            node = self.expr()
+            self.in_abs += 1
+            try:
+                node = self.expr()
+            finally:
+                self.in_abs -= 1
             self.take('bar')
             return ('abs', node)
         if kind == 'frac':
@@ -707,9 +716,9 @@ class _Parser:
                 self.take(')', '[')
                 if not (self.at('(', 'g') or self.at('(', '(') or self.at('num')):
                     return ('sqrt', index, None)   # `√[45*20*144]`: the bracket is the radicand, no index follows it (R1, #306)
-            if self.at('num') and index is None:   # √2, \sqrt2, \sqrt 12
+            if self.at('num'):   # √2, \sqrt2, \sqrt 12, `∛27` = \sqrt[3]27 (#307)
                 n = self.take()
-                return ('sqrt', ('num', n[1], n[2]), None)
+                return ('sqrt', ('num', n[1], n[2]), index)
             return ('sqrt', self.group(), index)
         if kind == 'pi':
             self.take()
@@ -756,7 +765,15 @@ class _Parser:
         raise NotExact('expected a value, got ' + str(kind))
 
 
+_VULGAR = {'½': '(1/2)', '⅓': '(1/3)', '⅔': '(2/3)', '¼': '(1/4)', '¾': '(3/4)', '⅕': '(1/5)', '⅛': '(1/8)'}
+
+
 def _parse(text):
+    if re.search(r'\d\s*[½⅓⅔¼¾⅕⅛]', text):
+        raise NotExact('a mixed number: 3½ is 3 + 1/2, not 3 * 1/2')
+    for k, v in _VULGAR.items():   # `½ *4` (R1, #307)
+        text = text.replace(k, v)
+    text = text.replace('∛', '\\sqrt[3]').replace('∜', '\\sqrt[4]')   # `∛2` (R1, #307)
     p = _Parser(_tokens(text))
     if not p.t:
         raise NotExact('empty')
@@ -913,7 +930,73 @@ def _has(node, kind):
     return any(_has(x, kind) for x in node[1:] if isinstance(x, tuple))
 
 
-def decimal_value(text, degrees=False, places=4):
+def _beyond_field(node):
+    """The tree holds a value no exact field here holds: a root past the square root (`∛2`, `\\sqrt[4]{3}`) or a power by a fraction
+    (`2^(1/3)`, `0.36^(1/4)`)."""
+    if not isinstance(node, tuple):
+        return False
+    if node[0] == 'sqrt' and node[2] is not None:
+        return True
+    if node[0] == '^' and isinstance(node[2], tuple) and (node[2][0] in ('/', 'neg') or node[2][0] == 'num' and len(node[2]) > 2 and node[2][2]):
+        return True
+    return any(_beyond_field(x) for x in node[1:] if isinstance(x, tuple))
+
+
+def _float_ev(node):
+    """A float for the numeric nodes only (numbers, pi, + - * /, powers, roots, bars); None for anything else (a symbol, a call)."""
+    k = node[0]
+    if k == 'num':
+        return float(node[1])
+    if k == 'pi':
+        return math.pi
+    if k in ('+', '-', '*', '/', '^'):
+        a, b = _float_ev(node[1]), _float_ev(node[2])
+        if a is None or b is None:
+            return None
+        if k == '+':
+            return a + b
+        if k == '-':
+            return a - b
+        if k == '*':
+            return a * b
+        if k == '/':
+            return None if b == 0 else a / b
+        if a < 0 and b != int(b):
+            return None
+        return a ** b
+    if k == 'neg':
+        a = _float_ev(node[1])
+        return None if a is None else -a
+    if k == 'abs':
+        a = _float_ev(node[1])
+        return None if a is None else abs(a)
+    if k == 'sqrt':
+        a = _float_ev(node[1])
+        n = 2 if node[2] is None else _float_ev(node[2])
+        if a is None or n is None or n != int(n) or n < 2:
+            return None
+        if a < 0:
+            return -((-a) ** (1 / n)) if int(n) % 2 else None
+        return a ** (1 / n)
+    return None
+
+
+def _float_cut(tree, places):
+    """The float value cut to `places` and marked `...`, or None where a float cannot settle the digits (near a cut, or too large)."""
+    try:
+        v = _float_ev(tree)
+    except (OverflowError, ValueError, ZeroDivisionError):
+        return None
+    if v is None or not math.isfinite(v) or abs(v) > 1e9:
+        return None
+    scaled = abs(v) * 10 ** places
+    if abs(scaled - round(scaled)) < 1e-9 * max(1.0, scaled):
+        return None   # too near a cut for a float to say which side
+    whole, frac = divmod(int(scaled), 10 ** places)
+    return f"{'-' if v < 0 else ''}{whole}.{frac:0{places}d}..."
+
+
+def decimal_value(text, degrees=False, places=4, latex=True):
     """The value cut to `places` and marked `...`, for what `evaluate` leaves to a decimal: a decimal under a root (`sqrt(1 +1.21)` =
     1.4866...), a decimal with pi (`1.530996 / \\pi` = 0.4873...). True as written whatever the model meant (#307: the General Style).
     None for anything else, and where the digits do not settle."""
@@ -921,7 +1004,9 @@ def decimal_value(text, degrees=False, places=4):
         tree = _parse(text)
         e = _Eval(degrees)
         value = e.ev(tree, {})
-    except (NotExact, ValueError, ZeroDivisionError, OverflowError, RecursionError, KeyError, IndexError):
+    except NotExact:
+        return _float_cut(tree, places) if 'tree' in locals() and _beyond_field(tree) else None
+    except (ValueError, ZeroDivisionError, OverflowError, RecursionError, KeyError, IndexError):
         return None
     if not (e.decimal and value.rational() is None and (e.decimal_root or value.has_pi())):
         return None
@@ -934,7 +1019,16 @@ def decimal_value(text, degrees=False, places=4):
     if cut[0] != cut[1] or (lo < 0) != (hi < 0):
         return None
     whole, frac = divmod(cut[0], scale)
-    return f"{'-' if lo < 0 else ''}{whole}.{frac:0{places}d}..."
+    decimal = f"{'-' if lo < 0 else ''}{whole}.{frac:0{places}d}"
+    if not value.has_pi() and all(r <= 1000 for r, _ in value.t) and all(c.denominator <= 1000 and abs(c.numerator) <= 10 ** 6
+                                                                           for c in value.t.values()):
+        # a short exact form exists: both, each true (`\sqrt{264.5} = \frac{23\sqrt{2}}{2} \approx 16.2634`); the rounded digit goes
+        # with `\approx`
+        rounded = round((lo + hi) / 2 * scale)
+        w, f = divmod(abs(rounded), scale)
+        approx = f"{'-' if lo < 0 else ''}{w}.{f:0{places}d}"
+        return f'{spell(value, latex)} \\approx {approx}' if latex else f'{spell(value, False)} ≈ {approx}'
+    return decimal + '...'
 
 
 def evaluate(text, degrees=False):

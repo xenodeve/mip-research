@@ -320,37 +320,36 @@ def _pm_found(before):
     return None if _bare(said) == _bare(expr) else (expr, said)
 
 
+_DIVISION_WORK = re.compile(r'\brem\b|remainder|bring(?:s|ing)? down|long division|\bquotient\b|divisib|divides|divisor', re.I)
+
+
 def _general_quotient(expr, value, before):
-    """An uneven integer quotient in the General Style, a value true however `=` is read (#307):
-    - in a long division (a remainder, a digit, bringing down, a column near it): `q rem r`, the quotient and what is left;
-    - one that reduces: the reduced fraction, `10044/42 = 1674/7`;
-    - one in lowest terms: its decimal, exact if it terminates (`174/4 = 43.5`), else cut to 4 places and marked (`1302 / 9 = 144.6666...`).
-    None where a reading would be false: mod work (a quotient is an inverse there, `_meant_otherwise`) is left to the later checks."""
+    """An uneven integer quotient in the General Style, the simplest value true however `=` is read (#307):
+    - where a division is being worked as one (a remainder, a quotient, bringing down, a divisibility test, a `÷`), and the quotient is at
+      least 1: `q rem r`, the quotient and what is left (`1302 / 9 = 144 rem 6`, `68 \\div 58 = 1 rem 10`);
+    - one that reduces, or one whose signs simplify: that fraction (`10044/42 = 1674/7`, `-4 / -7 = 4/7`, `4 / (-3) = -4/3`);
+    - one in lowest terms: its decimal, exact if it terminates (`174/4 = 43.5`), else cut to 4 places and marked (`21/19 = 1.1052...`).
+    A proper fraction never gets `0 rem a`. Mod work (a quotient is an inverse there) is refused later, by `_meant_otherwise`."""
     nums = [int(x) for x in re.findall(r'\d+', expr)]
     if len(nums) != 2:
         return None
     a, b = nums
     line = before.rsplit('\n', 1)[-1]
     latex = '\\' in line or '$' in line
-    if value > 0 and (_LONG_DIVISION.search(before[-600:]) or re.search(r'\\div|÷', expr)
-                      or re.search(r'divisib|divides|divisor', before[-400:], re.I)   # a divisibility test: the remainder answers it
-                      or re.search(rf'(?<!\d){a}\d+\s*(?:/|\\div|÷)\s*{b}(?!\d)', before[-400:])):
-        # `÷` is the sign of a long division in these texts (`68 \div 58 = 1`, dm div_big); `q rem r` is true for its reading and for the
-        # exact one alike
-        q, r = divmod(value.numerator, value.denominator)
-        if math.gcd(a, b) == 1:
-            return f'{q} \\text{{ rem }} {r}' if latex else f'{q} rem {r}'
-        q, r = divmod(a, b)   # `10044 / 42`: the division as written
+    division = _DIVISION_WORK.search(before[-600:]) or re.search(r'\\div|÷', expr) \
+        or re.search(rf'(?<!\d){a}\d+\s*(?:/|\\div|÷)\s*{b}(?!\d)', before[-400:])   # the first piece of a long division of a{digits} by b
+    worked = re.search(r'\\div|÷', expr) or re.search(r'bring(?:s|ing)? down|long division', before[-600:], re.I)
+    if division and (value > 1 or worked):   # a long division's step may be under 1: `1 \div 2 = 0 rem 1` after bringing down
+        q, r = divmod(a, b)   # the division as written: `10044 / 42 = 239 rem 6`
         return f'{q} \\text{{ rem }} {r}' if latex else f'{q} rem {r}'
-    if math.gcd(a, b) > 1:
-        return spelled(value)
     exact = spelled(value)
+    if math.gcd(a, b) > 1 or re.search(r'/\s*\(?\s*[-−]', expr):
+        return exact   # it reduces, or its signs do: the fraction is the computation
     if '/' not in exact:
         return exact
-    sign = '-' if value < 0 else ''
     q = abs(value.numerator) * 10 ** 4 // value.denominator
     whole, frac = divmod(q, 10 ** 4)
-    return f'{sign}{whole}.{frac:04d}...'
+    return f"{'-' if value < 0 else ''}{whole}.{frac:04d}..."
 
 
 def _lowest(expr):
@@ -386,9 +385,11 @@ def _tuple_found(before):
     if open_at is None:
         return None
     start = open_at - 5 if close == '\\right)' and s[:open_at].endswith('\\left') else open_at
-    head = s[:start].rstrip()
+    head = s[:start]
     if re.search(r'[A-Za-z_\d]$|\\[A-Za-z]+$', head) and not re.search(r'\\(?:cdot|times|quad|left)$', head):
-        return None   # a call or a point's name; `= (` or `$(` is a vector
+        return None   # a call or a point's name, glued to its bracket: `g(0, 1/2)`, `Q(2, 3)`; `= (` or `$(` is a vector
+    if re.search(r'(?<![A-Za-z])[A-Z]\s+$', head):
+        return None   # `Q (2, 3)`: a point's name and a space
     inner, parts, depth, cur = s[open_at + 1:len(s) - len(close)], [], 0, ''
     for ch in inner:
         if ch in '([{':

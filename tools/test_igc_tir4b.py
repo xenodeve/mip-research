@@ -939,9 +939,25 @@ class HeldOutInline(unittest.TestCase):
         self.assertEqual(found('so $3005/6 / 5'), '601/6')               # one reading, by the spaces or left to right
         self.assertIsNone(found('so $-1/4 / 1/2'))                        # two readings
         self.assertIsNone(found('x = 3 / 6/2'))
-        self.assertEqual(found('so sqrt(1 +1.21)'), '1.4866...')         # a decimal under a root: cut and marked
+        self.assertEqual(found('so sqrt(1 +1.21)'), 'sqrt(221)/10 ≈ 1.4866')   # a decimal under a root: a short exact form, and its decimal
+        self.assertEqual(found('s = \\sqrt{312.6}'), '17.6804...')    # no short exact form: cut and marked
         self.assertEqual(found('x = 1.530996 / \\pi'), '0.4873...')     # a decimal with pi
         self.assertEqual(found('so sqrt(2.25)'), '1.5')                   # exact where it comes out
+        self.assertEqual(found('Area=1/2 |42√5 -6√5|'), '18√5')           # a factor before an opening bar (the shoelace area)
+        self.assertEqual(found('Right:3|0 +0 +3*1|'), '9')
+        self.assertEqual(found('Multiply by ½: ½ *4'), '2')               # vulgar fractions
+        self.assertIsNone(found('so 3½ + 1'))                             # a mixed number reads two ways
+        self.assertEqual(found('centroid is (12.684/8,96.564/8)'), '(1.5855, 12.0705)')   # a vector after a word
+        self.assertIsNone(found('point Q (12-10, 20-6)'))                 # a named point
+        self.assertEqual(found('so ∛2 + 1/(∛2)²'), '1.8898...')           # past the exact field: cut and marked
+        self.assertEqual(found('then 2^(1/3) + 2^(-2/3)'), '1.8898...')
+        self.assertEqual(found('so 8^(1/3) + 1'), '3')
+        self.assertEqual(found('SD: $\\sqrt{264.5}'), '\\frac{23\\sqrt{2}}{2} \\approx 16.2635')
+        # an uneven quotient: the simplest true form, never a `0 rem a`
+        self.assertEqual(found('Denominator: $-4 / -7'), '4/7')
+        self.assertEqual(found('$BD/CD = 200/225'), '8/9')
+        self.assertEqual(found('remainder 3, so $4/9'), '0.4444...')
+        self.assertEqual(found('$2034 \\div 4'), '508 \\text{ rem } 2')
 
     def test_mod_work_and_long_division(self):
         # #306 held-out. The general style writes what is true under every reading; a model's profile writes the form it was measured to

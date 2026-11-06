@@ -368,7 +368,8 @@ _CONGRUENCE = re.compile(r'(?!)')   # matches nothing now: tir4b._mod_residue gi
 _EXACT_HINT = re.compile(r'\\sqrt|√|\bsqrt\b|\\(?:sin|cos|tan|cot|sec|csc|log|ln|sum|prod|binom|dbinom|tbinom|pi|bmod|pmod|mod|lfloor|lceil)(?![A-Za-z])'
                          r'|\b(?:sin|cos|tan|log|ln|mod)(?![A-Za-z])|[πθ°]|\\circ|\d\s*\(|\)\s*\(|[A-Za-z]\(|\b(?:gcd|lcm|comb|perm|totient)\b|\\gcd|\\lcm|\\varphi'
                          r'|\\det|\\begin\{|\^\s*\{\s*-1\s*\}|!!|\\overline|\d_\{?\d'
-                         r'|\||\d\s*\[|\)\s*\[|\\lvert|\\vert')   # `|2-5|`, `10 [ -2 * 0 + 2 * 1 ]` (#306 held-out: 240 bars read nothing)
+                         r'|\||\d\s*\[|\)\s*\[|\\lvert|\\vert|[½⅓⅔¼¾⅕⅛∛∜]'
+                         r'|\^\s*[({]?\s*-?\d+\s*/|\^\s*[({]?\s*-?\d*\.\d')   # `2^(1/3)`, `2^(1.75)`: a power past the exact field (#307)   # `|2-5|`, `10 [ -2 * 0 + 2 * 1 ]` (#306 held-out: 240 bars read nothing)
 _SPELL_SKIP = re.compile(r'\s|\\left|\\right|[{}()]|\\cdot|\*|\\,')
 
 
@@ -474,7 +475,7 @@ def expression_before_exact(text: str):
         except RecursionError:
             v = None
         if v is None:
-            approx = exactexpr.decimal_value(cand)   # `sqrt(1 +1.21)` = 1.4866...: cut and marked, true as written (#307)
+            approx = exactexpr.decimal_value(cand, latex='\\' in cand or ('sqrt' not in cand and '$' in line))   # `sqrt(1 +1.21)` = 1.4866...: cut and marked, true as written (#307)
             if approx is not None:
                 return cand, approx
             continue
