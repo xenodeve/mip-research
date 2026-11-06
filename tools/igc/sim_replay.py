@@ -141,7 +141,9 @@ class Script:
         return k
 
 
-def replay(rec, ids, arm_kw, tok, IDS):
+def replay(rec, ids, arm_kw, tok, IDS, recorded=False):
+    """recorded=True: `ids` is a trace the same arm wrote, so a put whose tokens are the next stored tokens is what happened there and
+    is followed whatever the model wrote after it (`18 + 3 = 21`, `0.0714...`); used to see where a mechanism added to the arm acts."""
     row = dict(id=rec['id'], suite=rec.get('suite', ''), answer=rec.get('answer', ''))
     r = tir4b.Rollout(row, 0, [1, 2, 3], tir4b.Arm(**arm_kw), IDS, tok, seed=1)
     s = Script(ids, tok)
@@ -163,6 +165,14 @@ def replay(rec, ids, arm_kw, tok, IDS):
         r.take(new)
         for e in r.events[seen:]:
             ev = dict(kind=e['kind'], at=s.pos, expr=e.get('expr'), value=e.get('value'))
+            if e['kind'] == 'inline value' and recorded:
+                start, end, _ = r.spans[-1]
+                put_ids = r.out[start:end]
+                if s.ids[s.pos:s.pos + len(put_ids)] == put_ids:
+                    s.pos += len(put_ids)
+                    ev.update(verdict='recorded', model=s.text_ahead(40).split('\n', 1)[0])
+                    out['events'].append(ev)
+                    continue
             if e['kind'] == 'inline value':
                 puts = _as_values(str(e.get('value')))
                 put = puts[0] if puts else None
@@ -204,6 +214,16 @@ def replay(rec, ids, arm_kw, tok, IDS):
     return out
 
 
+def arm_kwargs(spec):
+    """`inline_calc,mathbackend,inline_style=qwen,suppress_recheck=60`: a bare name is on; `name=value` passes the value, a whole number
+    as an int (`suppress_recheck='60'` would meet `max(0, self.window - n)` as a string)."""
+    kw = {}
+    for part in filter(None, spec.split(',')):
+        name, eq, value = part.partition('=')
+        kw[name] = (int(value) if value.lstrip('-').isdigit() else value) if eq else True
+    return kw
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument('--records', required=True)
@@ -211,12 +231,12 @@ def main():
     ap.add_argument('--tokenizer', default='D:/models/Qwen3.5-4B')
     ap.add_argument('--arm', default='inline_calc,mathbackend,inline_plain')
     ap.add_argument('--out', required=True)
+    ap.add_argument('--recorded', action='store_true', help="the records are the arm's own run: follow its puts")
     a = ap.parse_args()
     from transformers import AutoTokenizer
     tok = AutoTokenizer.from_pretrained(a.tokenizer)
     IDS = tir4b.Ids(tok, [tok.convert_tokens_to_ids('<|endoftext|>')])
-    arm_kw = {k: True for k in a.arm.split(',') if k and '=' not in k}
-    arm_kw.update(dict(k.split('=', 1) for k in a.arm.split(',') if '=' in k))   # `inline_style=qwen3.5-4b`
+    arm_kw = arm_kwargs(a.arm)
     recs = json.load(open(a.records, encoding='utf-8'))
     stored = {}
     if a.ids:
@@ -226,7 +246,7 @@ def main():
     rows = []
     for rec in recs:
         ids = stored.get((rec['id'], rec.get('sample', 0))) or tok.encode(rec['text'], add_special_tokens=False)
-        rows.append(replay(rec, ids, arm_kw, tok, IDS))
+        rows.append(replay(rec, ids, arm_kw, tok, IDS, recorded=a.recorded))
     kinds = collections.Counter(e['verdict'] if e['kind'] == 'inline value' else e['kind'] for x in rows for e in x['events'])
     stops = collections.Counter((x['stop']['kind'] if x['stop']['kind'] != 'inline value' else 'value: ' + x['stop']['verdict'])
                                 for x in rows if x['stop'])

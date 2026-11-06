@@ -47,6 +47,13 @@ class GeneralForms(unittest.TestCase):
         self.assertIsNone(skip('6 rem 1', ' 7 remainder 0'))
 
 
+class ArmSpec(unittest.TestCase):
+    def test_names_values_and_numbers(self):
+        self.assertEqual(sr.arm_kwargs('inline_calc,inline_style=qwen,suppress_recheck=60'),
+                         dict(inline_calc=True, inline_style='qwen', suppress_recheck=60))
+        self.assertEqual(sr.arm_kwargs(''), {})
+
+
 class Replay(unittest.TestCase):
     def test_follows_to_the_end_when_every_value_is_the_models(self):
         text = 'So $4 \\times 6 = 24$ and $24 + 1 = 25$.\n</think>\n\\boxed{25}<|im_end|>'
@@ -60,6 +67,24 @@ class Replay(unittest.TestCase):
         self.assertFalse(out['to_end'])
         self.assertEqual(out['stop']['verdict'], 'another value')
         self.assertGreater(out['left'], 0)
+
+
+    def test_an_arms_own_trace_is_followed_past_its_puts(self):
+        """#307: an MIP arm's trace holds software's put; the model went on from it (`18 + 3 = 21`, a carry) or it cannot be read as a
+        value (`0.0714...`). With recorded=True a put whose tokens are the stored ones is followed; without it, the replay stops there."""
+        ids = (TOK.encode('So $3 \\times 6 =') + TOK.encode(' 18') + TOK.encode(' + 3 = 21$ and $1/14 =') + TOK.encode(' 0.0714...')
+               + TOK.encode('$.\n</think>\n\\boxed{21}<|im_end|>'))
+        arm = dict(inline_calc=True, inline_plain=True, mathbackend=True)
+        old = sr.replay(dict(id='q', right=True, answer='21'), ids, arm, TOK, IDS)
+        self.assertFalse(old['to_end'])
+        new = sr.replay(dict(id='q', right=True, answer='21'), ids, arm, TOK, IDS, recorded=True)
+        self.assertTrue(new['to_end'], new)
+        self.assertEqual([e['verdict'] for e in new['events'] if e['kind'] == 'inline value'][:2], ['recorded', 'recorded'])
+
+    def test_recorded_still_stops_at_a_put_the_trace_does_not_hold(self):
+        ids = TOK.encode('So $3 \\times 6 =') + TOK.encode(' 19') + TOK.encode('$ more.\n</think>\n\\boxed{19}<|im_end|>')
+        out = sr.replay(dict(id='q', right=False, answer='18'), ids, dict(inline_calc=True, inline_plain=True), TOK, IDS, recorded=True)
+        self.assertFalse(out['to_end'])
 
 
 class BridgeGuards(unittest.TestCase):
