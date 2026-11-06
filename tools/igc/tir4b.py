@@ -199,7 +199,9 @@ INLINE_STYLES = {
     # a family profile: the General Style, then at each decision point one of its true forms, chosen by simulation on the family's traces
     # (tools/igc profile_sim: tune half of Qwen3.5-4B's stored traces, checked on the other half and on Qwen3-235B). `forms` maps
     # (decision, latex, decimals) or decision to a form name of `true_forms`; a point the table does not name keeps the General form.
-    'qwen': {'base': 'general', 'mod': 'both', 'remainder': 'both', 'decimal': 'cut', 'forms': {}},
+    # picked by pick_forms' fixed rule on the tune half (2026-11-06): a/b already in lowest terms gets no cut decimal, since Qwen went on
+    # from it at 3-11 % of such points (tune 20/371; check 33/368, Qwen3-235B 7/153); every other point keeps the General form
+    'qwen': {'base': 'general', 'mod': 'both', 'remainder': 'both', 'decimal': 'cut', 'forms': {'quotient-lowest': 'none'}},
     'qwen3.5-4b': {'mod': 'habit', 'remainder': 'quotient', 'decimal': 'rounded'},
     'deepseek-r1': {'mod': 'habit', 'remainder': 'quotient', 'decimal': 'rounded'},
     'qwq-32b': {'mod': 'habit', 'remainder': 'quotient', 'decimal': 'rounded'},
