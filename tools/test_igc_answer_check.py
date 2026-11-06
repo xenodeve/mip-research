@@ -85,6 +85,20 @@ class Reader(unittest.TestCase):
         env, _ = self.serve([(500, '')] * 2)
         self.assertIsNone(read_one(env, self.case(), tries=2, wait=0))
 
+    def test_each_sample_gets_its_own_verdict(self):
+        """#307: with --samples 2 both samples of a question share its id; one verdict for the id was read once and laid on both, so a
+        sample stopped by the loop guard showed the other sample's 'same'."""
+        env, seen = self.serve([])
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'verdicts.json'
+            two = [dict(record('a', 5, 'x</think>5'), sample=0), dict(record('a', 5, 'x</think>7'), sample=1)]
+            verdicts = read_all(env, two, dict(a='q'), path)
+            self.assertEqual(sorted(verdicts), ['a#0', 'a#1'])
+        self.assertEqual(len(seen), 2)
+        rows = triage(two, {'a#0': dict(verdict='same'), 'a#1': dict(verdict='different')})
+        self.assertEqual([r['route'] for r in rows], ['agreed-right', 'agreed-wrong'])
+        self.assertEqual([r['sample'] for r in rows], [0, 1])
+
     def test_a_stopped_run_goes_on(self):
         env, seen = self.serve([])
         with tempfile.TemporaryDirectory() as folder:

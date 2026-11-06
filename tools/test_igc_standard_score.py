@@ -51,6 +51,17 @@ class Math(unittest.TestCase):
         self.assertFalse(math_right('</think>\n\n\\boxed{26! 2^{24}}<|im_end|>', '2^{25}\\cdot26!'))
         self.assertFalse(math_right('</think>\n\n\\boxed{598.5377138413301}<|im_end|>', '1539439/2572'))   # a rounded quotient stays wrong
 
+    def test_a_root_in_another_spelling(self):
+        """#307 A100 General arm: every finished simplify_surd answer was right and scored wrong (13 of 13)."""
+        from tools.igc.standard_score import math_right
+        for reply, gold in (('\\boxed{7203 + 384\\sqrt{7}}', '384*sqrt(7) + 7203'),
+                            ('\\boxed{-\\frac{11\\sqrt{2}}{3}}', '-11*sqrt(2)/3'),
+                            ('\\boxed{45\\sqrt{13} - 5}', '-5 + 45*sqrt(13)'),
+                            ('\\boxed{10\\sqrt{13}}', '10*sqrt(13)')):
+            self.assertTrue(math_right('</think>\n\n' + reply, gold), reply)
+        self.assertFalse(math_right('</think>\n\n\\boxed{45\\sqrt{13} + 5}', '-5 + 45*sqrt(13)'))
+        self.assertFalse(math_right('</think>\n\n\\boxed{10\\sqrt{17}}', '10*sqrt(13)'))
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -121,6 +121,21 @@ def math_right(text, gold):
     # The same exact number written as an expression: `26! 2^{25}` for `2^{25}\cdot26!` (r1-ctrl a6f7b142) was scored wrong
     from tools.igc.mathexpr import evaluate
     a, b = evaluate(got), evaluate(want)
+    if a is not None and a == b:
+        return True
+    # The same exact number with a root or π: `7203 + 384\sqrt{7}` for `384*sqrt(7) + 7203` was scored wrong on every DeepMind
+    # simplify_surd row (13 of 13 on the #307 A100 General arm); the rational evaluator above cannot read a root
+    from tools.igc.exactexpr import NotExact, evaluate as exact
+    def value(*spellings):   # the raw text too: normalize_math turns the gold's `sqrt(7)` into `sqrt{(}7)`
+        for s in spellings:
+            try:
+                v = exact(s)
+            except (NotExact, ArithmeticError, ValueError, OverflowError, RecursionError):
+                v = None
+            if v is not None:
+                return v
+        return None
+    a, b = value(got, answer), value(want, gold)
     return a is not None and a == b
 
 

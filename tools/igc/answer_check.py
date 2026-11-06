@@ -31,11 +31,16 @@ def scored_right(record):
     return right(record, record['text'])
 
 
+def key(record):
+    """A verdict's key: the question id, and the sample when a run has several, since every sample of a question shares its id (#307)."""
+    return record['id'] if record.get('sample') is None else f"{record['id']}#{record['sample']}"
+
+
 def triage(records, verdicts):
     rows = []
     for r in records:
         rule = scored_right(r)
-        verdict = verdicts.get(r['id'])
+        verdict = verdicts.get(key(r))
         if reply_of(r['text']) is None:
             route = 'agreed-wrong'          # nothing to compare: the limit or a loop took it
         elif verdict is None or verdict['verdict'] not in ('same', 'different', 'hedged'):
@@ -43,7 +48,7 @@ def triage(records, verdicts):
         else:
             judge = verdict['verdict'] == 'same'
             route = 'disagree' if judge != rule else 'agreed-right' if rule else 'agreed-wrong'
-        rows.append(dict(id=r['id'], route=route, rule=rule, verdict=verdict, finish=r['finish'], tokens=r['tokens'],
+        rows.append(dict(id=r['id'], sample=r.get('sample'), route=route, rule=rule, verdict=verdict, finish=r['finish'], tokens=r['tokens'],
                          gold=r['answer'], rule_value=final_number(r['text'])))
     return rows
 
@@ -91,12 +96,12 @@ def read_one(env, case, tries=4, wait=2.):
 def read_all(env, records, questions, path):
     """Asks for what `path` does not hold yet and saves as it goes, so a stopped run goes on where it was."""
     verdicts = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
-    cases = [dict(id=r['id'], question=questions[r['id']], gold=r['answer'], reply=r['text']) for r in records
-             if r['id'] not in verdicts and reply_of(r['text']) is not None]
+    cases = [dict(id=r['id'], key=key(r), question=questions[r['id']], gold=r['answer'], reply=r['text']) for r in records
+             if key(r) not in verdicts and reply_of(r['text']) is not None]
     with ThreadPoolExecutor(int(env.get('ANSWER_CHECK_WORKERS') or 4)) as pool:
         for case, verdict in zip(cases, pool.map(lambda c: read_one(env, c), cases)):
             if verdict:
-                verdicts[case['id']] = verdict
+                verdicts[case['key']] = verdict
                 path.write_text(json.dumps(verdicts, ensure_ascii=False, indent=1), encoding='utf-8')
     return verdicts
 
@@ -165,7 +170,7 @@ def main():
     print(args.arm.name, dict(Counter(r['route'] for r in rows)))
     for r in rows:
         if r['route'] != 'agreed-right':
-            print(r['route'], r['id'], 'gold', r['gold'], 'rule', r['rule_value'], r['finish'], r['verdict'])
+            print(r['route'], r['id'], r['sample'], 'gold', r['gold'], 'rule', r['rule_value'], r['finish'], r['verdict'])
 
 
 if __name__ == '__main__':
