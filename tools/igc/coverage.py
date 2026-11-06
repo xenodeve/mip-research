@@ -20,6 +20,9 @@ import sys
 from pathlib import Path
 
 INJECTED_CAUGHT = ('inline value',)
+# the reader the arm ran with: --mathbackend and --inline-style, so a point is what that arm could have caught (#307: it counted every arm
+# with the plain reader, and a --mathbackend arm's roots, pi and quotients were neither points nor catches)
+READER = dict(use_mathbackend=False, style='general')
 
 
 def segments(tok, out_ids, spans):
@@ -45,7 +48,7 @@ def equals_points(segs):
             for m in re.finditer(r'(?<![<>!=])=(?!=)', text):
                 before = done + text[:m.start()]
                 try:
-                    found = inline_found(before)
+                    found = inline_found(before, **READER)
                 except Exception:  # noqa: BLE001 - a text the parser fails on is no point, as at run time
                     found = None
                 if found is None:
@@ -136,7 +139,10 @@ def main(argv=None):
     p.add_argument('outs', nargs='+')
     p.add_argument('--model', required=True)
     p.add_argument('--rows', action='store_true', help='one line per answer too')
+    p.add_argument('--mathbackend', action='store_true', help="count points with the arm's --mathbackend reader")
+    p.add_argument('--inline-style', default='general')
     a = p.parse_args(argv)
+    READER.update(use_mathbackend=a.mathbackend, style=a.inline_style)
     from transformers import AutoTokenizer
     tok = AutoTokenizer.from_pretrained(a.model)
     for out in a.outs:
