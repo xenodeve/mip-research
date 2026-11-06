@@ -231,6 +231,11 @@ class ReplayMisreads(unittest.TestCase):
         self.assertEqual(wrong_relations('$5 * (3 * 1) = 5 * 2 = 3$.', custom_ops={'*'}), [])   # `a * b = a - b` in the question
         self.assertTrue(wrong_relations('$5 * (3 * 1) = 5 * 2 = 3$.'))
         self.assertEqual(custom_operators('Define $a * b = a - b$ for all $a, b$.'), {'*'})
+        # #307: a product sign is a new operation only where words define it, and not as a product of the two
+        for text in ('so x*y = 3y here', 'Then a*b = ab', 'we get x*y = 12'):
+            with self.subTest(text=text):
+                self.assertEqual(custom_operators(text), set())
+        self.assertEqual(custom_operators('the operation a \\star b = 2a + b'), {'\\star'})
         # and the slips on such lines are still caught
         self.assertEqual(wrong_relations('$25 \\times 2/3 + 25 \\times 2/3 = 50/3$.'), [('25 \\times 2/3 + 25 \\times 2/3', '50/3', '100/3')])
         self.assertEqual(wrong_relations('Sum=14+7+4+3+2+2+2+1+1+1+1+1+1+1=40.'), [('14+7+4+3+2+2+2+1+1+1+1+1+1+1', '40', '41')])

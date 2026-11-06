@@ -550,9 +550,26 @@ _CUSTOM_OP = re.compile(r'(?<![A-Za-z\\])[a-z]\s*(\*|\\ast|\\star|\\circ|\\diamo
                         r'\\spadesuit|\\clubsuit|\\diamondsuit|⊕|⊗|∘|★|♦|#|@)\s*[a-z]\s*(?:=|:=|\bis defined)\s*[^=\n]*[a-z]')
 
 
+_DEFINES = re.compile(r'defin|operation|operator|denote|\blet\b|\bwhere\b|\bfor all\b|\bfor any\b', re.I)
+
+
 def custom_operators(text):
-    """The operator symbols the text defines as a new operation (`a * b = a - b`, `x \\star y = 2x + y`): `5 * (3 * 1)` is no product there."""
-    return {m.group(1) for m in _CUSTOM_OP.finditer(text)}
+    """The operator symbols the text defines as a new operation (`a * b = a - b`, `x \\star y = 2x + y`): `5 * (3 * 1)` is no product there.
+    A sign that is also the product (`*`, `\\ast`) is a new operation only where words define it (`Define a * b = a - b`, `the operation
+    a*b = ...`) and its right side is no product of the two: `x*y = 3y` in a model's algebra once made every later product of the answer
+    unread (#307: 753 refused `=` in the held-out traces, `13*20` among them)."""
+    out = set()
+    for m in _CUSTOM_OP.finditer(text):
+        op = m.group(1)
+        if op in ('*', '\\ast'):
+            head = text[max(0, m.start() - 80):m.start()]
+            a, b = re.match(r'([a-z])\s*\S+\s*([a-z])', text[m.start():m.end()]).groups()
+            rhs = re.split(r'=|:=|is defined(?: as| by)?', text[m.start():m.end()], 1)[-1].strip(' $.')
+            product = re.fullmatch(rf'\s*(?:{a}\s*\*?\s*{b}|{b}\s*\*?\s*{a})\s*', rhs) is not None
+            if not _DEFINES.search(head + text[m.start():m.end()]) or product or not (a in rhs and b in rhs):
+                continue
+        out.add(op)
+    return out
 
 
 def _partial(base_text, text):
