@@ -127,9 +127,11 @@ class Bridge(unittest.TestCase):
 
     def test_lowest_terms_but_not_in_a_long_division(self):
         self.assertEqual(self.found('so $10044/42')[1], '1674/7')
-        self.assertIsNone(self.found("Let's check $70308 / 6$:\n$70 / 6"))   # livebench-88407ca2: `= 11$ rem 4`
+        # livebench-88407ca2: `= 11$ rem 4`. The General Style writes the quotient and remainder; the 4B profile leaves it (#307)
+        self.assertEqual(self.found("Let's check $70308 / 6$:\n$70 / 6")[1], '11 \\text{ rem } 4')
+        self.assertIsNone(inline_found("Let's check $70308 / 6$:\n$70 / 6", use_mathbackend=True, style='qwen3.5-4b'))
         # livebench-ce2f15a7: `= 144.66`, a divisibility test wants the decimal (#306: software gives it, to 4 places)
-        self.assertEqual(self.found('Is 11718 divisible by anything else?\n$1302 / 9')[1], '144.6666...')   # cut and marked; '144.6667' for a model's profile
+        self.assertEqual(self.found('Is 11718 divisible by anything else?\n$1302 / 9')[1], '144 \\text{ rem } 6')   # a divisibility test: the remainder answers it (#307)
 
     def test_the_plain_arm_is_unchanged(self):
         # no --mathbackend: mathexpr alone, and a fraction that reduces is still left to the long division
@@ -138,7 +140,7 @@ class Bridge(unittest.TestCase):
         self.assertIsNone(inline_found(r'$4(117)'))
 
     def test_nothing_new_is_not_put_in(self):
-        for text in (r'$3\sqrt{186}', r'$\sqrt{2}', r'$\frac{\sqrt{6} - \sqrt{2}}{4}', r'$5 + \sqrt{2}', r'$(3)', r'$21/19'):
+        for text in (r'$3\sqrt{186}', r'$\sqrt{2}', r'$\frac{\sqrt{6} - \sqrt{2}}{4}', r'$5 + \sqrt{2}', r'$(3)'):
             with self.subTest(text=text):
                 self.assertIsNone(self.found(text))
 
@@ -158,7 +160,10 @@ class Bridge(unittest.TestCase):
     def test_out_of_sample_misreads(self):
         # seven other control arms (2026-11-06): each of these put in a value the model did not mean
         self.assertIsNone(self.found(r'$\cos \pi/4'))                   # cos(pi)/4 by the grammar, cos(pi/4) by the writer
-        self.assertIsNone(self.found(r'$68 \div 58'))                   # dm div_big: a long division wants the digit 1
+        # dm div_big: a long division wants the digit 1; the General Style's `q rem r` is true for that reading and the exact one
+        self.assertEqual(self.found(r'$68 \div 58')[1], '1 \\text{ rem } 10')
+        self.assertIsNone(inline_found(r'$68 \div 58', use_mathbackend=True, style='qwen3.5-4b'))
+        self.assertEqual(self.found(r'$21/19')[1], '1.1052...')             # lowest terms: the cut decimal is the computation
         # a text in decimals: this model wrote 8.33, but over both sets a fraction that reduces was written reduced 159 times and as a
         # decimal 105 even with decimals before it (#306), so the reduced fraction goes in
         self.assertEqual(self.found('the mean is 8.33 and\n$100/12')[1], '25/3')
@@ -176,7 +181,8 @@ class Bridge(unittest.TestCase):
         self.assertEqual(self.found('Work $\\pmod{13}$.\n$(2^4)^2')[1], '256')   # no `=` for `≡` written yet: the full value, a true equation
         self.assertIsNone(self.found('In $\\mathbb{Z}_5$, $2^{-1} \\equiv 3$. So\n$3/2'))
         self.assertIsNone(self.found('Using 10 cent and 1 cent coins: $2 \\times 10 + 5 \\times 1'))
-        self.assertIsNone(self.found('Tens: $3 + 8 + 4 + 6 + 2 + 3 + 2'))
+        self.assertEqual(self.found('Tens: $3 + 8 + 4 + 6 + 2 + 3 + 2')[1], '28')   # General: the sum as written; the carry is the model's
+        self.assertIsNone(inline_found('Tens: $3 + 8 + 4 + 6 + 2 + 3 + 2', use_mathbackend=True, style='qwen3.5-4b'))
         self.assertIsNone(self.found('Slope $= (0-1)/(3-1.66)'))
         self.assertEqual(self.found('$2 \\times 16')[1], '32')        # none of that around it: the value goes in
 

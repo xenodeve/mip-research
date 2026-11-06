@@ -223,7 +223,14 @@ def inline_found(before, whole=False, use_mathbackend=False, custom_ops=(), styl
     if whole:
         return expr, said
     from fractions import Fraction as _F
-    if isinstance(value, _F) and value.denominator != 1 and value > 0 and simple_quotient(expr) and _lowest(expr) \
+    general = style == 'general'
+    quotient = isinstance(value, _F) and value.denominator != 1 and simple_quotient(expr) and not re.search(r'\\d?frac', expr)
+    if general and use_mathbackend and quotient:
+        # the General Style: every uneven integer quotient gets a value true however `=` is read (#307), never a refusal by a habit
+        said = _general_quotient(expr, value, before)
+        if said is None:
+            return None
+    elif isinstance(value, _F) and value.denominator != 1 and value > 0 and simple_quotient(expr) and _lowest(expr) \
             and _REMAINDER_WORK.search('\n'.join(before.split('\n')[-2:])):
         # a long division wants its quotient: `13 \div 2 = 6` remainder 1. Where a remainder is being worked out the model wrote the
         # whole quotient 156 times in 165 (held-out) and 281 in 304 (seven 4B arms, #306). On this line or the one before only, and in
@@ -233,7 +240,7 @@ def inline_found(before, whole=False, use_mathbackend=False, custom_ops=(), styl
             return expr, str(q)
         latex = '\\' in before.rsplit('\n', 1)[-1] or '$' in before.rsplit('\n', 1)[-1]
         return expr, f'{q} \\text{{ rem }} {r}' if latex else f'{q} rem {r}'   # true however the `=` is read
-    if '/' in said and simple_quotient(expr) and not (use_mathbackend and _reduces(expr, before)):
+    elif '/' in said and simple_quotient(expr) and not (use_mathbackend and _reduces(expr, before)):
         # an integer quotient that does not come out: the model is doing long division and wants a digit, not 21/19 (dm div_big). One
         # that reduces is a step of its own: `10044/42 = 1674/7`, `6/26 = 3/13` (ctrl traces of a100_262k)
         decimal = _quotient_as_decimal(expr, value, before, st['decimal']) if use_mathbackend else None
@@ -253,7 +260,7 @@ def inline_found(before, whole=False, use_mathbackend=False, custom_ops=(), styl
         return None   # a number alone: `m=4,512=8*64` is m=4 and 512, not 4512 (#306, R1)
     if _operand_of_more(expr, before):
         return None
-    if _meant_otherwise(expr, value, before) or any(op in expr for op in custom_ops):
+    if _meant_otherwise(expr, value, before, general=general) or any(op in expr for op in custom_ops):
         # `5 * (3 * 1)` where the question defined `a * b = a - b`: no product (#306, held-out)
         return None
     return expr, said
@@ -311,6 +318,39 @@ def _pm_found(before):
         body = sp(pn) + pm + sp(qn)
         said = body if d == 1 else (f'\\frac{{{body}}}{{{d}}}' if latex else f'({body})/{d}')
     return None if _bare(said) == _bare(expr) else (expr, said)
+
+
+def _general_quotient(expr, value, before):
+    """An uneven integer quotient in the General Style, a value true however `=` is read (#307):
+    - in a long division (a remainder, a digit, bringing down, a column near it): `q rem r`, the quotient and what is left;
+    - one that reduces: the reduced fraction, `10044/42 = 1674/7`;
+    - one in lowest terms: its decimal, exact if it terminates (`174/4 = 43.5`), else cut to 4 places and marked (`1302 / 9 = 144.6666...`).
+    None where a reading would be false: mod work (a quotient is an inverse there, `_meant_otherwise`) is left to the later checks."""
+    nums = [int(x) for x in re.findall(r'\d+', expr)]
+    if len(nums) != 2:
+        return None
+    a, b = nums
+    line = before.rsplit('\n', 1)[-1]
+    latex = '\\' in line or '$' in line
+    if value > 0 and (_LONG_DIVISION.search(before[-600:]) or re.search(r'\\div|÷', expr)
+                      or re.search(r'divisib|divides|divisor', before[-400:], re.I)   # a divisibility test: the remainder answers it
+                      or re.search(rf'(?<!\d){a}\d+\s*(?:/|\\div|÷)\s*{b}(?!\d)', before[-400:])):
+        # `÷` is the sign of a long division in these texts (`68 \div 58 = 1`, dm div_big); `q rem r` is true for its reading and for the
+        # exact one alike
+        q, r = divmod(value.numerator, value.denominator)
+        if math.gcd(a, b) == 1:
+            return f'{q} \\text{{ rem }} {r}' if latex else f'{q} rem {r}'
+        q, r = divmod(a, b)   # `10044 / 42`: the division as written
+        return f'{q} \\text{{ rem }} {r}' if latex else f'{q} rem {r}'
+    if math.gcd(a, b) > 1:
+        return spelled(value)
+    exact = spelled(value)
+    if '/' not in exact:
+        return exact
+    sign = '-' if value < 0 else ''
+    q = abs(value.numerator) * 10 ** 4 // value.denominator
+    whole, frac = divmod(q, 10 ** 4)
+    return f'{sign}{whole}.{frac:04d}...'
 
 
 def _lowest(expr):
@@ -512,7 +552,7 @@ _COINS = re.compile(r'\b(?:coins?|notes?|bills?|stamps?|cents?)\b', re.I)
 _AS_COUNT = re.compile(r'\s*\d+\s*(?:\\times|\\cdot|\*|×)\s*\d+(?:\s*\+\s*\d+(?:\s*(?:\\times|\\cdot|\*|×)\s*\d+)?)*\s*')
 
 
-def _meant_otherwise(expr, value, before):
+def _meant_otherwise(expr, value, before, general=False):
     """The value is right for the text but not for what the model is doing there (#306, the inline audit over seven stored control arms):
     - a long division's step wants its digit: `1 \\div 2 = 0` (rem 1), `5 \\div 2 = 2` with a remainder of 1, not 0.5 or 2.5;
     - a column of a subtraction borrows: `0-9 = 1` (borrow from 7), not -9;
@@ -523,8 +563,8 @@ def _meant_otherwise(expr, value, before):
     q = value if isinstance(value, _F) else None
     recent = before[-600:]
     line = before.rsplit('\n', 1)[-1]
-    if q is not None and q.denominator != 1 and simple_quotient(expr) and _LONG_DIVISION.search(recent):
-        return True
+    if q is not None and q.denominator != 1 and simple_quotient(expr) and _LONG_DIVISION.search(recent) and not general:
+        return True   # the General Style writes `q rem r` there instead (_general_quotient)
     # one column of a written sum or difference: `$106029 - 76230$.` on a line above, then `$5-9=6$ (borrow)`, `$12 - 2 = 0$`. A column
     # gives a digit; a value under 0 or past 9 is a borrow or a carry the model is about to write
     column = _LONG_DIVISION.search(recent) or _COLUMN.search(before[-400:])
@@ -533,8 +573,9 @@ def _meant_otherwise(expr, value, before):
     # a borrow is not: `0-9 = 1`
     if q is not None and column and re.fullmatch(r'\s*\d{1,2}(?:\s*[-−+]\s*\d{1,2}){1,2}\s*', expr) and q < 0:
         return True
-    if _PLACE.search(line):
-        return True   # `Tens: $3 + 8 + 4 + 6 + 2 + 3 + 2 = 30$`: a column of a sum, its carry added in the head
+    if _PLACE.search(line) and not general:
+        return True   # `Tens: $3 + 8 + 4 + 6 + 2 + 3 + 2 = 30$`: a column of a sum, its carry added in the head. The General Style
+        # writes the sum of what is written (28), true as written; the model adds its carry to it
     if (q is None or q.denominator != 1) and _MOD_WORK.search('\n'.join(before.split('\n')[-2:])):
         return True   # `$3/2 = 3 \cdot 3$` mod 7: a quotient is a product by an inverse there
     # a mod word further back no longer refuses: past it the model wrote the plain value in 1,531 of 1,982 `=` (held-out) and 814 of
