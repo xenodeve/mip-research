@@ -958,6 +958,9 @@ class HeldOutInline(unittest.TestCase):
         self.assertEqual(found('$BD/CD = 200/225'), '8/9')
         self.assertEqual(found('remainder 3, so $4/9'), '0.4444...')
         self.assertEqual(found('$2034 \\div 4'), '508 \\text{ rem } 2')
+        # with a sign, never `q rem r` from unsigned digits: these were false (held-out audit)
+        self.assertEqual(found('So, $T_3 = \\frac{-1}{1} \\div 6 = -1 \\div 6'), '-0.1666...')
+        self.assertEqual(found('2. $20 \\div (-8)'), '-2.5')
 
     def test_mod_work_and_long_division(self):
         # #306 held-out. The general style writes what is true under every reading; a model's profile writes the form it was measured to

@@ -340,7 +340,9 @@ def _general_quotient(expr, value, before):
     division = _DIVISION_WORK.search(near) or re.search(r'\\div|÷', expr) \
         or re.search(rf'(?<!\d){a}\d+\s*(?:/|\\div|÷)\s*{b}(?!\d)', before[-400:])   # the first piece of a long division of a{digits} by b
     worked = re.search(r'\\div|÷', expr) or re.search(r'bring(?:s|ing)? down|long division', near, re.I)
-    if division and (value > 1 or worked):   # a long division's step may be under 1: `1 \div 2 = 0 rem 1` after bringing down
+    # a long division's step may be under 1: `1 \div 2 = 0 rem 1` after bringing down. Never with a sign: the digits read here have none,
+    # and `-1 \div 6 = 0 rem 1`, `20 \div (-8) = 2 rem 4` were false (#307 held-out audit)
+    if division and value > 0 and not re.search(r'[-−]', expr) and (value > 1 or worked):
         q, r = divmod(a, b)   # the division as written: `10044 / 42 = 239 rem 6`
         return f'{q} \\text{{ rem }} {r}' if latex else f'{q} rem {r}'
     exact = spelled(value)
