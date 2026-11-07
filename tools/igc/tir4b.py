@@ -150,7 +150,8 @@ class Arm:
     def __init__(self, force_after=0, execute=False, close_fit=False, loop_close=False, close_repeat=0, inline_calc=False, native_tool=False,
                  hint_calc=False, loop_hint=False, inline_plain=False, whole_hint=False, check_hand=False, whole_plain=False, hand_off=False, question_value=False,
                  trust='cort', logit_value=0.0, suppress_recheck=0, mathbackend=False, candidate_close=False, inline_style='general',
-                 no_digit_join=False, guard_progress=False, answer_close=False, loop_value=False, early_cycle=False, shape_cap=0):
+                 no_digit_join=False, guard_progress=False, answer_close=False, loop_value=False, early_cycle=False, shape_cap=0, cover_cap=0):
+        self.cover_cap = cover_cap   # --cover-cap W: 97 % of the last W tokens repeat a 12-gram of the last 2,048: a loop (#307 round 8)
         self.shape_cap = shape_cap   # --shape-cap: a cycle of this many rounds with every number read as one token is a loop, progress or not (#307)
         self.early_cycle = early_cycle   # --early-cycle: the thinking is also read for a short exact cycle, every request (#307, V7)
         self.loop_value = loop_value   # --loop-value: before a loop is closed, the question's own computation, exact (#307)
@@ -830,6 +831,8 @@ class Rollout:
         self.early_cycles = 0   # --early-cycle: loops its check found (the bench's check may have found some of them later)
         self.early_dropped = 0   # tokens taken and then dropped after the line end where it found one
         self.shape_loops = 0   # --shape-cap: loops found by the collapsed-number cycle and by no other check
+        self.cover_loops = 0   # --cover-cap: loops found by the run of already-seen grams and by no other check
+        self.cover = Cover(ids.digits, arm.cover_cap) if arm.cover_cap else None
         self.echo = (None, 0, 0)   # (expression, its run of back-to-back values, model_tokens at the last): see echoing()
         self.loop_floor = 0   # the loop checks of the thinking read from here: a nudge starts them afresh (#304)
         self.loop_nudges = 0
@@ -1124,6 +1127,12 @@ class Rollout:
         if self.arm.shape_cap and self.phase in ('think', 'answer') and shape_rounds(window, self.ids.digits) >= self.arm.shape_cap:
             self.shape_loops += 1
             return True
+        if self.arm.cover_cap and self.phase in ('think', 'answer'):
+            start = self.loop_floor if self.phase == 'think' else self.answer_start()
+            if self.cover.feed(self.out, start, self.early_dropped) >= COVER_SHARE:
+                self.cover_loops += 1
+                self.cover.__init__(self.ids.digits, self.arm.cover_cap)
+                return True
         return False
 
     def early_cut(self, new):
@@ -1462,7 +1471,7 @@ class Rollout:
                     prompt_tokens=len(self.prompt), thinking_tokens=self.thought, seconds=self.seconds, events=self.events,
                     runs=len(runs), runs_by_model=sum(e['by'] == 'model' for e in runs), runs_forced=sum(e['by'] == 'forced' for e in runs),
                     runs_by_tool=sum(e['by'] in ('tool', 'tool in thinking') for e in runs),
-                    inline_values=sum(e['kind'] == 'inline value' for e in self.events), loop_nudges=self.loop_nudges, echo_skips=self.echo_skips, joins_held=self.joins_held, early_cycles=self.early_cycles, shape_loops=self.shape_loops,
+                    inline_values=sum(e['kind'] == 'inline value' for e in self.events), loop_nudges=self.loop_nudges, echo_skips=self.echo_skips, joins_held=self.joins_held, early_cycles=self.early_cycles, shape_loops=self.shape_loops, cover_loops=self.cover_loops,
                     first_run_at=runs[0]['model_tokens'] if runs else None, tool_seconds=round(sum(e['seconds'] for e in runs), 3))
 
 
@@ -1506,6 +1515,48 @@ def shape_rounds(tokens, digits=frozenset(range(15, 25))):
             j -= 1
         best = max(best, (n - 1 - j) // p + 1)
     return best
+
+
+COVER_GRAM, COVER_BACK, COVER_SHARE = 12, 2048, 0.97
+
+
+class Cover:
+    """--cover-cap W: of the last W tokens (each digit run read as one token), the share whose COVER_GRAM-gram was already seen in the last
+    COVER_BACK of them; COVER_SHARE or more over a full window is a loop. shape_rounds wants an exact cycle and one odd round breaks it:
+    #307 round 8, a long division where every quotient digit 0 made a shorter round (`$320 / 10943 = 0.0292...$`, `$0$.`) ran 196k tokens
+    to the context end with shape rounds never past 46. A run of seen grams broke there too, every ~20k tokens on a rarer round; a share
+    moves 1/W for one new gram. Stored traces of 16 A100 arms (share_sim.py 12 2048 32768): the highest share in an answer that finished
+    right is 0.92 (two answers that looped long and then came right), the next 0.35; all 10 answers that ran past 150k tokens in a loop
+    reach 0.999-1.0. Fed as the text grows; a window that does not extend the one fed so far (a nudge, the answer's start, a dropped tail)
+    starts afresh."""
+
+    def __init__(self, digits, width=32768):
+        self.digits, self.width, self.base, self.fed = digits, width, None, 0
+        self.c, self.prev, self.seen, self.hits, self.share = [], False, {}, [], 0.0
+        self.count = 0
+
+    def feed(self, out, start, epoch=0):
+        """Feeds out[start:] past what was fed; the share of the last full window, 0 until the window is full."""
+        if (start, epoch) != self.base or len(out) < self.fed:
+            self.__init__(self.digits, self.width)
+            self.base, self.fed = (start, epoch), start
+        for t in out[self.fed:]:
+            d = t in self.digits
+            if not (d and self.prev):
+                self.c.append(-1 if d else t)
+                i = len(self.c) - 1
+                if i >= COVER_GRAM - 1:
+                    g = tuple(self.c[i - COVER_GRAM + 1:])
+                    j = self.seen.get(g)
+                    h = 1 if j is not None and j >= i - COVER_BACK else 0
+                    self.seen[g] = i
+                    self.hits.append(h)
+                    self.count += h
+                    if len(self.hits) > self.width:
+                        self.count -= self.hits[-self.width - 1]
+            self.prev = d
+        self.fed = len(out)
+        return self.count / self.width if len(self.hits) >= self.width else 0.0
 
 
 EARLY_ROUNDS, EARLY_ROUNDS_LONG, EARLY_SPAN = 6, 3, 500
@@ -1715,7 +1766,7 @@ def run(args):
               args.whole_hint, args.check_hand, args.whole_plain, args.hand_off, args.question_value, trust=args.trust_line, logit_value=args.logit_value,
               suppress_recheck=args.suppress_recheck, mathbackend=args.mathbackend, candidate_close=args.candidate_close,
               inline_style=args.inline_style, no_digit_join=args.no_digit_join, guard_progress=args.guard_progress, answer_close=args.answer_close,
-              loop_value=args.loop_value, early_cycle=args.early_cycle, shape_cap=args.shape_cap)
+              loop_value=args.loop_value, early_cycle=args.early_cycle, shape_cap=args.shape_cap, cover_cap=args.cover_cap)
     if args.no_digit_join and (args.server or not (args.inline_calc and args.inline_plain)):
         raise SystemExit('--no-digit-join holds digits down after a plain inline put: it needs --inline-calc --inline-plain, and vLLM (not --server)')
     if args.suppress_recheck and (args.server or not (args.inline_calc or args.logit_value)):
@@ -1906,6 +1957,8 @@ def main(argv=None):
     r.add_argument('--loop-value', action='store_true', help="before a loop is closed, put the question's own computation, exact")
     r.add_argument('--shape-cap', type=int, default=0, help='a cycle of this many rounds, every number read as one token, is a loop even '
                                                             'when each round is new (#307: 1024; right answers reached 805 at most)')
+    r.add_argument('--cover-cap', type=int, default=0, help='a window of this many tokens (numbers read as one) in which 97 %% repeat a 12-gram '
+                                                            'of the last 2,048 is a loop, odd rounds or not (#307: 32768; right answers 0.92 at most)')
     r.add_argument('--early-cycle', action='store_true', help='the thinking is also read, every request, for an exact cycle of 6 rounds '
                                                               '(3 past 512 tokens) spanning 500+ tokens (#307 detector replay V7)')
     r.add_argument('--answer-close', action='store_true', help='a loop in the answer (thinking closed) gets the final-answer cue and one value, not `stuck`')

@@ -382,6 +382,37 @@ class InlineCalc(unittest.TestCase):
         self.assertEqual(tir4b.shape_rounds(t), 301)
         self.assertLess(tir4b.shape_rounds(t + [50, 51]), 2)
 
+    def test_cover_reads_through_the_odd_rounds_an_exact_cycle_breaks_on(self):
+        """#307 round 8: long division where each quotient digit 0 made a shorter round ran to the context end, shape rounds never past 46."""
+        def digits(n):
+            return [15 + int(ch) for ch in str(n)]
+        full = lambda n: [40] + digits(n) + [41, 42] + digits(n * 7) + [198, 43] + digits(n) + [198]   # noqa: E731
+        zero = lambda n: [44] + digits(n) + [198, 45, 15, 198]   # noqa: E731
+        import random
+        rng = random.Random(5)
+        t = [7, 8, 9]
+        for k in range(3000):   # a 0 digit comes at no fixed period, as in the division
+            t += zero(k) if rng.random() < 0.3 else full(k)
+        self.assertLess(tir4b.shape_rounds(t), 10)
+        c = tir4b.Cover(frozenset(range(15, 25)), 4096)
+        self.assertGreaterEqual(c.feed(t, 0), tir4b.COVER_SHARE)
+        self.assertGreaterEqual(c.feed(t + [50 + i for i in range(30)], 0), tir4b.COVER_SHARE)   # one odd stretch does not restart it
+        self.assertEqual(c.feed(t[:100], 0), 0.0)   # a shorter window starts afresh, and a window not yet full reads 0
+
+    def test_cover_cap_closes_a_loop_and_leaves_plain_reasoning(self):
+        text = ''.join(f'Step {n}: {n * 10943} / 10943 gives {n}, carry {n % 7}, digit 0.\n' for n in range(1, 900))
+        r = rollout(loop_close=True, guard_progress=True, cover_cap=4096)
+        play(r, text, Kernel([]))
+        self.assertEqual(kinds(r)[:1], ['loop close'])
+        self.assertGreaterEqual(r.cover_loops, 1)
+        import random
+        rng = random.Random(3)
+        vocab = 'the a sum of root prime then so we check each part side angle area half more less next term value set map key row'.split()
+        words = ' '.join(rng.choice(vocab) for _ in range(9000))   # 12-grams of random words almost never meet twice
+        r = rollout(loop_close=True, guard_progress=True, cover_cap=4096)
+        play(r, words, Kernel([]))
+        self.assertEqual(r.cover_loops, 0)
+
     def test_shape_cap_closes_a_counter_loop_the_progress_guard_lets_run(self):
         """#307 round 7: `check ... base 5815. No. Okay.` ran 262k tokens: every round new, so --guard-progress let it go."""
         text = ''.join(f'Check base {n}. No.\n' for n in range(1000, 2400))
