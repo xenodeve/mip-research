@@ -134,6 +134,7 @@ class Ids:
         # 112,793 puts). Only `/` alone or before a digit, bracket, `-` or `\`: the 4B's vocabulary has 1,078 tokens starting with `/`, nearly
         # all code (`//`, `/**`), and holding them all broke vLLM's cap below (12 are left)
         self.slash_start = {i for i in range(len(tokenizer)) if self._division(tokenizer.decode([i]))}
+        self.digits = frozenset(i for i in range(len(tokenizer)) if tokenizer.decode([i]) in tuple('0123456789'))   # --shape-cap
         self.point = {i for i in range(len(tokenizer)) if tokenizer.decode([i]) == '.'}   # `0` then `.75` read `0.75`: digits held after it
         self.tool_close = tokenizer.convert_tokens_to_ids('</tool_call>')
         held = len(self.recheck | self.digit_start | self.slash_start)   # the most bias() ever asks for at once
@@ -149,7 +150,8 @@ class Arm:
     def __init__(self, force_after=0, execute=False, close_fit=False, loop_close=False, close_repeat=0, inline_calc=False, native_tool=False,
                  hint_calc=False, loop_hint=False, inline_plain=False, whole_hint=False, check_hand=False, whole_plain=False, hand_off=False, question_value=False,
                  trust='cort', logit_value=0.0, suppress_recheck=0, mathbackend=False, candidate_close=False, inline_style='general',
-                 no_digit_join=False, guard_progress=False, answer_close=False, loop_value=False, early_cycle=False):
+                 no_digit_join=False, guard_progress=False, answer_close=False, loop_value=False, early_cycle=False, shape_cap=0):
+        self.shape_cap = shape_cap   # --shape-cap: a cycle of this many rounds with every number read as one token is a loop, progress or not (#307)
         self.early_cycle = early_cycle   # --early-cycle: the thinking is also read for a short exact cycle, every request (#307, V7)
         self.loop_value = loop_value   # --loop-value: before a loop is closed, the question's own computation, exact (#307)
         self.answer_close = answer_close   # --answer-close: a loop in the answer gets the final-answer cue and one value, not `stuck` (#307)
@@ -827,6 +829,7 @@ class Rollout:
         self.joins_held = 0
         self.early_cycles = 0   # --early-cycle: loops its check found (the bench's check may have found some of them later)
         self.early_dropped = 0   # tokens taken and then dropped after the line end where it found one
+        self.shape_loops = 0   # --shape-cap: loops found by the collapsed-number cycle and by no other check
         self.echo = (None, 0, 0)   # (expression, its run of back-to-back values, model_tokens at the last): see echoing()
         self.loop_floor = 0   # the loop checks of the thinking read from here: a nudge starts them afresh (#304)
         self.loop_nudges = 0
@@ -1115,11 +1118,13 @@ class Rollout:
         line_back counts lines over the whole history, so read from the start every check after a nudge fired again at once (#304).
         In the answer, over the answer alone: an answer restates lines of its thinking, and read with them line_back could end a right
         answer `stuck` (#305)."""
-        if self.phase == 'think':
-            return looping(self.out[self.loop_floor:], self.arm.guard_progress)
-        if self.phase == 'answer':
-            return looping(self.out[self.answer_start():], self.arm.guard_progress)
-        return looping(self.out, self.arm.guard_progress)
+        window = self.out[self.loop_floor:] if self.phase == 'think' else self.out[self.answer_start():] if self.phase == 'answer' else self.out
+        if looping(window, self.arm.guard_progress):
+            return True
+        if self.arm.shape_cap and self.phase in ('think', 'answer') and shape_rounds(window, self.ids.digits) >= self.arm.shape_cap:
+            self.shape_loops += 1
+            return True
+        return False
 
     def early_cut(self, new):
         """--early-cycle, read at every line end of the tokens just taken (thinking only, since the last nudge), as the replay read it: a
@@ -1457,7 +1462,7 @@ class Rollout:
                     prompt_tokens=len(self.prompt), thinking_tokens=self.thought, seconds=self.seconds, events=self.events,
                     runs=len(runs), runs_by_model=sum(e['by'] == 'model' for e in runs), runs_forced=sum(e['by'] == 'forced' for e in runs),
                     runs_by_tool=sum(e['by'] in ('tool', 'tool in thinking') for e in runs),
-                    inline_values=sum(e['kind'] == 'inline value' for e in self.events), loop_nudges=self.loop_nudges, echo_skips=self.echo_skips, joins_held=self.joins_held, early_cycles=self.early_cycles,
+                    inline_values=sum(e['kind'] == 'inline value' for e in self.events), loop_nudges=self.loop_nudges, echo_skips=self.echo_skips, joins_held=self.joins_held, early_cycles=self.early_cycles, shape_loops=self.shape_loops,
                     first_run_at=runs[0]['model_tokens'] if runs else None, tool_seconds=round(sum(e['seconds'] for e in runs), 3))
 
 
@@ -1473,6 +1478,34 @@ def kv_tokens(llm):
 def looping(tokens, progress=False):
     from tools.igc.external_score import repeating
     return repeating(tokens, progress=progress)
+
+
+SHAPE_PERIOD, SHAPE_LOOK = 128, 128 * 600   # --shape-cap: the longest round, and how far back a run is read (collapsed tokens)
+
+
+def shape_rounds(tokens, digits=frozenset(range(15, 25))):
+    """The rounds of the longest exact cycle (period <= SHAPE_PERIOD) ending at the tail, with each run of digit tokens read as one token:
+    `$31090 / 10943 = 2.8410...$ (Digit 5244: 2)` and `$4496 / 10943 ...$ (Digit 5245: 4)` are one round. #307 round 7: that division ran
+    210k tokens and `check ... base 5815. No.` 262k, neither seen by the counting check (the numbers change length, or each round is new
+    so --guard-progress let it go). Stored traces of 15 A100 arms: the longest such run in an answer that finished right is 805 rounds
+    (trial division by one prime after another), the four that ran to the context end reached 1,874-4,267."""
+    c = []
+    prev = False
+    for t in tokens[-SHAPE_LOOK * 4:]:
+        d = t in digits
+        if not (d and prev):
+            c.append(-1 if d else t)
+        prev = d
+    n, best = len(c), 0
+    for p in range(1, min(SHAPE_PERIOD, n - 1) + 1):
+        if c[-1] != c[-1 - p]:
+            continue
+        j = n - 1
+        stop = max(p, n - SHAPE_LOOK)
+        while j >= stop and c[j] == c[j - p]:
+            j -= 1
+        best = max(best, (n - 1 - j) // p + 1)
+    return best
 
 
 EARLY_ROUNDS, EARLY_ROUNDS_LONG, EARLY_SPAN = 6, 3, 500
@@ -1682,7 +1715,7 @@ def run(args):
               args.whole_hint, args.check_hand, args.whole_plain, args.hand_off, args.question_value, trust=args.trust_line, logit_value=args.logit_value,
               suppress_recheck=args.suppress_recheck, mathbackend=args.mathbackend, candidate_close=args.candidate_close,
               inline_style=args.inline_style, no_digit_join=args.no_digit_join, guard_progress=args.guard_progress, answer_close=args.answer_close,
-              loop_value=args.loop_value, early_cycle=args.early_cycle)
+              loop_value=args.loop_value, early_cycle=args.early_cycle, shape_cap=args.shape_cap)
     if args.no_digit_join and (args.server or not (args.inline_calc and args.inline_plain)):
         raise SystemExit('--no-digit-join holds digits down after a plain inline put: it needs --inline-calc --inline-plain, and vLLM (not --server)')
     if args.suppress_recheck and (args.server or not (args.inline_calc or args.logit_value)):
@@ -1871,6 +1904,8 @@ def main(argv=None):
     r.add_argument('--close-fit', action='store_true')
     r.add_argument('--loop-close', action='store_true')
     r.add_argument('--loop-value', action='store_true', help="before a loop is closed, put the question's own computation, exact")
+    r.add_argument('--shape-cap', type=int, default=0, help='a cycle of this many rounds, every number read as one token, is a loop even '
+                                                            'when each round is new (#307: 1024; right answers reached 805 at most)')
     r.add_argument('--early-cycle', action='store_true', help='the thinking is also read, every request, for an exact cycle of 6 rounds '
                                                               '(3 past 512 tokens) spanning 500+ tokens (#307 detector replay V7)')
     r.add_argument('--answer-close', action='store_true', help='a loop in the answer (thinking closed) gets the final-answer cue and one value, not `stuck`')

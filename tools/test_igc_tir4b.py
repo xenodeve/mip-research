@@ -372,6 +372,27 @@ class InlineCalc(unittest.TestCase):
         play(r, 'x</think>\n\n' + text + 'done<|im_end|>', Kernel([]))
         self.assertEqual((r.finish, kinds(r)), ('stop', []))
 
+    def test_shape_rounds_reads_numbers_of_any_length_as_one(self):
+        """#307 round 7: `(Digit 5243: 7)` digit-by-digit division ran 210k tokens; its numbers change length, so no digit-masked cycle."""
+        def digits(n):
+            return [15 + int(ch) for ch in str(n)]
+        line = lambda n, d: [40, 41] + digits(n) + [42] + digits(d) + [198]   # noqa: E731
+        t = [7] + sum((line(5000 + 37 * k, k % 10) for k in range(300)), [])
+        t += line(99999, 3)   # a five-digit number among four-digit ones: still the same round
+        self.assertEqual(tir4b.shape_rounds(t), 301)
+        self.assertLess(tir4b.shape_rounds(t + [50, 51]), 2)
+
+    def test_shape_cap_closes_a_counter_loop_the_progress_guard_lets_run(self):
+        """#307 round 7: `check ... base 5815. No. Okay.` ran 262k tokens: every round new, so --guard-progress let it go."""
+        text = ''.join(f'Check base {n}. No.\n' for n in range(1000, 2400))
+        r = rollout(loop_close=True, guard_progress=True, shape_cap=1024)
+        play(r, text, Kernel([]))
+        self.assertEqual(kinds(r), ['loop close'])
+        self.assertEqual(r.shape_loops, 1)
+        r = rollout(loop_close=True, guard_progress=True)
+        play(r, text, Kernel([]))
+        self.assertNotIn('loop close', kinds(r))
+
     def test_answer_close_ends_a_value_that_keeps_going(self):
         r = rollout(answer_close=True)
         play(r, 'x</think>\n\nso ' + 'ab' * 2000, Kernel([]))
