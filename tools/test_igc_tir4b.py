@@ -334,6 +334,44 @@ class InlineCalc(unittest.TestCase):
         self.assertEqual(kinds(r).count('loop value'), 1)
         self.assertIn('answer close', kinds(r))
 
+    def test_early_cycle_reads_six_rounds_over_500_tokens(self):
+        """#307 detector replay V7: an exact cycle of 6 rounds (3 past 512 tokens) that spans 500+ tokens; no fire on 915 right answers."""
+        unit = list(range(100, 200))   # one round of 100 tokens
+        self.assertTrue(tir4b.early_cycle(unit * 6))
+        self.assertFalse(tir4b.early_cycle(unit * 5))
+        self.assertFalse(tir4b.early_cycle(list(range(50, 100)) * 9))   # 9 rounds of 50: 450 tokens, short of the span
+        self.assertTrue(tir4b.early_cycle(list(range(50, 100)) * 10))
+        self.assertTrue(tir4b.early_cycle(list(range(1000, 1600)) * 3))   # past 512 three rounds are enough
+        self.assertFalse(tir4b.early_cycle(list(range(1000, 1600)) * 2))
+        self.assertFalse(tir4b.early_cycle([7] + unit * 6 + [8]))   # the tail is not the cycle
+
+    def test_early_cycle_closes_a_loop_the_bench_check_lets_run(self):
+        text = 'Wait, let me recheck the sum of the two parts again, the first part and the second part, carefully now.\n' * 7
+        r = rollout(loop_close=True, early_cycle=True)
+        play(r, text + 'more', Kernel([]))
+        self.assertEqual(kinds(r), ['loop close'])
+        self.assertEqual(r.early_cycles, 1)
+        thinking = r.text().split('</think>')[0]
+        self.assertEqual(thinking.count('carefully now.'), 6)   # cut at the sixth line end, inside the request that wrote the seventh
+        self.assertNotIn('more', thinking)
+        r = rollout(loop_close=True)
+        play(r, text + 'more', Kernel([]))
+        self.assertNotIn('loop close', kinds(r))   # 20 rounds: the bench check waits
+
+    def test_early_cycle_on_the_equals_path_needs_no_full_chunk(self):
+        """Requests that end at `=` are read for a loop once per CHUNK; the early check reads every one."""
+        text = 'Let me write it out once more so that we can see where the value comes from, x =' + ' x.\n'
+        r = rollout(inline_calc=True, inline_plain=True, loop_close=True, early_cycle=True)
+        play(r, text * 8, Kernel([]))
+        self.assertIn('loop close', kinds(r))
+        self.assertLess(r.model_tokens(), len(TOK.encode(text * 8)))
+
+    def test_early_cycle_leaves_the_answer_to_the_answer_checks(self):
+        text = 'Wait, let me recheck the sum of the two parts again, the first part and the second part, carefully now.\n' * 7
+        r = rollout(loop_close=True, early_cycle=True)
+        play(r, 'x</think>\n\n' + text + 'done<|im_end|>', Kernel([]))
+        self.assertEqual((r.finish, kinds(r)), ('stop', []))
+
     def test_answer_close_ends_a_value_that_keeps_going(self):
         r = rollout(answer_close=True)
         play(r, 'x</think>\n\nso ' + 'ab' * 2000, Kernel([]))

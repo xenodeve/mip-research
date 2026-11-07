@@ -149,7 +149,8 @@ class Arm:
     def __init__(self, force_after=0, execute=False, close_fit=False, loop_close=False, close_repeat=0, inline_calc=False, native_tool=False,
                  hint_calc=False, loop_hint=False, inline_plain=False, whole_hint=False, check_hand=False, whole_plain=False, hand_off=False, question_value=False,
                  trust='cort', logit_value=0.0, suppress_recheck=0, mathbackend=False, candidate_close=False, inline_style='general',
-                 no_digit_join=False, guard_progress=False, answer_close=False, loop_value=False):
+                 no_digit_join=False, guard_progress=False, answer_close=False, loop_value=False, early_cycle=False):
+        self.early_cycle = early_cycle   # --early-cycle: the thinking is also read for a short exact cycle, every request (#307, V7)
         self.loop_value = loop_value   # --loop-value: before a loop is closed, the question's own computation, exact (#307)
         self.answer_close = answer_close   # --answer-close: a loop in the answer gets the final-answer cue and one value, not `stuck` (#307)
         self.trust = trust   # the line after a hinted program that printed: 'cort' (the original), 'none', 'positive'
@@ -824,6 +825,8 @@ class Rollout:
         self.window = 0   # --suppress-recheck: steps left in which the re-check words are held down
         self.join_guard = False   # --no-digit-join: the next request is one token, digits held down
         self.joins_held = 0
+        self.early_cycles = 0   # --early-cycle: loops its check found (the bench's check may have found some of them later)
+        self.early_dropped = 0   # tokens taken and then dropped after the line end where it found one
         self.echo = (None, 0, 0)   # (expression, its run of back-to-back values, model_tokens at the last): see echoing()
         self.loop_floor = 0   # the loop checks of the thinking read from here: a nudge starts them afresh (#304)
         self.loop_nudges = 0
@@ -962,6 +965,10 @@ class Rollout:
         if self.phase != 'answer' and self.phase != 'block':
             self.thought += len(new)
         last = new[-1] if new else None
+        if self.early_cut(new):
+            if self.left() <= 0:
+                self.done('length')
+            return False
         if self.answer_closed_at is not None:
             # --answer-close: after the cue only the value is read, nothing else acts (a put, a check), and it ends at a line end or the cap
             wrote = len(self.out) - self.answer_closed_at
@@ -1113,6 +1120,24 @@ class Rollout:
         if self.phase == 'answer':
             return looping(self.out[self.answer_start():], self.arm.guard_progress)
         return looping(self.out, self.arm.guard_progress)
+
+    def early_cut(self, new):
+        """--early-cycle, read at every line end of the tokens just taken (thinking only, since the last nudge), as the replay read it: a
+        request runs up to CHUNK tokens with no line stop, so the check at its end alone would come up to 1,024 tokens late. On a hit the
+        tokens after that line end are dropped (the loop going on: nothing has read them yet) and the loop is handled. True when it was."""
+        if not self.arm.early_cycle or self.phase != 'think' or not new:
+            return False
+        start = len(self.out) - len(new)
+        for i in range(max(start, self.loop_floor), len(self.out)):
+            if self.out[i] in self.ids.lines and early_cycle(self.out[self.loop_floor:i + 1]):
+                dropped = len(self.out) - (i + 1)
+                del self.out[i + 1:]
+                self.thought -= dropped
+                self.early_dropped += dropped   # a replay hands these tokens back to its trace
+                self.early_cycles += 1
+                self.on_loop()
+                return True
+        return False
 
     def answer_start(self):
         """Where the answer begins: after the last `</think>` (the model's or the runner's close), or 0 when there is none."""
@@ -1432,7 +1457,7 @@ class Rollout:
                     prompt_tokens=len(self.prompt), thinking_tokens=self.thought, seconds=self.seconds, events=self.events,
                     runs=len(runs), runs_by_model=sum(e['by'] == 'model' for e in runs), runs_forced=sum(e['by'] == 'forced' for e in runs),
                     runs_by_tool=sum(e['by'] in ('tool', 'tool in thinking') for e in runs),
-                    inline_values=sum(e['kind'] == 'inline value' for e in self.events), loop_nudges=self.loop_nudges, echo_skips=self.echo_skips, joins_held=self.joins_held,
+                    inline_values=sum(e['kind'] == 'inline value' for e in self.events), loop_nudges=self.loop_nudges, echo_skips=self.echo_skips, joins_held=self.joins_held, early_cycles=self.early_cycles,
                     first_run_at=runs[0]['model_tokens'] if runs else None, tool_seconds=round(sum(e['seconds'] for e in runs), 3))
 
 
@@ -1448,6 +1473,27 @@ def kv_tokens(llm):
 def looping(tokens, progress=False):
     from tools.igc.external_score import repeating
     return repeating(tokens, progress=progress)
+
+
+EARLY_ROUNDS, EARLY_ROUNDS_LONG, EARLY_SPAN = 6, 3, 500
+
+
+def early_cycle(tokens, longest=4096):
+    """--early-cycle: the tail is one exact cycle of EARLY_ROUNDS rounds (EARLY_ROUNDS_LONG past 512 tokens) that spans EARLY_SPAN tokens or
+    more. The bench's check wants 20 rounds (8 past 512). #307 detector replay over every stored A100 arm with no closer (detect_sim V7):
+    no fire on 915 answers that finished right nor on any that finished wrong, 212 of 243 loops caught sooner, 624k tokens sooner in all.
+    The span keeps a short echo (`= 15/13 = 15/13`, a column of digits) out: those are for the bench's own rounds."""
+    n = len(tokens)
+    for period in range(1, min(longest, n // EARLY_ROUNDS_LONG) + 1):
+        if tokens[-1] != tokens[-1 - period]:
+            continue
+        rounds = max(EARLY_ROUNDS if period <= 512 else EARLY_ROUNDS_LONG, -(-EARLY_SPAN // period))
+        if period * rounds > n:
+            continue
+        tail = tokens[-period * rounds:]
+        if tail[period:] == tail[:-period]:
+            return True
+    return False
 
 
 def eos_ids(model, tok, generation_config):
@@ -1636,7 +1682,7 @@ def run(args):
               args.whole_hint, args.check_hand, args.whole_plain, args.hand_off, args.question_value, trust=args.trust_line, logit_value=args.logit_value,
               suppress_recheck=args.suppress_recheck, mathbackend=args.mathbackend, candidate_close=args.candidate_close,
               inline_style=args.inline_style, no_digit_join=args.no_digit_join, guard_progress=args.guard_progress, answer_close=args.answer_close,
-              loop_value=args.loop_value)
+              loop_value=args.loop_value, early_cycle=args.early_cycle)
     if args.no_digit_join and (args.server or not (args.inline_calc and args.inline_plain)):
         raise SystemExit('--no-digit-join holds digits down after a plain inline put: it needs --inline-calc --inline-plain, and vLLM (not --server)')
     if args.suppress_recheck and (args.server or not (args.inline_calc or args.logit_value)):
@@ -1825,6 +1871,8 @@ def main(argv=None):
     r.add_argument('--close-fit', action='store_true')
     r.add_argument('--loop-close', action='store_true')
     r.add_argument('--loop-value', action='store_true', help="before a loop is closed, put the question's own computation, exact")
+    r.add_argument('--early-cycle', action='store_true', help='the thinking is also read, every request, for an exact cycle of 6 rounds '
+                                                              '(3 past 512 tokens) spanning 500+ tokens (#307 detector replay V7)')
     r.add_argument('--answer-close', action='store_true', help='a loop in the answer (thinking closed) gets the final-answer cue and one value, not `stuck`')
     r.add_argument('--close-repeat', type=int, default=0)
     r.add_argument('--inline-calc', action='store_true')

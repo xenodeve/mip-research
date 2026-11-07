@@ -165,7 +165,9 @@ def replay(rec, ids, arm_kw, tok, IDS, recorded=False):
                 break
         if not new:
             new = [next(iter(IDS.ends))]
+        dropped = r.early_dropped
         r.take(new)
+        s.pos -= r.early_dropped - dropped   # --early-cycle cut the tokens after a line end: the trace goes on from there
         for e in r.events[seen:]:
             ev = dict(kind=e['kind'], at=s.pos, expr=e.get('expr'), value=e.get('value'))
             # recorded: any text the runner put (a value, a loop close) whose tokens are the trace's own is what happened there, and is

@@ -96,6 +96,14 @@ class Replay(unittest.TestCase):
         out = sr.replay(dict(id='q', right=False, answer='1'), ids, dict(arm, answer_close=True), TOK, IDS, recorded=True)
         self.assertEqual(out['stop']['kind'], 'answer close')
 
+    def test_early_cycle_stops_at_the_line_end_it_cut(self):
+        """--early-cycle drops the tokens after the line end where it found the cycle; the replay's place in the trace goes back with them."""
+        line = 'Wait, let me recheck the sum of the two parts again, the first part and the second part, carefully now.\n'
+        ids = TOK.encode(line * 9 + 'x</think>\n\\boxed{1}<|im_end|>')
+        out = sr.replay(dict(id='q', right=False, answer='1'), ids, dict(loop_close=True, early_cycle=True), TOK, IDS, recorded=True)
+        self.assertEqual(out['stop']['kind'], 'loop close')
+        self.assertEqual(out['followed'], len(TOK.encode(line * 6)))
+
     def test_a_request_vllm_would_refuse_is_counted(self):
         """#307: the replay never builds a vLLM request, so a 1,106-token bias went to the A100 unseen; each request is checked now."""
         ids = TOK.encode('So $3 \\times 6 =') + TOK.encode(' 18') + TOK.encode('$ more.\n</think>\n\\boxed{18}<|im_end|>')
