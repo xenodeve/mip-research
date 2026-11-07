@@ -154,6 +154,9 @@ def replay(rec, ids, arm_kw, tok, IDS, recorded=False):
         if not ask:
             break
         most, stops = ask
+        why = tir4b.vllm_refusal(len(r.prompt) + len(r.out), most, r.bias())   # every request the A100 would get, checked here
+        if why:
+            out.setdefault('refused', []).append(dict(at=s.pos, why=why))
         new = []
         while s.pos < len(s.ids) and len(new) < most:
             new.append(s.ids[s.pos])
@@ -252,7 +255,8 @@ def main():
                                 for x in rows if x['stop'])
     summary = dict(arm=a.arm, records=a.records, rows=len(rows), to_end=sum(x['to_end'] for x in rows), events=dict(kinds),
                    stops=dict(stops), saved=sum(x['saved'] for x in rows), tokens=sum(x['tokens'] for x in rows),
-                   followed=sum(x['followed'] for x in rows))
+                   followed=sum(x['followed'] for x in rows),
+                   vllm_refused=sum(len(x.get('refused', [])) for x in rows))   # must be 0 before any A100 run (CLAUDE.md rule 11)
     json.dump(dict(summary=summary, rows=rows), open(a.out, 'w', encoding='utf-8'), indent=1, default=str)
     print(json.dumps(summary, indent=1))
 

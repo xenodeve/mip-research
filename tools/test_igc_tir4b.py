@@ -278,6 +278,38 @@ class InlineCalc(unittest.TestCase):
         self.assertFalse(right(row, '</think>\n\nso \\boxed{3/7}'))
         self.assertEqual(tir4b.prompt_text(dict(suite='arith', question='What is 2*3?')), 'What is 2*3?')
 
+    def test_answer_close_asks_for_one_value_after_a_loop_in_the_answer(self):
+        """#307 loop-lc: 3 of 15 closed loops looped again in the answer (`-5511170.918918...`); there the cue asks for one value."""
+        r = rollout(answer_close=True)
+        r.take(TOK.encode('x</think>'))   # a request ends at the close, as vLLM's stop does
+        r.take(TOK.encode('\n\nso ' + 'ab' * 600))
+        self.assertIsNone(r.finish)
+        self.assertEqual(kinds(r), ['answer close'])
+        self.assertTrue(r.text().endswith('The final answer is $\\boxed{'))
+        self.assertLess(r.text().count('ab'), 10)   # the cycle cut back to one round before the cue
+        most, stops = r.request()
+        self.assertLessEqual(most, tir4b.ANSWER_CLOSE_TOKENS)
+        self.assertIn(198, stops)
+        r.take(TOK.encode('-3/7}$'))
+        r.take(TOK.encode('\n'))
+        self.assertEqual(r.finish, 'stop')
+        from tools.igc.select_rows import right
+        self.assertTrue(right(dict(id='a', suite='arith', answer='-3/7'), r.text()))
+
+    def test_answer_close_ends_a_value_that_keeps_going(self):
+        r = rollout(answer_close=True)
+        play(r, 'x</think>\n\nso ' + 'ab' * 2000, Kernel([]))
+        self.assertEqual(r.finish, 'stop')
+        self.assertEqual(len(r.out) - r.answer_closed_at, tir4b.ANSWER_CLOSE_TOKENS)
+
+    def test_answer_close_leaves_a_thinking_loop_and_a_plain_answer_alone(self):
+        r = rollout(answer_close=True)
+        play(r, 'ab' * 700, Kernel([]))
+        self.assertEqual(r.finish, 'stuck')   # the thinking is loop-close's, not this
+        r = rollout(answer_close=True)
+        play(r, 'x</think>\n\nso \\boxed{2}<|im_end|>', Kernel([]))
+        self.assertEqual((r.finish, kinds(r)), ('stop', []))
+
     def test_a_loop_of_equations_is_stuck(self):
         # every request ends at an `=`, never at a chunk: the loop check must still come round, or it runs to the end of the context
         r = rollout(inline_calc=True)

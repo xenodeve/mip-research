@@ -86,6 +86,27 @@ class Replay(unittest.TestCase):
         out = sr.replay(dict(id='q', right=False, answer='18'), ids, dict(inline_calc=True, inline_plain=True), TOK, IDS, recorded=True)
         self.assertFalse(out['to_end'])
 
+    def test_a_request_vllm_would_refuse_is_counted(self):
+        """#307: the replay never builds a vLLM request, so a 1,106-token bias went to the A100 unseen; each request is checked now."""
+        ids = TOK.encode('So $3 \\times 6 =') + TOK.encode(' 18') + TOK.encode('$ more.\n</think>\n\\boxed{18}<|im_end|>')
+        arm = dict(inline_calc=True, inline_plain=True, no_digit_join=True)
+        out = sr.replay(dict(id='q', right=True, answer='18'), ids, arm, TOK, IDS, recorded=True)
+        self.assertNotIn('refused', out)
+        cap = sr.tir4b.BIAS_MAX
+        sr.tir4b.BIAS_MAX = 3   # fewer than the digits held after the put
+        try:
+            out = sr.replay(dict(id='q', right=True, answer='18'), ids, arm, TOK, IDS, recorded=True)
+        finally:
+            sr.tir4b.BIAS_MAX = cap
+        self.assertIn('logit bias tokens', out['refused'][0]['why'])
+
+    def test_the_known_vllm_limits(self):
+        f = sr.tir4b.vllm_refusal
+        self.assertIsNone(f(100, 1024, {1: -100.0}))
+        self.assertIn('at least 1', f(100, 0, None))
+        self.assertIn('holds', f(sr.tir4b.CONTEXT, 10, None))
+        self.assertIn('1025 logit bias', f(100, 1, {i: -1.0 for i in range(1025)}))
+
 
 class BridgeGuards(unittest.TestCase):
     """What the replay of a100 ctrlb showed the bridge put in where the model meant something else (2026-11-06)."""

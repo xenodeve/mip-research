@@ -26,6 +26,11 @@ MAX_BLOCK = 2048   # kMaxBlockTokens
 MAX_RUNS = 128   # kMaxRuns
 CLOSE = '</think>\n\n'   # {kThinkClose, 271}
 LOOP_CLOSE = '\n</think>\n\n'   # {198, kThinkClose, 271}
+# --answer-close: a loop in the answer, after the thinking is closed, ends with the model's one final value instead of `stuck`. loop-lc (#307)
+# closed 15 thinking loops, 12 then answered right; 3 carried the same doubt into the answer and looped there (an endless decimal
+# `-5511170.918918...`, a recount of `19+1`), where nothing was left to close
+ANSWER_CLOSE = '\n\nThe final answer is $\\boxed{'
+ANSWER_CLOSE_TOKENS = 64   # the value after the cue; a value still going past this is no value
 CHUNK = 1024   # thinking tokens between two loop checks; the engine checks every 16, so a close can come up to this much later
 CONTEXT = 262144   # the model card's native context, all of it (developer, 2026-11-03)
 # Qwen's precise set for thinking (model card). Its general set adds presence_penalty 1.5, which vLLM counts per request: every block the runner
@@ -143,7 +148,8 @@ class Arm:
     def __init__(self, force_after=0, execute=False, close_fit=False, loop_close=False, close_repeat=0, inline_calc=False, native_tool=False,
                  hint_calc=False, loop_hint=False, inline_plain=False, whole_hint=False, check_hand=False, whole_plain=False, hand_off=False, question_value=False,
                  trust='cort', logit_value=0.0, suppress_recheck=0, mathbackend=False, candidate_close=False, inline_style='general',
-                 no_digit_join=False, guard_progress=False):
+                 no_digit_join=False, guard_progress=False, answer_close=False):
+        self.answer_close = answer_close   # --answer-close: a loop in the answer gets the final-answer cue and one value, not `stuck` (#307)
         self.trust = trust   # the line after a hinted program that printed: 'cort' (the original), 'none', 'positive'
         self.no_digit_join = no_digit_join   # --no-digit-join: the token after a put that ends in a digit starts with no digit (#307)
         self.guard_progress = guard_progress   # --guard-progress: the counting check lets a tail whose rounds are nearly all new go on (#307)
@@ -183,6 +189,19 @@ def with_call(code):
         return code, None
     name = free[-1]
     return code + ('' if code.endswith('\n') else '\n') + f'\n_r = {name}()\nif _r is not None:\n    print(_r)\n', name
+
+
+def vllm_refusal(context, most, bias):
+    """Why vLLM would refuse this request, or None. The known limits only, each one met on a run: a replay never builds the request, so it
+    checks them here (#307: a 1,106-token logit bias, over the cap of 1,024, ended all four A100 arms of the loop round within minutes).
+    context: the tokens the request reads (prompt and answer so far)."""
+    if most < 1:
+        return f'max_tokens {most}: vLLM needs at least 1'
+    if context >= CONTEXT:
+        return f'{context} tokens read: the model holds {CONTEXT}'
+    if bias and len(bias) > BIAS_MAX:
+        return f'{len(bias)} logit bias tokens: vLLM refuses more than {BIAS_MAX}'
+    return None
 
 
 def loop_start(tokens, longest=4096):
@@ -806,6 +825,7 @@ class Rollout:
         self.echo = (None, 0, 0)   # (expression, its run of back-to-back values, model_tokens at the last): see echoing()
         self.loop_floor = 0   # the loop checks of the thinking read from here: a nudge starts them afresh (#304)
         self.loop_nudges = 0
+        self.answer_closed_at = None   # --answer-close: where the model's value after the cue begins
         self.echo_skips = 0   # values echoing() left to the model
         if arm.candidate_close:
             from tools.igc.unified_detect import CandidateAnswerTracker
@@ -911,6 +931,8 @@ class Rollout:
             stops |= self.ids.lines   # the whole step may come as a line of its own, with no `=`
         if self.arm.hand_off and self.given:
             stops |= self.ids.lines   # each line after a given value is read for a restatement
+        if self.phase == 'answer' and self.answer_closed_at is not None:
+            return min(left, ANSWER_CLOSE_TOKENS - (len(self.out) - self.answer_closed_at)), stops | self.ids.lines
         if self.phase == 'answer':
             # a decimal expansion has no line end: after a given value, short requests so it is seen while it starts
             return min(left, 48 if self.arm.hand_off and self.given else CHUNK), stops
@@ -1001,11 +1023,21 @@ class Rollout:
             else:
                 self.done('stop')
             return False
+        if self.phase == 'answer' and self.answer_closed_at is not None:
+            wrote = len(self.out) - self.answer_closed_at
+            if last in self.ids.lines and wrote > 1 or wrote >= ANSWER_CLOSE_TOKENS:
+                self.done('stop')   # the value after the cue is the answer; the event says the runner asked for it
+            elif self.left() <= 0:
+                self.done('length')
+            return False
         if self.phase == 'answer':
             if self.left() <= 0:
                 self.done('length')
             elif self.looping_now():
-                self.done('stuck')
+                if self.arm.answer_close:
+                    self.close_answer()
+                else:
+                    self.done('stuck')
             return False
         if last == self.ids.think_close:
             if self.phase == 'block':
@@ -1120,6 +1152,20 @@ class Rollout:
             self.phase = 'answer'
         else:
             self.done('stuck')
+
+    def close_answer(self):
+        """--answer-close: the answer loops after its thinking was closed. An exact cycle is cut back to one round (so the cue does not land
+        inside the 300th `918`), then the final-answer cue is put and the model writes one value, at most ANSWER_CLOSE_TOKENS, to a line end."""
+        floor = max(self.answer_start(), self.spans[-1][1] if self.spans else 0)
+        start = loop_start(self.out[floor:])
+        taken = 0
+        if start is not None:
+            taken = len(self.out) - (floor + start)
+            del self.out[floor + start:]
+        self.join_guard = False
+        self.inject(ANSWER_CLOSE, 'answer close')
+        self.events[-1].update(cut_tokens=taken)
+        self.answer_closed_at = len(self.out)
 
     def whole_line(self):
         """The --whole-hint's step written as a line of its own, with no `=` (pc-whole dm mul_div 3350: the whole expression, then pieces):
@@ -1428,6 +1474,9 @@ def drive(llm, rollouts, kernel_factory, live_most=256, workers=32, on_round=Non
             return False
         most, stops = q
         bias = r.bias()
+        why = vllm_refusal(len(r.prompt) + len(r.out), most, bias)
+        if why:
+            raise RuntimeError(f'{r.row["id"]}#{r.sample}: {why}')
         params = SamplingParams(**SAMPLING, max_tokens=most, stop_token_ids=sorted(stops), seed=(r.seed + len(r.out)) % 2**31,
                                 skip_special_tokens=False, detokenize=False,
                                 **(dict(logit_bias=bias, **(dict(logprobs=20) if r.plan is not None else {})) if bias else {}))
@@ -1565,7 +1614,7 @@ def run(args):
     arm = Arm(args.force_after, args.execute, args.close_fit, args.loop_close, args.close_repeat, args.inline_calc, args.native_tool, args.hint_calc, args.loop_hint, args.inline_plain,
               args.whole_hint, args.check_hand, args.whole_plain, args.hand_off, args.question_value, trust=args.trust_line, logit_value=args.logit_value,
               suppress_recheck=args.suppress_recheck, mathbackend=args.mathbackend, candidate_close=args.candidate_close,
-              inline_style=args.inline_style, no_digit_join=args.no_digit_join, guard_progress=args.guard_progress)
+              inline_style=args.inline_style, no_digit_join=args.no_digit_join, guard_progress=args.guard_progress, answer_close=args.answer_close)
     if args.no_digit_join and (args.server or not (args.inline_calc and args.inline_plain)):
         raise SystemExit('--no-digit-join holds digits down after a plain inline put: it needs --inline-calc --inline-plain, and vLLM (not --server)')
     if args.suppress_recheck and (args.server or not (args.inline_calc or args.logit_value)):
@@ -1753,6 +1802,7 @@ def main(argv=None):
     r.add_argument('--execute', action='store_true')
     r.add_argument('--close-fit', action='store_true')
     r.add_argument('--loop-close', action='store_true')
+    r.add_argument('--answer-close', action='store_true', help='a loop in the answer (thinking closed) gets the final-answer cue and one value, not `stuck`')
     r.add_argument('--close-repeat', type=int, default=0)
     r.add_argument('--inline-calc', action='store_true')
     r.add_argument('--whole-plain', action='store_true', help="--whole-hint asking for one plain expression in the question's order, not LaTeX")
