@@ -31,6 +31,7 @@ LOOP_CLOSE = '\n</think>\n\n'   # {198, kThinkClose, 271}
 # `-5511170.918918...`, a recount of `19+1`), where nothing was left to close
 ANSWER_CLOSE = '\n\nThe final answer is $\\boxed{'
 ANSWER_CLOSE_TOKENS = 64   # the value after the cue; a value still going past this is no value
+LOOP_VALUE = 'Computed exactly: ${expr} = {value}$'   # --loop-value: the question's computation, put before a loop is closed
 CHUNK = 1024   # thinking tokens between two loop checks; the engine checks every 16, so a close can come up to this much later
 CONTEXT = 262144   # the model card's native context, all of it (developer, 2026-11-03)
 # Qwen's precise set for thinking (model card). Its general set adds presence_penalty 1.5, which vLLM counts per request: every block the runner
@@ -148,7 +149,8 @@ class Arm:
     def __init__(self, force_after=0, execute=False, close_fit=False, loop_close=False, close_repeat=0, inline_calc=False, native_tool=False,
                  hint_calc=False, loop_hint=False, inline_plain=False, whole_hint=False, check_hand=False, whole_plain=False, hand_off=False, question_value=False,
                  trust='cort', logit_value=0.0, suppress_recheck=0, mathbackend=False, candidate_close=False, inline_style='general',
-                 no_digit_join=False, guard_progress=False, answer_close=False):
+                 no_digit_join=False, guard_progress=False, answer_close=False, loop_value=False):
+        self.loop_value = loop_value   # --loop-value: before a loop is closed, the question's own computation, exact (#307)
         self.answer_close = answer_close   # --answer-close: a loop in the answer gets the final-answer cue and one value, not `stuck` (#307)
         self.trust = trust   # the line after a hinted program that printed: 'cort' (the original), 'none', 'positive'
         self.no_digit_join = no_digit_join   # --no-digit-join: the token after a put that ends in a digit starts with no digit (#307)
@@ -826,6 +828,7 @@ class Rollout:
         self.loop_floor = 0   # the loop checks of the thinking read from here: a nudge starts them afresh (#304)
         self.loop_nudges = 0
         self.answer_closed_at = None   # --answer-close: where the model's value after the cue begins
+        self.loop_valued = False   # --loop-value: put once per answer
         self.echo_skips = 0   # values echoing() left to the model
         if arm.candidate_close:
             from tools.igc.unified_detect import CandidateAnswerTracker
@@ -1146,12 +1149,29 @@ class Rollout:
                     self.events[-1].update(cut_tokens=taken, nudge=self.loop_nudges)
                     self.loop_floor = len(self.out)
                     return
+            self.put_loop_value()
             self.inject(LOOP_CLOSE, 'loop close')
             self.phase = 'answer'
         elif self.phase == 'answer' and self.arm.answer_close and self.answer_closed_at is None:
             self.close_answer()   # a loop of equations comes here from the `=` path, any other from the answer's own check
         else:
             self.done('stuck')
+
+    def put_loop_value(self):
+        """--loop-value: a loop is being closed. When the question states a computation (tools.igc.question_read: gold on 160 of 160
+        DeepMind rows), its exact value is put on a line of its own first, once: software computes, the model decides what to answer.
+        #307: 5 of 15 loop-lc closes were a doubt the close did not settle; 2 were an endless division of the question's own fraction."""
+        if not self.arm.loop_value or self.loop_valued or not self.row.get('question'):
+            return
+        from tools.igc.question_read import read
+        got = read(self.row['question'])
+        if got is None:
+            return
+        self.loop_valued = True
+        text = self.text()
+        lead = '' if text.endswith('\n') else '\n'
+        self.inject(f'{lead}{LOOP_VALUE.format(expr=got[0], value=spelled(got[1]))}\n', 'loop value')
+        self.events[-1].update(expr=got[0][:200], value=spelled(got[1]))
 
     def close_answer(self):
         """--answer-close: the answer loops after its thinking was closed. An exact cycle is cut back to one round (so the cue does not land
@@ -1163,6 +1183,7 @@ class Rollout:
             taken = len(self.out) - (floor + start)
             del self.out[floor + start:]
         self.join_guard = False
+        self.put_loop_value()
         self.inject(ANSWER_CLOSE, 'answer close')
         self.events[-1].update(cut_tokens=taken)
         self.answer_closed_at = len(self.out)
@@ -1614,7 +1635,8 @@ def run(args):
     arm = Arm(args.force_after, args.execute, args.close_fit, args.loop_close, args.close_repeat, args.inline_calc, args.native_tool, args.hint_calc, args.loop_hint, args.inline_plain,
               args.whole_hint, args.check_hand, args.whole_plain, args.hand_off, args.question_value, trust=args.trust_line, logit_value=args.logit_value,
               suppress_recheck=args.suppress_recheck, mathbackend=args.mathbackend, candidate_close=args.candidate_close,
-              inline_style=args.inline_style, no_digit_join=args.no_digit_join, guard_progress=args.guard_progress, answer_close=args.answer_close)
+              inline_style=args.inline_style, no_digit_join=args.no_digit_join, guard_progress=args.guard_progress, answer_close=args.answer_close,
+              loop_value=args.loop_value)
     if args.no_digit_join and (args.server or not (args.inline_calc and args.inline_plain)):
         raise SystemExit('--no-digit-join holds digits down after a plain inline put: it needs --inline-calc --inline-plain, and vLLM (not --server)')
     if args.suppress_recheck and (args.server or not (args.inline_calc or args.logit_value)):
@@ -1802,6 +1824,7 @@ def main(argv=None):
     r.add_argument('--execute', action='store_true')
     r.add_argument('--close-fit', action='store_true')
     r.add_argument('--loop-close', action='store_true')
+    r.add_argument('--loop-value', action='store_true', help="before a loop is closed, put the question's own computation, exact")
     r.add_argument('--answer-close', action='store_true', help='a loop in the answer (thinking closed) gets the final-answer cue and one value, not `stuck`')
     r.add_argument('--close-repeat', type=int, default=0)
     r.add_argument('--inline-calc', action='store_true')

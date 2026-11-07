@@ -144,7 +144,7 @@ class Script:
 def replay(rec, ids, arm_kw, tok, IDS, recorded=False):
     """recorded=True: `ids` is a trace the same arm wrote, so a put whose tokens are the next stored tokens is what happened there and
     is followed whatever the model wrote after it (`18 + 3 = 21`, `0.0714...`); used to see where a mechanism added to the arm acts."""
-    row = dict(id=rec['id'], suite=rec.get('suite', ''), answer=rec.get('answer', ''))
+    row = dict(id=rec['id'], suite=rec.get('suite', ''), answer=rec.get('answer', ''), question=rec.get('question', ''))
     r = tir4b.Rollout(row, 0, [1, 2, 3], tir4b.Arm(**arm_kw), IDS, tok, seed=1)
     s = Script(ids, tok)
     out = dict(id=rec['id'], right=bool(rec.get('right')), finish=rec.get('finish'), tokens=len(ids), events=[], saved=0, stop=None)
@@ -238,12 +238,21 @@ def main():
     ap.add_argument('--arm', default='inline_calc,mathbackend,inline_plain')
     ap.add_argument('--out', required=True)
     ap.add_argument('--recorded', action='store_true', help="the records are the arm's own run: follow its puts")
+    ap.add_argument('--rows', default='', help='the rows file the run read: gives each record its question (--loop-value reads it)')
     a = ap.parse_args()
     from transformers import AutoTokenizer
     tok = AutoTokenizer.from_pretrained(a.tokenizer)
     IDS = tir4b.Ids(tok, [tok.convert_tokens_to_ids('<|endoftext|>')])
     arm_kw = arm_kwargs(a.arm)
     recs = json.load(open(a.records, encoding='utf-8'))
+    if a.rows:   # a record keeps no question; a mechanism that reads it (--loop-value) needs it
+        questions = {}
+        for line in open(a.rows, encoding='utf-8'):
+            if line.strip():
+                d = json.loads(line)
+                questions[d['id']] = d.get('question', '')
+        for rec in recs:
+            rec.setdefault('question', questions.get(rec['id'], ''))
     stored = {}
     if a.ids:
         for line in open(a.ids, encoding='utf-8'):

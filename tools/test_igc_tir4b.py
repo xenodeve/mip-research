@@ -314,6 +314,26 @@ class InlineCalc(unittest.TestCase):
         self.assertEqual((kinds(r).count('inline value'), r.finish), (puts, 'stop'))
         self.assertTrue(r.text().endswith('The final answer is $\\boxed{6 \\times 7 = 42}$\n'))
 
+    def test_loop_value_puts_the_questions_computation_before_the_close(self):
+        """#307: div_big-2208 divided by hand without end; the question's own fraction, exact, goes in before the loop is closed."""
+        row = dict(ROW, id='d', suite='arith', answer='-6681/10943', question='Calculate -6681 divided by 10943.')
+        r = tir4b.Rollout(row, 0, [1, 2, 3], tir4b.Arm(loop_close=True, loop_value=True), IDS, TOK, seed=1)
+        play(r, 'ab' * 700, Kernel([]))
+        self.assertEqual(kinds(r)[:2], ['loop value', 'loop close'])
+        self.assertIn('Computed exactly: $', r.text())
+        self.assertIn('= -6681/10943$\n\n</think>', r.text())
+
+    def test_loop_value_once_and_only_with_a_computation(self):
+        row = dict(ROW, id='w', suite='gsm', answer='3', question='Tom has three apples. How many?')
+        r = tir4b.Rollout(row, 0, [1, 2, 3], tir4b.Arm(loop_close=True, loop_value=True), IDS, TOK, seed=1)
+        play(r, 'ab' * 700, Kernel([]))
+        self.assertNotIn('loop value', kinds(r))   # a word problem states no computation software reads
+        row = dict(ROW, id='d', suite='arith', answer='-6681/10943', question='Calculate -6681 divided by 10943.')
+        r = tir4b.Rollout(row, 0, [1, 2, 3], tir4b.Arm(loop_close=True, answer_close=True, loop_value=True), IDS, TOK, seed=1)
+        play(r, 'ab' * 700 + 'cd' * 1500, Kernel([]))
+        self.assertEqual(kinds(r).count('loop value'), 1)
+        self.assertIn('answer close', kinds(r))
+
     def test_answer_close_ends_a_value_that_keeps_going(self):
         r = rollout(answer_close=True)
         play(r, 'x</think>\n\nso ' + 'ab' * 2000, Kernel([]))
