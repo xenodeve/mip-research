@@ -102,6 +102,7 @@ def shown_text(ok, shown):
 
 
 JOIN_BIAS = -100.0   # --no-digit-join: a digit cannot follow a put that ends in one
+BIAS_MAX = 1024      # vLLM 0.33's GPU sampler kills the engine on a logit_bias over this many tokens (#307: 1,106 ended all four A100 arms)
 RECHECK_WORDS = {'wait', 'hmm', 'hmmm', 'verify', 'verifying', 'check', 'checking', 'double', 'recheck', 'rechecking', 'recalculate', 'recompute', 'again'}
 SUPPRESS_BIAS = -30.0   # added to those words' logits: -inf in NoWait, a finite number that no sampled logit climbs back from
 
@@ -123,10 +124,19 @@ class Ids:
         self.recheck = {i for i in range(len(tokenizer)) if tokenizer.decode([i]).strip().lower().rstrip('.,:!') in RECHECK_WORDS}
         # --no-digit-join: every token whose text starts with a digit, so none can run on a number software put
         self.digit_start = {i for i in range(len(tokenizer)) if tokenizer.decode([i])[:1].isdigit()}
-        # and every token that starts with `/`: `-23/11 + 12/11 =` put `-1`, the model's planned `/11` read `-1/11` (#307, 121 of 112,793 puts)
-        self.slash_start = {i for i in range(len(tokenizer)) if tokenizer.decode([i])[:1] == '/'}
+        # and every token that starts a division with `/`: `-23/11 + 12/11 =` put `-1`, the model's planned `/11` read `-1/11` (#307, 121 of
+        # 112,793 puts). Only `/` alone or before a digit, bracket, `-` or `\`: the 4B's vocabulary has 1,078 tokens starting with `/`, nearly
+        # all code (`//`, `/**`), and holding them all broke vLLM's cap below (12 are left)
+        self.slash_start = {i for i in range(len(tokenizer)) if self._division(tokenizer.decode([i]))}
         self.point = {i for i in range(len(tokenizer)) if tokenizer.decode([i]) == '.'}   # `0` then `.75` read `0.75`: digits held after it
         self.tool_close = tokenizer.convert_tokens_to_ids('</tool_call>')
+        held = len(self.recheck | self.digit_start | self.slash_start)   # the most bias() ever asks for at once
+        if held > BIAS_MAX:
+            raise RuntimeError(f'tokenizer: bias() could hold {held} tokens, vLLM refuses more than {BIAS_MAX}')
+
+    @staticmethod
+    def _division(text):
+        return text[:1] == '/' and (text[1:2] in ('', '(', '[', '{', '-', '\\') or text[1:2].isdigit())
 
 
 class Arm:

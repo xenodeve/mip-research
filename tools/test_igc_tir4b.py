@@ -70,6 +70,19 @@ def play(rollout, script, kernel):
             rollout.run_pending(lambda: kernel)
 
 
+class WideTok(Tok):
+    """Tok plus whole-word tokens after its range, as a real vocabulary has (`//`, `/**`)."""
+    def __init__(self, words):
+        self.words = list(words)
+
+    def decode(self, ids):
+        base = 1000 + 200
+        return ''.join(self.words[i - base] if i >= base else super(WideTok, self).decode([i]) for i in ids)
+
+    def __len__(self):
+        return 1000 + 200 + len(self.words)
+
+
 TOK = Tok()
 IDS = tir4b.Ids(TOK, [6])
 ROW = dict(id='q1', suite='gsm', answer='42')
@@ -1024,6 +1037,17 @@ class NoDigitJoin(unittest.TestCase):
         """`-23/11 + 12/11 =` put `-1`, then the model's planned `/11` read `-1/11` (#307)."""
         r = self.put(no_digit_join=True)
         self.assertEqual(r.bias()[1000 + ord('/')], tir4b.JOIN_BIAS)
+
+    def test_only_tokens_that_start_a_division_are_held(self):
+        """The 4B has 1,078 tokens starting with `/`; holding them all made 1,106 bias tokens and vLLM killed the engine (#307)."""
+        tok = WideTok(['/', '/(', '/\\', '/-', '/7', '//', '/**', '/>', '/usr'])
+        held = {tok.decode([i]) for i in tir4b.Ids(tok, [6]).slash_start}
+        self.assertEqual(held, {'/', '/(', '/\\', '/-', '/7'})
+
+    def test_a_tokenizer_that_would_overflow_vllms_cap_is_refused(self):
+        tok = WideTok([f'{d}x{n}' for d in '123456789' for n in range(120)])   # 1,080 tokens that start with a digit
+        with self.assertRaisesRegex(RuntimeError, 'vLLM refuses more than 1024'):
+            tir4b.Ids(tok, [6])
 
     def test_after_a_point_only_digits_are_held(self):
         """`0` then `.75` read `0.75`; `= 42.` ends a sentence. The point is let through, then one token with digits held."""
