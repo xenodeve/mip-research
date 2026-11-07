@@ -296,6 +296,24 @@ class InlineCalc(unittest.TestCase):
         from tools.igc.select_rows import right
         self.assertTrue(right(dict(id='a', suite='arith', answer='-3/7'), r.text()))
 
+    def test_answer_close_also_takes_a_loop_of_equations(self):
+        """loop-lc surd-2201: `Let's check $19+1$. $19+1 = 20$.` looped in the answer; each request ended at `=`, so the loop was read on
+        that path, which ended it `stuck` past the answer close."""
+        r = rollout(inline_calc=True, inline_plain=True, answer_close=True)
+        play(r, 'x</think>\n\n' + 'Check: $19+1 =$. Okay.\n' * 400, Kernel([]))
+        self.assertIn('answer close', kinds(r))
+        self.assertEqual(r.finish, 'stop')
+
+    def test_after_the_cue_nothing_else_puts_a_value(self):
+        r = rollout(inline_calc=True, inline_plain=True, answer_close=True)
+        r.take(TOK.encode('x</think>'))
+        r.take(TOK.encode('\n\nso ' + 'ab' * 600))
+        puts = kinds(r).count('inline value')
+        r.take(TOK.encode('6 \\times 7 ='))
+        r.take(TOK.encode(' 42}$\n'))
+        self.assertEqual((kinds(r).count('inline value'), r.finish), (puts, 'stop'))
+        self.assertTrue(r.text().endswith('The final answer is $\\boxed{6 \\times 7 = 42}$\n'))
+
     def test_answer_close_ends_a_value_that_keeps_going(self):
         r = rollout(answer_close=True)
         play(r, 'x</think>\n\nso ' + 'ab' * 2000, Kernel([]))

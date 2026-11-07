@@ -168,8 +168,11 @@ def replay(rec, ids, arm_kw, tok, IDS, recorded=False):
         r.take(new)
         for e in r.events[seen:]:
             ev = dict(kind=e['kind'], at=s.pos, expr=e.get('expr'), value=e.get('value'))
-            if e['kind'] == 'inline value' and recorded:
-                start, end, _ = r.spans[-1]
+            # recorded: any text the runner put (a value, a loop close) whose tokens are the trace's own is what happened there, and is
+            # followed; only a put the trace does not hold is where the mechanism under test acts (#307: an answer close comes after a loop close)
+            span = r.spans[-1] if e['kind'] == 'inline value' else next((sp for sp in reversed(r.spans) if sp[0] == e.get('at')), None)
+            if recorded and span is not None:
+                start, end, _ = span
                 put_ids = r.out[start:end]
                 if s.ids[s.pos:s.pos + len(put_ids)] == put_ids:
                     s.pos += len(put_ids)

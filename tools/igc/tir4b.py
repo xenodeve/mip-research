@@ -959,6 +959,14 @@ class Rollout:
         if self.phase != 'answer' and self.phase != 'block':
             self.thought += len(new)
         last = new[-1] if new else None
+        if self.answer_closed_at is not None:
+            # --answer-close: after the cue only the value is read, nothing else acts (a put, a check), and it ends at a line end or the cap
+            wrote = len(self.out) - self.answer_closed_at
+            if last in self.ids.ends or last in self.ids.lines and wrote > 1 or wrote >= ANSWER_CLOSE_TOKENS:
+                self.done('stop')   # the value after the cue is the answer; the event says the runner asked for it
+            elif self.left() <= 0:
+                self.done('length')
+            return False
         if self.plan is not None and new and self.follow_plan(last) and last not in self.ids.ends:
             if self.left() <= 0:
                 self.done('length')
@@ -1023,21 +1031,11 @@ class Rollout:
             else:
                 self.done('stop')
             return False
-        if self.phase == 'answer' and self.answer_closed_at is not None:
-            wrote = len(self.out) - self.answer_closed_at
-            if last in self.ids.lines and wrote > 1 or wrote >= ANSWER_CLOSE_TOKENS:
-                self.done('stop')   # the value after the cue is the answer; the event says the runner asked for it
-            elif self.left() <= 0:
-                self.done('length')
-            return False
         if self.phase == 'answer':
             if self.left() <= 0:
                 self.done('length')
             elif self.looping_now():
-                if self.arm.answer_close:
-                    self.close_answer()
-                else:
-                    self.done('stuck')
+                self.on_loop()
             return False
         if last == self.ids.think_close:
             if self.phase == 'block':
@@ -1150,6 +1148,8 @@ class Rollout:
                     return
             self.inject(LOOP_CLOSE, 'loop close')
             self.phase = 'answer'
+        elif self.phase == 'answer' and self.arm.answer_close and self.answer_closed_at is None:
+            self.close_answer()   # a loop of equations comes here from the `=` path, any other from the answer's own check
         else:
             self.done('stuck')
 

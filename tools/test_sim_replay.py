@@ -86,6 +86,16 @@ class Replay(unittest.TestCase):
         out = sr.replay(dict(id='q', right=False, answer='18'), ids, dict(inline_calc=True, inline_plain=True), TOK, IDS, recorded=True)
         self.assertFalse(out['to_end'])
 
+    def test_recorded_follows_a_loop_close_to_the_answer_close(self):
+        """#307 loop-lc: 3 answers looped again after the loop close. The replay must follow the close the trace holds to reach them."""
+        loop = 'ab' * 700
+        ids = TOK.encode(loop[:sr.tir4b.CHUNK]) + TOK.encode('\n</think>\n\n') + TOK.encode('so ' + 'cd' * 1500)
+        arm = dict(loop_close=True)
+        out = sr.replay(dict(id='q', right=False, answer='1'), ids, arm, TOK, IDS, recorded=True)
+        self.assertEqual(out['stop']['kind'], 'ended: stuck')   # followed past the close, then the answer loop ends it as the run did
+        out = sr.replay(dict(id='q', right=False, answer='1'), ids, dict(arm, answer_close=True), TOK, IDS, recorded=True)
+        self.assertEqual(out['stop']['kind'], 'answer close')
+
     def test_a_request_vllm_would_refuse_is_counted(self):
         """#307: the replay never builds a vLLM request, so a 1,106-token bias went to the A100 unseen; each request is checked now."""
         ids = TOK.encode('So $3 \\times 6 =') + TOK.encode(' 18') + TOK.encode('$ more.\n</think>\n\\boxed{18}<|im_end|>')
