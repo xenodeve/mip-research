@@ -11,6 +11,9 @@ top-k 20, the full 262,144-token context).
 
 ## At a glance
 
+- **Arithmetic: 95 % fewer tokens and more right answers.** When software takes the whole calculation, the 4B gets **156 of 160**
+  DeepMind arithmetic questions right against 118, with **0.05x the tokens** (261,731 -> 12,062) and answers 85 % faster
+  ([Arithmetic mode](#arithmetic-mode-95--fewer-tokens)).
 - **+13 right answers where a 4B model gets stuck.** On 24 questions where the plain model loops: 24 -> **37 of 48** right, and
   answers with no answer at all fall from 21 to **1**.
 - **No fine-tuning, no second model.** The plain checkpoint, its own sampling; MIP only reads the text and adds tokens to it.
@@ -24,10 +27,52 @@ top-k 20, the full 262,144-token context).
   all right answers: the newest closer touched **0 of 1,078** right answers in replay.
 - **Failures are counted, not hidden:** 2 of 48 right answers were lost to a close that came too early ([Failures](#failures)).
 
-Contents: [Best config](#best-config) · [Results](#results) · [Tokens and time](#tokens-and-time) · [Ordinary math](#ordinary-math-answers-right-in-both-arms) · [Detection points](#detection-points) ·
+Contents: [Arithmetic mode](#arithmetic-mode-95--fewer-tokens) · [Best config](#best-config) · [Results](#results) · [Tokens and time](#tokens-and-time) · [Ordinary math](#ordinary-math-answers-right-in-both-arms) · [Detection points](#detection-points) ·
 [How a value is put](#how-a-value-is-put) · [Loops it prevents](#loops-it-prevents) · [MathBackend](#mathbackend) ·
 [Staying out of the way](#staying-out-of-the-way) · [No fine-tuning](#no-fine-tuning) · [Failures](#failures) ·
 [Not measured yet](#not-measured-yet) · [Repo](#repo) · [ภาษาไทย](#ภาษาไทย)
+
+## Arithmetic mode: 95 % fewer tokens
+
+For a question whose work is one fixed calculation, MIP lets software take the whole step instead of each `=`:
+
+```sh
+python tools/igc/tir4b.py run --model <Qwen3.5-4B> --server http://127.0.0.1:8099 --rows dm-rows.jsonl --no-think --greedy \
+  --system "Do every arithmetic step exactly." --inline-calc --inline-plain --whole-hint --whole-plain --question-value --hand-off
+```
+
+1. **The whole step.** The reply opens asking for the whole calculation as one plain expression in the question's order
+   (`--whole-hint --whole-plain`); software computes it exactly, sign and uneven quotient included.
+2. **The question's own computation.** Software also reads the computation from the question itself, in symbols or in words
+   (`less than`, `take away`, `product of` ...): on these 160 questions it reads all 160 exactly, so a number the model copies wrong
+   is caught (`--question-value`).
+3. **The hand-off.** A line that only restates software's value (`= v`, or a long decimal expansion) is cut, and the model is led
+   to its answer with `So the final answer is \boxed{` (`--hand-off`). Software never writes the answer; the model does.
+
+DeepMind arithmetic, Qwenputer's 160 questions (40 each of big addition and subtraction, big division, big multiplication, long
+multiply-divide chains), Qwen3.5-4B, thinking off, greedy, llama-server on an RTX 5060 Ti, one answer each:
+
+| | Plain model | Arithmetic mode |
+|---|---|---|
+| Right | 118 / 160 | **156 / 160** |
+| Tokens, all answers | 261,731 | **12,062 (0.046x)** |
+| Median tokens per answer | 1,191 | **38** |
+| Median seconds per answer | 61 | **8** |
+
+| Kind | Right, plain -> MIP | Tokens with MIP / without |
+|---|---|---|
+| Big multiplication | 21 -> **40** | **0.018** |
+| Big addition and subtraction | 33 -> 39 | 0.044 |
+| Long multiply-divide chains | 35 -> **40** | 0.047 |
+| Big division | 29 -> 37 | 0.072 |
+
+- **On the 117 answers right in both arms: 0.042x the tokens (-96 %) and 0.15x the seconds (-85 %),** the same answer written
+  without grinding the digits by hand. Seconds are per answer with 16 answers in flight, both arms on the same PC, not an ABBA.
+- **39 answers gained, 1 lost** (`add_or_sub_big-5409`).
+- The plain model has a 4,096-token cap here, and 20 of its 160 answers reach it; those count as wrong, which favours the MIP arm
+  on accuracy. The token cut on answers right in both arms does not depend on the cap.
+- This mode answers a calculation question with thinking off. The best config below is for reasoning with thinking on, where the
+  calculations sit inside a longer argument.
 
 ## Best config
 
@@ -246,6 +291,7 @@ repo นี้เก็บกลไก เครื่องมือทดล�
 
 ### สรุปสั้น ๆ
 
+- **เลขคณิต: token ลดลง 95% และตอบถูกมากขึ้น:** พอให้ software คำนวณทั้งขั้น model 4B ตอบถูก **156 จาก 160** ข้อเลขคณิต DeepMind จากเดิม 118 ใช้ token **0.05 เท่า** (261,731 เหลือ 12,062) และตอบเร็วขึ้น 85%
 - **ตอบถูกเพิ่ม 13 คำตอบ ในโจทย์ที่ model 4B วนติด:** 24 ข้อที่ model เปล่าวน ตอบถูกจาก 24 เป็น **37 จาก 48** และคำตอบที่ไม่มีคำตอบเลยลดจาก 21 เหลือ **1**
 - **ไม่ต้อง fine-tune ไม่ต้องใช้ model ตัวที่สอง:** ใช้ checkpoint ปกติกับค่าการสุ่มของมันเอง MIP แค่อ่านข้อความแล้วต่อ token ลงไป
 - **ไม่เคยใส่เลขผิด:** ใส่ค่า 39,046 ครั้ง **ผิด 0 ครั้ง** ตรวจซ้ำทุกค่าด้วยตัวคำนวณอิสระ เพราะคำนวณแบบตรงเป๊ะ (387 operation ไม่มี floating point) และถ้าไม่แน่ใจจะไม่ใส่ ไม่เดา
@@ -253,6 +299,39 @@ repo นี้เก็บกลไก เครื่องมือทดล�
 - **ใช้ token น้อยลงในโจทย์ที่คำนวณตายตัว:** นับเฉพาะข้อที่ตอบถูกทั้งตอนมีและไม่มี MIP แทนค่าในพหุนามลด **33%** จัดรูปรากลด 29% แปลงหน่วยกับลำดับลด 11% แต่ถ้ารวมโจทย์คณิตทั่วไปทั้งหมด ลดได้แค่ 3%
 - **ไม่ไปยุ่งกับงานอื่น:** ใส่ค่าเฉพาะหลัง `=` ที่ model เขียนเอง และเฉพาะเลขคณิตที่คำนวณได้ตรงเป๊ะ ส่วนเกณฑ์ของตัวปิด loop ตั้งไว้สูงกว่าคำตอบที่ถูกทุกตัว ตัวปิด loop ตัวล่าสุดแตะคำตอบที่ถูก **0 จาก 1,078** ใน replay
 - **นับความผิดพลาดไว้ครบ ไม่ซ่อน:** มีคำตอบที่ถูกเสียไป 2 จาก 48 เพราะปิดการคิดเร็วเกินไป (ดูหัวข้อความผิดพลาด)
+
+### โหมดเลขคณิต: token ลดลง 95%
+
+ถ้าโจทย์ทั้งข้อเป็นการคำนวณแบบตายตัว MIP จะให้ software รับไปทั้งขั้น แทนที่จะใส่ค่าทีละ `=` (ดูคำสั่งในหัวข้อ Arithmetic mode ข้างบน)
+1. **ทั้งขั้น:** ตอนเริ่มตอบ ให้ model เขียนการคำนวณทั้งหมดเป็นนิพจน์เดียว เรียงตามลำดับของโจทย์ แล้ว software คำนวณให้ตรงเป๊ะ ทั้งเครื่องหมายและการหารที่ไม่ลงตัว
+2. **การคำนวณที่โจทย์เขียนมาเอง:** software อ่านการคำนวณจากตัวโจทย์ด้วย ไม่ว่าจะเขียนเป็นสัญลักษณ์หรือเป็นคำ (`less than`, `take away`, `product of` ...)
+   ใน 160 ข้อนี้อ่านถูกครบทั้ง 160 ถ้า model ลอกตัวเลขจากโจทย์ผิดก็จับได้
+3. **การส่งต่อ (hand-off):** บรรทัดที่แค่พูดค่าของ software ซ้ำ (`= v` หรือทศนิยมยาว ๆ) จะถูกตัด แล้วพา model ไปที่ `So the final answer is \boxed{`
+   software ไม่ได้เขียนคำตอบให้ model เป็นคนเขียนเอง
+
+ทดสอบบนเลขคณิต DeepMind 160 ข้อของ Qwenputer มี 4 ประเภท ประเภทละ 40 ข้อ คือ บวกลบเลขใหญ่ หารเลขใหญ่ คูณเลขใหญ่ และคูณหารต่อกันยาว ๆ
+ใช้ Qwen3.5-4B ปิด thinking, greedy, llama-server บน RTX 5060 Ti ข้อละ 1 คำตอบ
+
+| | model เปล่า | โหมดเลขคณิต |
+|---|---|---|
+| ตอบถูก | 118 / 160 | **156 / 160** |
+| token รวม | 261,731 | **12,062 (0.046 เท่า)** |
+| มัธยฐาน token ต่อคำตอบ | 1,191 | **38** |
+| มัธยฐานวินาทีต่อคำตอบ | 61 | **8** |
+
+| ประเภท | ตอบถูก เปล่า -> MIP | token มี MIP / ไม่มี |
+|---|---|---|
+| คูณเลขใหญ่ | 21 -> **40** | **0.018** |
+| บวกลบเลขใหญ่ | 33 -> 39 | 0.044 |
+| คูณหารต่อกันยาว ๆ | 35 -> **40** | 0.047 |
+| หารเลขใหญ่ | 29 -> 37 | 0.072 |
+
+- **117 คำตอบที่ถูกทั้งสองฝั่ง: token เหลือ 0.042 เท่า (ลด 96%) และเวลาเหลือ 0.15 เท่า (ลด 85%)** เป็นคำตอบเดียวกัน แค่ไม่ต้องไล่คิดตัวเลขเองทีละหลัก
+  เวลาเป็นวินาทีต่อคำตอบ ตอนที่รันพร้อมกัน 16 คำตอบ ทั้งสองฝั่งรันบนเครื่องเดียวกัน แต่ไม่ได้ทำ ABBA
+- **ตอบถูกเพิ่ม 39 ข้อ เสีย 1 ข้อ** (`add_or_sub_big-5409`)
+- **ข้อควรรู้เรื่องเพดาน token:** model เปล่าโดนจำกัดที่ 4,096 token มี 20 จาก 160 คำตอบที่ชนเพดาน และถูกนับเป็นผิด ข้อนี้ทำให้ฝั่ง MIP ได้เปรียบเรื่องคะแนน
+  แต่ตัวเลข token ที่ลดลงในข้อที่ถูกทั้งสองฝั่ง ไม่ได้ขึ้นกับเพดานนี้
+- **โหมดนี้ใช้กับโจทย์คำนวณตอนปิด thinking:** ส่วน best config ข้างล่างใช้ตอนเปิด thinking ซึ่งการคำนวณแทรกอยู่ในเหตุผลยาว ๆ
 
 ### best config
 
