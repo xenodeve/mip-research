@@ -16,6 +16,8 @@
 | **Exact CPU & CUDA MathBackend** (387 operations) | **0 wrong values** in **41,176** + **39,046** puts | `0.18 ms` CPU / `0.066–0.093 ms` CUDA · **0 disagreements** in 31,064 cross-checked test cases | [Detection points](#detection-points) · [How a value is put](#how-a-value-is-put) · [MathBackend](#mathbackend) |
 | **Non-intrusive guardrails** (1,526 frozen + A100 traces) | **0 / 1,078** (`cover-cap`) · **0 / 915** (`V7`) false closes | Model doubts MIP values only **4.1%** of the time (vs. **15.2%** for its own) · Tokenizer-portable | [Staying out of the way](#staying-out-of-the-way) · [No fine-tuning](#no-fine-tuning) · [Accuracy audit](#accuracy-audit) |
 
+Everything else that was built and measured, including the engine-side mechanisms not in the best config: **[the catalog](docs/INDEX.md)**.
+
 ## Arithmetic mode: 95 % fewer tokens
 
 | Metric (DeepMind 160, Qwen3.5-4B, `--no-think`, greedy, RTX 5060 Ti) | Plain model | Arithmetic mode |
@@ -226,6 +228,8 @@ Hidden-state signals let MIP prepare a value before `=` arrives instead of waiti
 | `tools/igc/answer_check.py` | API reader beside the deterministic rule (key stays local) |
 | `tools/qwenputer/` | Native Qwenputer: computation compiled for the engine |
 | `scripts/` | Audits and replay gates behind all reported numbers |
+| [`docs/`](docs/INDEX.md) | The full catalog: every mechanism built or measured, by category (detection, inject, anti-loop, compute, sandbox, learned), engine-only ones included, and every benchmark with its setup |
+| `results/arithmetic-mode/` | The records behind the arithmetic-mode numbers (base and pc9) |
 | [Strata-xeno](https://github.com/xenodeve/Strata-xeno) (`include/strata/core/igc_*.hpp`, `src/kernels/qwenputer.cu`) | Engine-side MIP implementation (`tools/test_igc_adapter_artifact.py` checks schema headers against `STRATA_ROOT`; pre-split issues mapped in #22) |
 
 ```sh
@@ -264,6 +268,8 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
 | **เห็นการคำนวณล่วงหน้า 2 Token** (ก่อนโมเดลเริ่มเขียนสมการ) | แม่นยำ **89%** (4B) / **87%** (35B) ด้วย probe | อ่านจาก MoE router ของ Qwen3.6 ได้ฟรีโดยไม่มีต้นทุน แม่นยำ **83%** (ดูข้อความอย่างเดียวได้ 53%) | [เห็นการคำนวณก่อนที่จะมาถึง](#เห็นการคำนวณก่อนที่จะมาถึง) |
 | **MathBackend แม่นยำ 100% ทั้ง CPU & GPU** (387 ฟังก์ชัน) | **ใส่เลขผิด 0 ครั้ง** จาก **41,176** และ **39,046** ครั้ง | เร็ว `0.18 ms` บน CPU / `0.066–0.093 ms` บน CUDA · เทียบผล 31,064 กรณีกับไลบรารีอิสระ **ตรงกัน 100%** | [จุดที่ตรวจจับ](#จุดที่ตรวจจับ) · [ใส่ค่ายังไง](#ใส่ค่ายังไง) · [MathBackend](#mathbackend-1) |
 | **ไม่กระทบงานอื่น & ไม่ต้อง Fine-tune** | แตะคำตอบที่ถูก **0 / 1,078** (`cover-cap`) และ **0 / 915** (`V7`) | โมเดลสงสัยค่าจากซอฟต์แวร์เพียง **4.1%** (เทียบกับคิดเอง **15.2%**) · ใช้กับ tokenizer อื่นได้ทันที | [ไม่กระทบการทำงานอื่น](#ไม่กระทบการทำงานอื่น) · [ไม่ต้อง fine-tune](#ไม่ต้อง-fine-tune) · [ตรวจความแม่นยำ](#ตรวจความแม่นยำ) |
+
+กลไกอื่นทั้งหมดที่สร้างและวัดแล้ว รวมถึงตัวที่อยู่ฝั่ง engine และไม่ได้อยู่ใน best config: **[แคตตาล็อก](docs/INDEX.md#ภาษาไทย)**
 
 ### โหมดเลขคณิต: token ลดลง 95%
 
@@ -464,6 +470,8 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
 | `tools/igc/answer_check.py` | ตัวตรวจผ่าน API คู่กับกฎตรวจคำตอบ (เก็บ key ไว้บนเครื่องที่รัน) |
 | `tools/qwenputer/` | Native Qwenputer: การคำนวณที่คอมไพล์สำหรับรันใน engine |
 | `scripts/` | สคริปต์ตรวจสอบและ replay gate ที่อยู่เบื้องหลังตัวเลขทั้งหมดในหน้านี้ |
+| [`docs/`](docs/INDEX.md) | แคตตาล็อกเต็ม: ทุกกลไกที่สร้างหรือวัดแล้ว แยกตามหมวด (detect ใส่ค่า ปิด loop ตัวคำนวณ sandbox learned) รวมตัวที่มีเฉพาะใน engine และ benchmark ทุกชุดพร้อม setup |
+| `results/arithmetic-mode/` | record ที่อยู่เบื้องหลังตัวเลขของโหมดเลขคณิต (base และ pc9) |
 | [Strata-xeno](https://github.com/xenodeve/Strata-xeno) (`include/strata/core/igc_*.hpp`, `src/kernels/qwenputer.cu`) | ส่วน engine ของ MIP (สคริปต์ test จะเทียบ schema header กับ `STRATA_ROOT` ให้; เลข issue ก่อนแยก repo ดูเทียบได้ที่ #22) |
 
 [^th-time-a]: หมายเหตุ: วินาทีต่อคำตอบ ตอนที่รันพร้อมกัน 16 คำตอบ ทั้งสองฝั่งรันบนเครื่องเดียวกัน แต่ไม่ได้จับเวลาแบบ ABBA
