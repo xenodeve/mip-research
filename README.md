@@ -10,6 +10,8 @@ Qwen3.6-35B-A3B-NVFP4. The work so far is on **Qwen3.5-4B** (bf16, vLLM 0.33, Co
 context), the **General Style** only: forms that are true under every reading, no per-model profile.
 
 Contents: [Best config](#the-best-config-now) · [Results](#results) · [Tokens](#tokens) · [How each mechanism works](#how-each-mechanism-works) ·
+[Detection to put](#from-detection-to-put-every-point-mip-acts-at) · [MathBackend](#mathbackend-how-the-exact-value-is-computed) ·
+[Staying out of the way](#staying-out-of-the-way-why-the-other-work-is-left-alone) · [No fine-tuning](#no-fine-tuning) · [Failures](#failures-in-the-best-config-tests) ·
 [What did not work](#what-did-not-work) · [Open](#open) · [The boundary with Strata-xeno](#the-boundary-with-strata-xeno) · [Running](#running) ·
 [ภาษาไทย](#ภาษาไทย)
 
@@ -126,6 +128,108 @@ stretch seen in the 2,048 before; 97 % or more is a loop. One odd round moves th
 Stored traces of 16 arms: right answers reach 0.92 at most (two that looped long and then came right), the next 0.35; all 10 loops
 past 150k tokens reach 0.999-1.0. Replay gate: **0 of 1,078 right answers acted on**, 12 of 13 long loops stopped at 40k-114k (the
 13th parts from its record in the replay; fed directly, the check fires at 58k). Not yet run on the A100.
+
+## From detection to put: every point MIP acts at
+
+In the best config MIP watches the model's own text at five points. Nothing else in the run changes: the prompt, the sampling
+(T 0.6, top-p 0.95, top-k 20) and the weights are the model's own.
+
+| # | Where it looks | When | What it may do |
+|---|---|---|---|
+| 1 | The token `=` | Every request stops at an `=` token (in the thinking and in the answer), so MIP reads the text before it ahead of the model's next token | Put the exact value after the `=` |
+| 2 | The token after a put that ends in a digit (and a `.` straight after it) | One token | Hold digit tokens down (`--no-digit-join`), so the model's next digit cannot glue onto the put |
+| 3 | Every line end in the thinking | As the tokens arrive | V7: close the thinking on a short exact cycle |
+| 4 | The whole thinking since the last close, or the whole answer | Every 1,024 tokens and at each request end | The repeat check, shape cap and cover cap: close the thinking (A) or the answer (B) |
+| 5 | The answer after B's cue | Until a line end or 64 tokens | Nothing: only the value is read, then the answer ends |
+
+**How a value is put.** The text before the `=` is cut to the longest arithmetic expression that ends there, read in every form the
+model writes (`tools/igc/mathexpr.py`: ASCII, LaTeX at any depth, Unicode). It is computed exactly (MathBackend, below), spelled in the
+General Style and checked against the refusals (below). If it passes, ` value` is appended to the model's text as plain text, and the
+next request goes on from it: to the model the value is simply the next words on the page. If any step says no, nothing is put and the
+model writes its own value, as it would without MIP.
+
+**The General Style: a value true under every reading.** The same `=` can mean different things, so the form is chosen to be true
+whichever way it is read:
+
+| The model wrote | Put | Why this form |
+|---|---|---|
+| `12 \times 7 =` | `84` | an integer as itself |
+| `9/2 =` | `4.5` | a terminating decimal, the model's own spelling (`9/2` broke a decimal sum into a loop once) |
+| `6/26 =` | `3/13` | a quotient that reduces: its lowest terms are the step |
+| `34 \div 4 =` in a long division | `8 \text{ rem } 2` | the model wants the digit; `q rem r` is true as a quotient and as a division |
+| `1302 / 9 =` where the text works in decimals | `144.6666...` | cut and marked as cut, so it is not a false equality |
+| `7^5 =` while working mod 11 | the residue, when the model's own last `=` there linked a value to its residue | what that `=` means on this line |
+
+**The loops it guards against** (point 4, all with the counting rules in the mechanisms below):
+
+| Loop | Example from the runs | Caught by |
+|---|---|---|
+| An exact cycle, short or long | the same re-check paragraph again and again | the repeat check (20 rounds, 8 past 512 tokens); V7 sooner (6 rounds, 3 past 512, 500+ tokens) |
+| Counting with masked digits | `check 101. No. check 102. No.` | the counting check; `--guard-progress` lets it go when nearly every round is new (trial division) |
+| A line that keeps coming back | `So the answer is 24?` between other lines | the line-back check |
+| A cycle whose numbers change length | `$31090 / 10943 = 2.84...$ (Digit 5244: 2)` | shape cap (digit runs as one token, 1,024 rounds) |
+| A cycle with odd rounds in it | long division where each zero digit makes a shorter round | cover cap (97 % of the last 32,768 tokens repeat) |
+| The same doubt carried into the answer | `-5511170.918918...` without end, a recount of `19+1` | B: answer close |
+| The same value put again and again | `= 15/13 = 15/13 = ...` | the third put in a row of one expression is left to the model (echo guard) |
+
+## MathBackend: how the exact value is computed
+
+`tools/igc/mathbackend/` is a registry of **387 operations in six modules**: numbers 100 (gcd, lcm, phi, modular inverse, digits,
+divisors, primes ...), geometry 86, algebra 70, counting 70 (C, P, Catalan, derangements ...), search 43, symbolic 18. The arithmetic
+reader (`mathexpr`) covers `+ - * / ^`, fractions, roots, absolute value, floor and ceiling, factorial and percent; `unified_detect`
+adds the calls a model writes (`\gcd(12, 18)`, `\binom{7}{3}`, `\phi(36)`).
+
+- **Exact only.** Python's standard library: `Fraction` for rationals, `Surd` for `p + q*sqrt(d)`, `Decimal` where a decimal is asked
+  for. No floating point stands behind a put. A root or power that is not exact is refused, not rounded.
+- **Bounded.** Every operation states its bound (`@op(name, kind, bound=...)`); past it, or outside its domain, it raises `NotCovered`
+  or `BadInput`, and the caller must not guess: no put.
+- **Checked against independent libraries.** Each module has a `sim_*.py` that draws inputs and compares every operation with SymPy,
+  mpmath or NetworkX, which the backend itself never imports (`tools/test_mathbackend_*.py`; the 2026-11-05 review fixed or refused
+  every wrong value and removed contest formulas as operations, #17).
+
+## Staying out of the way: why the other work is left alone
+
+MIP acts only where it is sure it is right and where the model is about to need the value. Everything else passes untouched.
+
+- **Only after an `=` the model wrote, only on exact arithmetic.** A symbol (algebra), a word, a mixed number (`2\frac{1}{3}`), an
+  inexact root, or a number too big to be a step: no put. On the broad set, puts went to 19,546 of the 19,636 readable `=`; the rest of
+  the text was never touched.
+- **Refused even when the arithmetic is right,** because the value is not what the model means there (each rule came from reading
+  stored traces, #18 / #19):
+  - a number alone: `m=4,512=8*64` is m=4 and 512, not 4512;
+  - nothing new: the value would repeat the expression (`15/13 = 15/13`);
+  - an operand of a longer expression still being written;
+  - a column of a written subtraction that borrows (`0-9 = 1`), a count of coins (`2 \times 10 + 5 \times 1 = 7` coins);
+  - an operator the question defined otherwise (`a * b = a - b`);
+  - a congruence with no modulus named;
+  - the third put in a row of the same expression (echo guard).
+- **Closers act only on a loop, with thresholds set above every right answer.** Each threshold sits over the longest stretch any
+  right answer reached in the stored traces (shape: 805 rounds against a cap of 1,024; cover: 0.92 against 0.97), and each closer
+  went to the A100 only after the replay gate showed it acting on no right answer, or every act read and understood.
+- **The model decides.** A put is a value on the page, not an instruction; a close hands the model `</think>` or the final-answer cue,
+  and the model writes the answer.
+
+## No fine-tuning
+
+None of this changes a weight. MIP works on the text stream at inference time: it reads what the model writes and appends tokens to
+it. The model is the plain checkpoint (Qwen3.5-4B, bf16, from its model card), with the model card's own sampling. The digit set and
+the `=` and line-end tokens come from the tokenizer, so the same mechanisms run on another model's tokenizer; only the thresholds
+must be checked again there.
+
+## Failures in the best-config tests
+
+From the A100 records of the four best-config arms (`loop-lc`, `loop-lcac`, `loop-lcacv7`, `loop-shape`; 156 answers), with
+`scripts/fail_audit.py` and `scripts/put_reject.py`:
+
+| Failure | Count | How it was measured |
+|---|---|---|
+| A wrong value put (the arithmetic of the put is wrong) | **0 of 51,015** puts checked | every put re-computed by Python's `Fraction` on a normalised copy, not by MIP's own reader; 2,850 more (roots, mod, functions) were not plain enough to re-check this way |
+| A put the model pushed away | **4.1 %** of puts in loop-lcacv7 (832 of 20,490), 0.9 % in loop-shape | a rejection word (`wait`, `no,`, `wrong`, `actually`, `let me recheck` ...) within the next 40 tokens. Base rate: after the model's **own** `= value` in the no-MIP control, 15.2 %. The cases read were the model doubting a right value (`10856 / 5192 = 23/11? No, wait.`) |
+| A right answer made wrong | **2** in loop-lcacv7 (1 in loop-lc, 3 in loop-lcac) | same questions and seeds as the no-closer arm of the same round, answer by answer. Both loop-lcacv7 cases are MATH level-5 problems where **V7 closed the thinking too early** (at 8,433 and 6,582 tokens); without the closers the model finished right at 42,974 and 31,518. Against these, 14 answers went from wrong to right |
+| A closer acting on an answer that then ended wrong | loop-lcacv7: loop close 8 of 21, early cycle 6 of 17, answer close 6 of 6 | every act, and how its answer ended. B acts only when the answer is already looping, so its answers are mostly lost ones it turns into a value |
+
+Not paired across runs (#21): the right-to-wrong count is per answer between two runs with the same seeds, so a part of it can be
+sampling. The two V7 cases are read, and V7 caused them; whether a longer V7 span fixes them without losing what V7 catches is open.
 
 ## What did not work
 
@@ -257,6 +361,104 @@ repo นี้เป็นฝั่งวิจัย มีเครื่อ�
     รอบแปลก ๆ หนึ่งรอบขยับสัดส่วนแค่ 1/32,768 เลยไม่ทำให้เริ่มนับใหม่
   - คำตอบที่ถูกได้สูงสุด 0.92 ส่วน loop ที่เกิน 150k ทุกตัวได้ 0.999-1.0
   - replay gate ไม่แตะคำตอบที่ถูกเลย 0 จาก 1,078 หยุด loop ยาวได้ 12 จาก 13 ส่วนตัวที่ 13 ถ้าป้อนเข้าตัวจับตรง ๆ จะจับได้ที่ 58k ยังไม่ได้รันบน A100
+
+### ตั้งแต่ตรวจจับจนใส่ค่า: MIP ทำงานกี่จุด
+
+ใน best config MIP ดูข้อความที่ model เขียนเองอยู่ 5 จุด นอกนั้นไม่ได้แตะอะไรเลย prompt, การสุ่ม (T 0.6, top-p 0.95, top-k 20) และน้ำหนักของ model ยังเหมือนเดิมทั้งหมด
+
+1. **token `=`:** ทุก request หยุดตรง `=` ทั้งตอนคิดและตอนตอบ MIP จึงได้อ่านข้อความก่อน `=` ก่อนที่ model จะเขียน token ถัดไป จุดนี้ใส่ค่าที่ถูกต่อท้าย `=`
+2. **token ถัดจากค่าที่ใส่ ถ้าค่านั้นลงท้ายด้วยตัวเลข** (รวม `.` ที่ตามมาทันที): กดตัวเลขไว้ 1 token (`--no-digit-join`) ตัวเลขที่ model เขียนต่อจะได้ไม่ไปติดกับค่าที่ใส่
+3. **ทุกครั้งที่จบบรรทัดตอนคิด:** V7 ปิดการคิดเมื่อเจอ cycle สั้นที่ซ้ำตรงตัว
+4. **การคิดทั้งหมดตั้งแต่ครั้งล่าสุดที่ปิด หรือส่วนคำตอบทั้งหมด:** ตรวจทุก 1,024 token และทุกครั้งที่ request จบ ด้วยตัวตรวจการวน shape-cap และ cover-cap ถ้าเจอก็ปิดการคิด (A) หรือปิดคำตอบ (B)
+5. **ส่วนคำตอบหลังวางประโยคบังคับตอบของ B:** ไม่ทำอะไรเพิ่ม อ่านแค่ค่าเดียวจนจบบรรทัดหรือครบ 64 token แล้วจบคำตอบ
+
+**ใส่ค่ายังไง:** ข้อความก่อน `=` จะถูกตัดเหลือนิพจน์เลขที่ยาวที่สุดที่จบตรงนั้น อ่านได้ทุกรูปแบบที่ model เขียน (`mathexpr`: ASCII, LaTeX ซ้อนกี่ชั้นก็ได้, Unicode)
+จากนั้นคำนวณให้ตรงเป๊ะด้วย MathBackend เขียนในรูปแบบ General Style แล้วเช็กกับเงื่อนไขที่ไม่ให้ใส่ (ดูหัวข้อถัดไป) ถ้าผ่าน ` value` ก็จะถูกต่อท้ายข้อความของ model
+เป็นข้อความธรรมดา แล้ว request ถัดไปก็เดินต่อจากตรงนั้น สำหรับ model ค่าที่ใส่ให้ก็คือคำถัดไปบนหน้ากระดาษเท่านั้น ถ้าขั้นไหนบอกว่าไม่ใส่ ก็ไม่ใส่อะไรเลย
+model จะเขียนค่าเองเหมือนตอนไม่มี MIP
+
+**General Style คือค่าที่ถูกไม่ว่าจะอ่านแบบไหน:** `=` ตัวเดียวกันมีความหมายได้หลายแบบ เลยเลือกรูปที่ถูกทุกแบบ
+- `12 \times 7 =` ใส่ `84`
+- `9/2 =` ใส่ `4.5` เพราะเป็นทศนิยมที่จบได้ เขียนแบบเดียวกับที่ model เขียนเอง
+- `6/26 =` ใส่ `3/13` เพราะการย่อเศษส่วนก็คือขั้นนั้นพอดี
+- `34 \div 4 =` ระหว่างหารยาว ใส่ `8 \text{ rem } 2` ถูกทั้งในแง่ผลหารและในแง่การหาร
+- `1302 / 9 =` ตอนที่ model กำลังทำทศนิยม ใส่ `144.6666...` ตัดทศนิยมแล้วมีเครื่องหมายบอกไว้ จะได้ไม่เป็นสมการเท็จ
+- ระหว่างทำ mod ใส่เศษเหลือ เฉพาะเมื่อ `=` ตัวล่าสุดที่ model เขียนเองบนบรรทัดนั้นหมายถึงเศษเหลือ
+
+**loop ที่ป้องกันได้**
+- **cycle ที่ซ้ำตรงตัว ทั้งสั้นและยาว:** ตัวตรวจการวน (20 รอบ หรือ 8 รอบเมื่อยาวเกิน 512) และ V7 ที่จับได้เร็วกว่า (6 รอบ หรือ 3 รอบ ยาว 500 token ขึ้นไป)
+- **การนับเลขเมื่อปิดตัวเลขทิ้ง** เช่น `check 101. No. check 102. No.`: ตัวตรวจการนับ ส่วน `--guard-progress` ปล่อยให้วิ่งต่อถ้าแต่ละรอบเป็นของใหม่เกือบหมด
+- **บรรทัดที่วนกลับมาเรื่อย ๆ:** ตัวตรวจ line-back
+- **cycle ที่ตัวเลขยาวไม่เท่ากัน:** shape-cap
+- **cycle ที่มีรอบแปลก ๆ แทรก:** cover-cap
+- **ความสงสัยเดิมที่พาไปวนต่อในส่วนคำตอบ:** B
+- **ค่าเดิมถูกใส่ซ้ำไปซ้ำมา** เช่น `= 15/13 = 15/13 = ...`: ครั้งที่ 3 ติดกันของนิพจน์เดียวกันจะปล่อยให้ model เขียนเอง
+
+### MathBackend ทำงานยังไง
+
+`tools/igc/mathbackend/` เป็นที่รวม **387 operation แบ่งเป็น 6 module**:
+- numbers 100 (gcd, lcm, phi, inverse mod, หลักตัวเลข, ตัวหาร, จำนวนเฉพาะ ...)
+- geometry 86
+- algebra 70
+- counting 70 (C, P, Catalan, derangement ...)
+- search 43
+- symbolic 18
+
+ตัวอ่านนิพจน์รองรับ `+ - * / ^` เศษส่วน ราก ค่าสัมบูรณ์ floor/ceiling factorial และเปอร์เซ็นต์ ส่วน `unified_detect` เพิ่มการเรียกฟังก์ชันที่ model เขียน
+เช่น `\gcd(12, 18)`, `\binom{7}{3}`
+
+- **คำนวณแบบตรงเป๊ะเท่านั้น:** ใช้แค่ standard library ของ Python ได้แก่ `Fraction` สำหรับเศษส่วน `Surd` สำหรับ `p + q*sqrt(d)` และ `Decimal` เมื่อต้องการทศนิยม
+  ไม่มี floating point อยู่เบื้องหลังค่าที่ใส่ ถ้าราก ยกกำลัง ได้ค่าไม่ลงตัว จะไม่ใส่ ไม่ใช่ปัดเศษ
+- **มีขอบเขตชัด:** ทุก operation ประกาศขอบเขตของตัวเอง ถ้าเกินขอบเขตหรืออยู่นอกโดเมน จะโยน `NotCovered` หรือ `BadInput` แล้วห้ามเดา ผลคือไม่ใส่ค่า
+- **ตรวจกับ library อิสระ:** ทุก module มี `sim_*.py` ที่สุ่มค่าเข้าไป แล้วเทียบทุก operation กับ SymPy, mpmath หรือ NetworkX ซึ่งตัว backend เองไม่ได้ import
+
+### ไม่กระทบการทำงานอื่นได้ยังไง
+
+MIP แทรกเฉพาะตอนที่มั่นใจว่าถูก และ model กำลังจะต้องใช้ค่านั้นจริง ๆ นอกนั้นปล่อยผ่านหมด
+
+- **ใส่ค่าเฉพาะหลัง `=` ที่ model เขียนเอง และเฉพาะเลขคณิตที่คำนวณได้ตรงเป๊ะ:** ถ้ามีตัวแปร มีคำพูด มีจำนวนคละ มีรากที่ไม่ลงตัว หรือเลขใหญ่เกินกว่าจะเป็นขั้นหนึ่ง ก็ไม่ใส่
+  ในชุดกว้างใส่ไป 19,546 จาก 19,636 จุด `=` ที่อ่านได้ ข้อความส่วนอื่นไม่ถูกแตะเลย
+- **ถึงเลขจะถูก ก็ไม่ใส่ ถ้าค่านั้นไม่ใช่สิ่งที่ model หมายถึง:** ทุกกฎได้มาจากการอ่าน trace ที่เก็บไว้ ได้แก่
+  - ตัวเลขเดี่ยว ๆ
+  - ค่าที่ซ้ำกับนิพจน์ ไม่มีอะไรใหม่
+  - ตัวเลขที่เป็นส่วนหนึ่งของนิพจน์ที่ยังเขียนไม่จบ
+  - หลักที่ต้องยืมในการลบแบบตั้งหลัก
+  - การนับเหรียญ
+  - operator ที่โจทย์นิยามไว้เป็นอย่างอื่น
+  - congruence ที่ไม่ได้บอก modulus
+  - การใส่ค่าครั้งที่ 3 ติดกันของนิพจน์เดียวกัน
+- **ตัวปิด loop ทำงานเฉพาะตอนที่วนจริง และเกณฑ์ตั้งไว้สูงกว่าคำตอบที่ถูกทุกตัว:** shape คำตอบที่ถูกได้สูงสุด 805 รอบ เกณฑ์อยู่ที่ 1,024 cover คำตอบที่ถูกได้สูงสุด 0.92 เกณฑ์อยู่ที่ 0.97
+  ทุกตัวต้องผ่าน replay gate ก่อนขึ้น A100 คือต้องไม่แตะคำตอบที่ถูกเลย หรือถ้าแตะ ต้องอ่านแล้วเข้าใจทุกครั้ง
+- **model เป็นคนตัดสินใจ:** ค่าที่ใส่เป็นแค่ตัวเลขบนหน้ากระดาษ ไม่ใช่คำสั่ง ส่วนการปิด loop ก็แค่ยื่น `</think>` หรือประโยคบังคับตอบให้ แล้ว model เขียนคำตอบเอง
+
+### ไม่ต้อง fine-tune
+
+ไม่มีอะไรไปแก้น้ำหนักของ model เลย MIP ทำงานกับข้อความระหว่าง inference อ่านสิ่งที่ model เขียน แล้วต่อ token ลงไป
+model ที่ใช้คือ checkpoint ปกติ (Qwen3.5-4B, bf16) ใช้ค่าการสุ่มตาม model card ส่วนชุดตัวเลข token `=` และ token จบบรรทัด ได้มาจาก tokenizer
+กลไกเดียวกันจึงใช้กับ tokenizer ของ model อื่นได้ แค่ต้องเช็กเกณฑ์ใหม่
+
+### ความผิดพลาดในการทดสอบ best config
+
+นับจาก record บน A100 ของ arm ที่เป็น best config ทั้ง 4 ชุด (156 คำตอบ) ด้วย `scripts/fail_audit.py` และ `scripts/put_reject.py`
+
+- **ใส่ค่าที่คำนวณผิด: 0 จาก 51,015 ครั้งที่ตรวจได้**
+  - คำนวณซ้ำทุกค่าด้วย `Fraction` ของ Python ไม่ได้ใช้ตัวอ่านของ MIP เอง
+  - อีก 2,850 ครั้ง (ราก mod ฟังก์ชัน) ตรวจด้วยวิธีนี้ไม่ได้
+- **model ปฏิเสธค่าที่ใส่ให้: 4.1%** ใน loop-lcacv7 (832 จาก 20,490) และ 0.9% ใน loop-shape
+  - นับจากคำอย่าง `wait`, `no,`, `wrong`, `actually` ที่โผล่ใน 40 token ถัดไป
+  - ตัวเทียบคือหลัง `=` ที่ model คิดเองใน control ซึ่งมี 15.2%
+  - ตัวอย่างที่อ่านดูเป็น model สงสัยค่าที่ถูกอยู่แล้ว เช่น `10856 / 5192 = 23/11? No, wait.`
+- **คำตอบที่ถูกกลายเป็นผิด: 2 คำตอบใน loop-lcacv7** (loop-lc 1, loop-lcac 3) เทียบทีละคำตอบกับ arm ที่ไม่มีตัวปิด loop ในรอบเดียวกัน ข้อเดียวกัน seed เดียวกัน
+  - ทั้ง 2 คำตอบเป็นโจทย์ MATH ระดับ 5 ที่ **V7 ปิดการคิดเร็วเกินไป** ที่ 8,433 และ 6,582 token
+  - ถ้าไม่มีตัวปิด model คิดต่อจนตอบถูกที่ 42,974 และ 31,518 token
+  - ฝั่งกลับกัน มี 14 คำตอบที่จากผิดกลายเป็นถูก
+- **ตัวปิด loop ทำงานแล้วคำตอบยังผิด (loop-lcacv7):**
+  - loop close 8 จาก 21
+  - early cycle 6 จาก 17
+  - answer close 6 จาก 6 เพราะ B ทำงานเฉพาะตอนที่คำตอบวนอยู่แล้ว คำตอบส่วนใหญ่ที่ B แตะจึงเป็นคำตอบที่เสียไปแล้ว B แค่บังคับให้ออกมาเป็นค่าหนึ่งค่า
+
+การเทียบข้ามรอบจับคู่ไม่ได้ (#21) ตัวเลข "ถูกกลายเป็นผิด" เลยอาจมีส่วนที่มาจากการสุ่ม แต่ 2 กรณีของ V7 ผมอ่านแล้ว เป็นเพราะ V7 จริง
+ส่วนการขยายช่วงของ V7 จะแก้ได้โดยไม่เสียสิ่งที่ V7 จับได้หรือเปล่า ยังต้องทดสอบ
 
 ### สิ่งที่ไม่ได้ผล
 
