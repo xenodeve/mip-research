@@ -58,6 +58,10 @@ The learned / latent path stays paused (developer decision, Strata-xeno#276).
 **Phase 1b, the PC layer (developer, 2026-11-08; `AGENTS.md` "The PC layer").** Round 9 runs first on the RTX 5060 Ti + RTX 4070 Super
 (Qwen3.5-4B NVFP4 W4A8, one locked config, both arms per card, frozen rows split in two halves): started 2026-11-08. More right
 answers than control beyond noise sends round 9 to the A100; noise-level sends the method back for review.
+After round 9 is read, `frozen9` becomes development rows (developer, 2026-11-09). Idea from its losses: the model set up
+the wrong expression and software confirmed every step of it (dm_mul_div_longer-1505#0: 331 right values, wrong setup);
+`--question-value` (the whole question computed by software) could show the mismatch. Try on development rows, measure on the
+next frozen set; if rules change, the A100 runs on that new set, not on `frozen9`.
 
 **Phase 2, A100 (needs compute units; check the balance, say it, stop the VM after the round).**
 1. Round 9 first, once the PC layer passed: it is the active goal, and anything else here would displace it. Rows: `frozen9-rows.jsonl`

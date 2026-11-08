@@ -11,7 +11,8 @@ The rules agents miss most, all in full in `AGENTS.md`:
    card. It tests the concept, confirms before the A100, and records a normal user's environment. **More right answers than control
    beyond noise (sign test p < 0.05, rule and API reader both): go to the A100; otherwise review the method first.** NVFP4 loops
    more than bf16, so it is the hardest test of the anti-loop software and a normal user's real result; report it per environment,
-   and never tune a rule on loops found in frozen rows (hunt on development rows). On the A100: a
+   A frozen set measures once; once its round is read it becomes development rows and may be studied, and the next
+   measurement (PC layer and A100) draws a new frozen set. On the A100: a
    5-minute smoke run, then the rest; check the compute-unit balance before opening a VM and stop it when the round ends.
 2. **Software computes, the model reasons; never lower the model's ability.** A change that loses right answers fails, whatever it
    saves.

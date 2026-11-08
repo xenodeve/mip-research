@@ -92,9 +92,12 @@ Why NVFP4 matters here (developer, 2026-11-09):
 - **Its result has its own weight.** People run 4-bit models on gaming cards; a gain measured here is the gain such a user gets,
   not only an estimate of the A100's. Report it as that environment's result.
 - **Two cautions.** (1) The size of a gain here does not carry to bf16: a model that slips more leaves software more to fix, so the
-  A100 measures its own. (2) Loops found on frozen rows are never used to write or tune a rule, or the A100 run on the same rows no
-  longer counts. To hunt hard cases with NVFP4, use development rows (round 1's `fresh-rows.jsonl`, the loop rows) and measure
-  the result on a new frozen set.
+  A100 measures its own. (2) A frozen set measures once, then becomes development rows (developer, 2026-11-09: "the cases we
+  would meet anyway when the test grows; we only meet them sooner"). Once its round is read, its answers may be studied and rules
+  written from them; from then on it no longer counts as a measurement, and the next measurement, on the PC layer and on the A100
+  both, runs on a newly drawn frozen set (`scripts/a100/frozen_rows.py`, a new seed, every id seen so far excluded). Record which
+  set each round measured on and when a set turned into development rows. Round 9's `frozen9` turns into development rows after
+  round 9 on the PC layer is read; MATH-500 level 5 then has 49 unused questions, enough for one more set of 40.
 
 How it runs (scripts in `scripts/pc/`, data in `WORK`, outside the repository):
 
@@ -107,7 +110,8 @@ How it runs (scripts in `scripts/pc/`, data in `WORK`, outside the repository):
   half, so a comparison never crosses cards.
 - **`-np 4` is the fastest** (sweep 2026-11-08, Q8_0: np 4 76 tok/s total, np 8 64; each answer decodes about 4x slower at np 8).
   The 4070 Super is the display card: the server must leave the desktop its headroom (server about 7.9 GB, measured).
-- **The frozen rows are used here with no rule or threshold changed from the result,** so the same rows still count on the A100.
+- **A round on frozen rows changes no rule while it runs.** Once it is read, the set becomes development rows (above); a rule
+  written from it is measured on the next frozen set, here and on the A100.
 
 ## How a test is run
 
