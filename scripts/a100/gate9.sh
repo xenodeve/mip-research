@@ -2,7 +2,7 @@
 # Round 9's gate on this exact shipped code, from this PC: the tests, every stored A100 arm replayed with the full round-9 flag set, and
 # a smoke run of the archive the VM gets (git archive HEAD tools serve third_party) on the 5060 Ti's llama-server, if one answers on
 # 127.0.0.1:8099. The verdict goes into $WORK/sim/gate9.stamp, which launch9.sh checks.
-# PASS = tests green, no act on any answer that finished right, vllm_refused 0, the archive's smoke wrote its report (or no server:
+# PASS = tests green, every act on an answer that finished right explained (gate9_verdict.py), vllm_refused 0, the archive's smoke wrote its report (or no server:
 # then the archive must at least import everything tir4b's run() imports). Re-run after every commit that touches tools/ or serve/.
 #   sh scripts/a100/gate9.sh          (in the background; ~10-20 min, most of it the one 262k-token answer)
 K=$(cd "$(dirname "$0")" && pwd)
@@ -13,7 +13,9 @@ cd "$R" || exit 1
 git diff --quiet HEAD -- tools serve third_party || { echo "tools/ serve/ third_party/ have uncommitted changes: commit first"; exit 1; }
 TREE=$(git rev-parse HEAD:tools)-$(git rev-parse HEAD:serve | cut -c1-12)
 NAME=r9-$(echo "$TREE" | cut -c1-8)
-MECHS=inline_calc,mathbackend,inline_plain,inline_style=general,no_digit_join,guard_progress,loop_close,answer_close,early_cycle,shape_cap=1024,cover_cap=32768
+# the closers of round 9 added to each stored arm's own flags (gate cov2's method): forcing inline values onto an arm that ran without
+# them only measures where the replay parts from its record
+MECHS=guard_progress,loop_close,answer_close,early_cycle,shape_cap=1024,cover_cap=32768
 FLAGS="--inline-calc --mathbackend --inline-plain --inline-style general --no-digit-join --guard-progress --loop-close --answer-close --early-cycle --shape-cap 1024 --cover-cap 32768"
 mkdir -p "$WORK/sim"
 python tools/test_igc_tir4b.py > "$WORK/sim/$NAME-tests.log" 2>&1; t1=$?
@@ -35,13 +37,11 @@ fi
 ARMS=$(ls "$WORK/out")
 python scripts/sim_gate.py "$NAME" "$MECHS" $ARMS > "$WORK/sim/$NAME-run.log" 2>&1
 python scripts/gate_read.py "$NAME" > "$WORK/sim/$NAME-read.txt" 2>&1
-TOTAL=$(grep '^TOTAL' "$WORK/sim/$NAME-read.txt")
+python scripts/a100/gate9_verdict.py "$NAME" > "$WORK/sim/$NAME-verdict.txt" 2>&1
+TOTAL=$(grep '^TOTAL' "$WORK/sim/$NAME-verdict.txt")
 FAILED=$(grep -c FAILED "$WORK/sim/$NAME-run.log")
-VERDICT=$(python -c "
-import ast, sys
-t = ast.literal_eval(sys.argv[1].split(' ', 1)[1]) if sys.argv[1] else {}
-ok = $t1 == 0 and $t2 == 0 and $t3 == 0 and $FAILED == 0 and bool(t) and t.get('right acted', 0) == 0 and t.get('refused', 0) == 0
-print('PASS' if ok else 'FAIL')" "$TOTAL")
+VERDICT=FAIL
+[ $t1 = 0 ] && [ $t2 = 0 ] && [ $t3 = 0 ] && [ "$FAILED" = 0 ] && grep -q "^VERDICT PASS" "$WORK/sim/$NAME-verdict.txt" && VERDICT=PASS
 { echo "tree $TREE"; echo "commit $(git rev-parse HEAD)"; echo "verdict $VERDICT"; echo "tests tir4b=$t1 sim_replay=$t2 $SMOKE failed_arms=$FAILED";
   echo "$TOTAL"; echo "date $(date +%F_%T)"; } > "$WORK/sim/gate9.stamp"
 cat "$WORK/sim/gate9.stamp"

@@ -1,0 +1,2 @@
+# Acts on answers that finished right, each read in its text: arm id#sample kind at | the reading. gate9_verdict.py passes these.
+fresh-gen dm_swr_p_sequence-2201#0 loop close 10056 | the close lands in a re-count of the string's letters, about 800 tokens after "Final Answer seems to be 1/220"; the run left that re-check by itself ~300 tokens later and boxed 1/220. A cut re-check after the answer, not work in progress (read 2026-11-08).
