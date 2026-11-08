@@ -1,6 +1,6 @@
 #!/bin/sh
-# Round 9 on the PC layer (5060 Ti / 4070 Super, NVFP4 W4A8; AGENTS.md "The PC layer"; the A100 bf16 run is the result): the full General Style + closers against control, frozen9 rows x 2,
-# seed 1, full 262,144-token context, both arms at once on one llama-server (4B NVFP4 W4A8 from the sm_89 build, KV q8_0, -c 262144 -kvu -np N). No rule or threshold is
+# Round 9 on the 5060 Ti (preliminary; the A100 bf16 run confirms): the full General Style + closers against control, frozen9 rows x 2,
+# seed 1, full 262,144-token context, both arms at once on one llama-server (4B Q8_0, -c 262144 -kvu -np N). No rule or threshold is
 # changed from this run's results. Then the API reader on both arms (this PC).
 #   sh pc_round9.sh N GPU PORT GGUF ROWS TAG [server args...]   (GPU = PCI index: 1 the 5060 Ti, 0 the 4070 Super)
 N=${1:?np}; GPU=${2:?gpu}; PORT=${3:?port}; GGUF=${4:?gguf}; ROWS=${5:?rows}; TAG=${6:?tag}; shift 6
@@ -20,7 +20,7 @@ SP=$!
 for i in $(seq 1 90); do curl -s -m 2 http://127.0.0.1:$PORT/health | grep -q ok && break; sleep 2; done
 curl -s -m 2 http://127.0.0.1:$PORT/health | grep -q ok || { echo "server did not start"; exit 2; }
 F="--inline-calc --mathbackend --inline-plain --inline-style general --no-digit-join --guard-progress --loop-close --answer-close --early-cycle --shape-cap 1024 --cover-cap 32768"
-C="--model $G/q4b-hf --server http://127.0.0.1:$PORT --rows $W/$ROWS --samples 2 --seed 1 --ids --live $((N / 2))"
+C="--model $G/q4b-hf --server http://127.0.0.1:$PORT --rows $W/$ROWS --samples 2 --seed 1 --ids --live $((N / 2)) ${RESUME:+--resume}"
 python tools/igc/tir4b.py run $C --out $W/pc/r9$TAG-gen $F > $W/pc-r9$TAG-gen.log 2>&1 &
 P1=$!
 python tools/igc/tir4b.py run $C --out $W/pc/r9$TAG-ctrl > $W/pc-r9$TAG-ctrl.log 2>&1 &
