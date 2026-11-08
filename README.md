@@ -1,21 +1,20 @@
 # mip-research
 
 **MIP (Model Inline Processing): software computes, the model reasons.** While a model thinks, MIP reads the expression it writes
-before `=`, computes it exactly, and puts the value after the `=` so the model reads a right number instead of working it out by hand.
-It also watches the thinking for loops a small model cannot leave and closes them, so the model still gives an answer.
+before `=`, computes it exactly and puts the value after the `=`, and it closes the loops a small model cannot leave, so the model
+still answers. No weight is changed.
 
-This repo is the research side: the harness, the mechanisms, the simulations and every measured result.
-[Strata-xeno](https://github.com/xenodeve/Strata-xeno) runs MIP in its engine and server, for Qwen3.8-Flash-Next and
-Qwen3.6-35B-A3B-NVFP4. The work so far is on **Qwen3.5-4B** (bf16, vLLM 0.33, Colab A100 80 GB, T 0.6, the full 262,144-token
-context), the **General Style** only: forms that are true under every reading, no per-model profile.
+This repo holds the mechanisms, the harness and the measurements. [Strata-xeno](https://github.com/xenodeve/Strata-xeno) runs MIP in
+its engine and server for Qwen3.8-Flash-Next and Qwen3.6-35B-A3B-NVFP4. Everything below is the current **General Style** (forms true
+under every reading, no per-model profile), measured on **Qwen3.5-4B** (bf16, vLLM 0.33, Colab A100 80 GB, T 0.6, top-p 0.95,
+top-k 20, the full 262,144-token context).
 
-Contents: [Best config](#the-best-config-now) · [Results](#results) · [Tokens](#tokens) · [How each mechanism works](#how-each-mechanism-works) ·
-[Detection to put](#from-detection-to-put-every-point-mip-acts-at) · [MathBackend](#mathbackend-how-the-exact-value-is-computed) ·
-[Staying out of the way](#staying-out-of-the-way-why-the-other-work-is-left-alone) · [No fine-tuning](#no-fine-tuning) · [Failures](#failures-in-the-best-config-tests) · [Easy math](#easy-math-tokens-time-and-answers) ·
-[What did not work](#what-did-not-work) · [Open](#open) · [The boundary with Strata-xeno](#the-boundary-with-strata-xeno) · [Running](#running) ·
-[ภาษาไทย](#ภาษาไทย)
+Contents: [Best config](#best-config) · [Results](#results) · [Tokens and time](#tokens-and-time) · [Detection points](#detection-points) ·
+[How a value is put](#how-a-value-is-put) · [Loops it prevents](#loops-it-prevents) · [MathBackend](#mathbackend) ·
+[Staying out of the way](#staying-out-of-the-way) · [No fine-tuning](#no-fine-tuning) · [Failures](#failures) ·
+[Not measured yet](#not-measured-yet) · [Repo](#repo) · [ภาษาไทย](#ภาษาไทย)
 
-## The best config now
+## Best config
 
 ```sh
 python tools/igc/tir4b.py run --model <Qwen3.5-4B> --rows rows.jsonl --samples 2 --seed 1 --ids --out out/arm \
@@ -23,451 +22,295 @@ python tools/igc/tir4b.py run --model <Qwen3.5-4B> --rows rows.jsonl --samples 2
   --loop-close --answer-close --early-cycle --shape-cap 1024 --cover-cap 32768
 ```
 
-| Layer | Flags | Status |
+| Part | Flags | Measured on |
 |---|---|---|
-| Inline values, General Style | `--inline-calc --mathbackend --inline-plain --inline-style general --no-digit-join --guard-progress` | A100 |
-| A: loop close | `--loop-close` | A100 (round 4) |
-| B: answer close | `--answer-close` | A100 (round 5) |
-| V7: early cycle | `--early-cycle` | A100 (round 7) |
-| Shape cap | `--shape-cap 1024` | A100 (round 8, 3 rows) |
-| Cover cap | `--cover-cap 32768` | **simulation only**; the A100 round is ready and waits for compute units |
-
-The scores below were measured with the first four layers (A+B+V7 gave the same score as A alone; see the table). Shape cap and
-cover cap close loops the others miss; their effect on the score is not measured on a full set yet.
+| Inline values (General Style) | `--inline-calc --mathbackend --inline-plain --inline-style general --no-digit-join --guard-progress` | A100 |
+| A: loop close | `--loop-close` | A100 |
+| B: answer close | `--answer-close` | A100 |
+| V7: early cycle | `--early-cycle` | A100 |
+| Shape cap | `--shape-cap 1024` | A100 (3 questions) |
+| Cover cap | `--cover-cap 32768` | replay of stored A100 traces |
 
 ## Results
 
-All numbers are answers right out of answers given, two samples per question, scored by the rule, with an API reader beside it
-(`answer_check.py`) and every row where they differ read by hand. **vLLM does not repeat an answer across runs (#21)**, so arms in different runs are not paired: a
-difference of 1-2 answers is noise.
+24 questions where the plain model loops (48 answers, 2 samples each): 17 DeepMind arithmetic questions (34 answers: sequences,
+surds, big divisions, mixed expressions, unit conversion) and 7 MATH-500 level-5 problems (14 answers). Right answers are scored
+by the rule, with an API reader beside it and every disagreement read by hand.
 
-### The loop rows: what the loop closers buy
+| Arm | Arithmetic | MATH L5 | All | No answer (cut) |
+|---|---|---|---|---|
+| Plain model, no MIP | 17/34 | 7/14 | 24/48 | 21 |
+| Inline values only | 17/34 | 8/14 | 25/48 | 23 |
+| **Best config** (inline + A + B + V7) | **27/34** | **10/14** | **37/48** | **1** |
 
-24 questions (48 answers) where earlier arms looped: DeepMind arithmetic (long mixed expressions, big divisions, surds, unit
-conversion) and a few MATH problems. The arms below ran in the same rounds on the same rows and seeds; `loop-gen` is the General
-Style with no closer, the baseline for the closers.
+**+13 right answers over the plain model (24 -> 37 of 48)** and +12 over inline values alone, and the answers that ended with
+no answer fall from 21 to 1. On the three hardest of these questions with shape cap added (12 answers): 8 right and none run to the
+end of the context. The best config and the inline-only arm ran in one round on the same questions and seeds; the plain model is
+another run. vLLM does not repeat an answer across runs (#21), so a difference of 1-2 answers is noise.
 
-| Arm | Layers | Right | Cut (no answer) | Tokens, all answers | Median tokens of a right answer |
-|---|---|---|---|---|---|
-| loop-gen | inline values | 25/48 | 23 | 754k | 10,221 |
-| loop-lc | + A | **37/48** | 3 | 724k | 10,531 |
-| loop-lcac | + A + B | **37/48** | 1 | 861k | 10,723 |
-| loop-lcacv7 | + A + B + V7 | **37/48** | 1 | 936k | 8,829 |
+## Tokens and time
 
-**+12 answers (25 -> 37 of 48)**, and the answers with no answer fell from 23 to 1. For reference, the same 24 questions in the
-earlier no-MIP control runs: 24/48 (fresh-ctrl, 21 cut) and 19/48 (v2-ctrl, 26 cut). Those are other runs, and the rows were
-chosen because they looped there, so read them as context, not as the gain.
-
-Round 8 (A+B+V7+shape cap, 3 of the hardest rows x 4): 8/12. `div_big-2208`, a big division no answer had got right in 28 earlier
-answers across 13 arms, got its first right answer (1/4); `simplify_surd-1931` 4/4 (0/2 in the control); no answer ran to the
-context end, where these rows had run to 210k-262k tokens before.
-
-### The broad set: inline values alone, against the control
-
-120 fresh questions (240 answers), inline values with no loop closer, round 1:
-
-| Arm | Right | Cut | Tokens |
+| Arm | Tokens, all answers | Median tokens per answer | Median tokens of a right answer |
 |---|---|---|---|
-| control (no MIP) | 192/240 | 31 | 2,348k |
-| General Style, inline values only | 181/240 | 43 | 2,440k |
-| Qwen profile, inline values only | 189/240 | 34 | 2,674k |
+| Plain model | 631k | 10,096 | 7,144 |
+| Inline values only | 754k | 11,360 | 10,221 |
+| **Best config** | 936k | 10,961 | 8,829 |
 
-**Inline values alone lost 11 answers**, and the loss is in the cuts (31 -> 43): with a right value always in front of it, the
-model looped more often, and nothing closed those loops. This is why the closers were built. The broad set has not been run with
-the closers yet: that is the round waiting for compute units (`run_vm9.sh`: the best config and the control in one round, 120
-questions x 2).
+By kind, the best config's median right answer is 8,371 tokens on arithmetic and 9,090 on MATH L5 (plain model 6,472 and 15,260):
+**on MATH the right answers are 40 % shorter**; on arithmetic they are longer, because 10 more arithmetic answers now finish where
+the plain model looped and was cut.
 
-On 52 questions the model had got wrong (104 answers): control 71, General 73, Qwen profile 78.
+- **The total rises because more answers finish.** The best config turns 20 cut answers into finished ones, and a finished answer
+  spends tokens on its answer. One answer that runs to the context end costs 210-262k tokens, a quarter of an arm's total, so totals
+  move with those few answers.
+- **What the closers save is the run to the end.** Shape cap closed a long division at 55k tokens where such loops run past 200k; in
+  replay, cover cap stops every loop that ran past 150k at 40k-114k.
+- **Time.** In this harness the best config ran at 25.7 tokens/s per answer against 37.9 for the plain model (vLLM, many answers in
+  one batch). That is the harness: `tir4b` ends a vLLM request at every `=` and starts the next after the put, about 20,000 extra
+  requests an arm. In Strata's engine the put happens inside the decode loop (`include/strata/core/igc_inline.hpp`); its time there
+  is not measured yet.
 
-## Tokens
+## Detection points
 
-- **A typical answer costs the same.** The median answer is 10-11k tokens on the loop rows in every arm, and 7.3-7.4k on the
-  broad set with or without MIP.
-- **Totals are set by the few answers that run to the context end.** One such answer is 210-262k tokens, a quarter of an arm's total,
-  so the totals above move with how many of them an arm has, not with the mechanisms. The closers turn cut answers into finished ones,
-  and a finished answer spends tokens on its answer.
-- **What the closers save is the run to the end.** Round 8's division loop was closed at 55k model tokens where it had run past 200k;
-  in simulation, cover cap stops every loop that ran past 150k at 40k-114k.
-- **V7 closes loops sooner:** the median right answer fell from 10,723 to 8,829 tokens (not paired, so a hint, not a measurement).
+MIP reads the model's own text at five points. The prompt, the sampling and the weights stay the model's own.
 
-## How each mechanism works
-
-Each closer acts only on the thinking or the answer of a loop that the checks before it let run. A mechanism is reported as
-caught / should have caught.
-
-**Inline values (General Style).** At every `=` the model writes, the expression before it is parsed and computed exactly by
-`tools/igc/mathbackend` (fractions, decimals, roots, powers, mod), and the value is put after the `=` in plain text
-(`--inline-plain`), in a form true under every reading (`--inline-style general`). The model then reads the right number and
-reasons on from it. `--no-digit-join` holds digits down for one token after a put that ends in a digit, so `-5` and the model's own
-`75` cannot read `-575` (80 of 19,990 puts did that before). `--guard-progress` lets the repeat check pass a tail whose rounds are
-nearly all new (trial division by prime after prime), which is work, not a loop. Coverage: **19,546 of 19,636** readable `=` on the
-broad set got software's value (99.5 %); arithmetic in the head with no expression written is not counted.
-
-**The repeat check** (every arm, MIP or not): an exact cycle of 20 rounds (8 past 512 tokens), a digit-masked counting cycle, or a
-line that comes back. Without a closer it ends the answer `stuck`, with no answer. That is where the 23 cut answers of `loop-gen` went.
-
-**A: loop close** (`--loop-close`). When the repeat check fires in the thinking, MIP puts `</think>` instead of ending the answer,
-and the model answers from what it has worked out. Of 15 thinking loops closed in loop-lc, 12 then answered right. This is the +12.
-
-**B: answer close** (`--answer-close`). The other 3 carried the same doubt into the answer and looped there (an endless decimal
-`-5511170.918918...`, a recount of `19+1`), where A has nothing left to close. B cuts an exact cycle back to one round, puts
-`The final answer is $\boxed{` and lets the model write one value (at most 64 tokens). Cut answers: 3 -> 1.
-
-**V7: early cycle** (`--early-cycle`). The bench's check wants 20 rounds; V7 also reads the thinking at every line end for an exact
-cycle of 6 rounds (3 past 512 tokens) spanning 500+ tokens, and closes it there. It fired on 17 of 48 answers and the score
-stayed at 37/48: the same loops, closed sooner.
-
-**Shape cap** (`--shape-cap 1024`). Two loops pass every check above: a counting loop where every round is new
-(`check ... base 5815. No.`, so `--guard-progress` lets it go) and digit-by-digit division whose numbers change length. Shape cap reads
-each run of digits as one token and closes an exact cycle of 1,024 rounds. Stored traces: right answers reach 805 rounds at most,
-loops 1,874-4,267. Round 8: it caught 1 of the 2 long division loops.
-
-**Cover cap** (`--cover-cap 32768`). The one shape cap missed: each zero digit made a shorter round, so the exact cycle broke every
-few rounds (46 at most). Cover cap reads the last 32,768 tokens (digit runs as one) and asks what share of them repeat a 12-token
-stretch seen in the 2,048 before; 97 % or more is a loop. One odd round moves the share by 1/32,768, so it cannot reset the count.
-Stored traces of 16 arms: right answers reach 0.92 at most (two that looped long and then came right), the next 0.35; all 10 loops
-past 150k tokens reach 0.999-1.0. Replay gate: **0 of 1,078 right answers acted on**, 12 of 13 long loops stopped at 40k-114k (the
-13th parts from its record in the replay; fed directly, the check fires at 58k). Not yet run on the A100.
-
-## From detection to put: every point MIP acts at
-
-In the best config MIP watches the model's own text at five points. Nothing else in the run changes: the prompt, the sampling
-(T 0.6, top-p 0.95, top-k 20) and the weights are the model's own.
-
-| # | Where it looks | When | What it may do |
+| # | Where | When | What it may do |
 |---|---|---|---|
-| 1 | The token `=` | Every request stops at an `=` token (in the thinking and in the answer), so MIP reads the text before it ahead of the model's next token | Put the exact value after the `=` |
-| 2 | The token after a put that ends in a digit (and a `.` straight after it) | One token | Hold digit tokens down (`--no-digit-join`), so the model's next digit cannot glue onto the put |
-| 3 | Every line end in the thinking | As the tokens arrive | V7: close the thinking on a short exact cycle |
-| 4 | The whole thinking since the last close, or the whole answer | Every 1,024 tokens and at each request end | The repeat check, shape cap and cover cap: close the thinking (A) or the answer (B) |
-| 5 | The answer after B's cue | Until a line end or 64 tokens | Nothing: only the value is read, then the answer ends |
+| 1 | The token `=` | every request stops at an `=` token, in the thinking and in the answer, so MIP reads before the model's next token | put the exact value |
+| 2 | The token after a put that ends in a digit (and a `.` right after it) | one token | hold digit tokens down, so the model's next digit cannot glue onto the put (`--no-digit-join`) |
+| 3 | Every line end in the thinking | as tokens arrive | V7: close the thinking on a short exact cycle |
+| 4 | The thinking since the last close, or the whole answer | every 1,024 tokens and at each request end | the repeat check, shape cap and cover cap: close the thinking (A) or the answer (B) |
+| 5 | The answer after B's cue | to a line end or 64 tokens | nothing: one value is read and the answer ends |
 
-**How a value is put.** The text before the `=` is cut to the longest arithmetic expression that ends there, read in every form the
-model writes (`tools/igc/mathexpr.py`: ASCII, LaTeX at any depth, Unicode). It is computed exactly (MathBackend, below), spelled in the
-General Style and checked against the refusals (below). If it passes, ` value` is appended to the model's text as plain text, and the
-next request goes on from it: to the model the value is simply the next words on the page. If any step says no, nothing is put and the
-model writes its own value, as it would without MIP.
+## How a value is put
 
-**The General Style: a value true under every reading.** The same `=` can mean different things, so the form is chosen to be true
-whichever way it is read:
+1. The text before the `=` is cut to the longest arithmetic expression that ends there, read in every form a model writes
+   (`tools/igc/mathexpr.py`: ASCII, LaTeX at any depth, Unicode; `unified_detect` adds calls such as `\gcd(12, 18)`, `\binom{7}{3}`).
+2. MathBackend computes it exactly.
+3. The value is spelled in the General Style and checked against the refusals ([Staying out of the way](#staying-out-of-the-way)).
+4. ` value` is appended to the model's text as plain text and the next request goes on from it: to the model it is the next words
+   on the page. If any step says no, nothing is put and the model writes its own value.
+
+**The General Style: a value true however the `=` is read.**
 
 | The model wrote | Put | Why this form |
 |---|---|---|
 | `12 \times 7 =` | `84` | an integer as itself |
-| `9/2 =` | `4.5` | a terminating decimal, the model's own spelling (`9/2` broke a decimal sum into a loop once) |
-| `6/26 =` | `3/13` | a quotient that reduces: its lowest terms are the step |
-| `34 \div 4 =` in a long division | `8 \text{ rem } 2` | the model wants the digit; `q rem r` is true as a quotient and as a division |
-| `1302 / 9 =` where the text works in decimals | `144.6666...` | cut and marked as cut, so it is not a false equality |
-| `7^5 =` while working mod 11 | the residue, when the model's own last `=` there linked a value to its residue | what that `=` means on this line |
+| `9/2 =` | `4.5` | a terminating decimal, as the model spells it |
+| `6/26 =` | `3/13` | a quotient that reduces: the lowest terms are the step |
+| `34 \div 4 =` in a long division | `8 \text{ rem } 2` | true as a quotient and as a division |
+| `1302 / 9 =` where the text works in decimals | `144.6666...` | cut and marked as cut, never a false equality |
+| `7^5 =` in work mod 11 | the residue | only when the model's own last `=` there linked a value to its residue |
 
-**The loops it guards against** (point 4, all with the counting rules in the mechanisms below):
+## Loops it prevents
 
-| Loop | Example from the runs | Caught by |
+| Loop | Example | Caught by |
 |---|---|---|
-| An exact cycle, short or long | the same re-check paragraph again and again | the repeat check (20 rounds, 8 past 512 tokens); V7 sooner (6 rounds, 3 past 512, 500+ tokens) |
-| Counting with masked digits | `check 101. No. check 102. No.` | the counting check; `--guard-progress` lets it go when nearly every round is new (trial division) |
+| An exact cycle | the same re-check paragraph again and again | the repeat check (20 rounds, 8 past 512 tokens); V7 sooner (6 rounds, 3 past 512, spanning 500+ tokens) |
+| Counting | `check 101. No. check 102. No.` | the counting check, digits masked; `--guard-progress` lets it go when nearly every round is new (trial division by prime after prime) |
 | A line that keeps coming back | `So the answer is 24?` between other lines | the line-back check |
-| A cycle whose numbers change length | `$31090 / 10943 = 2.84...$ (Digit 5244: 2)` | shape cap (digit runs as one token, 1,024 rounds) |
-| A cycle with odd rounds in it | long division where each zero digit makes a shorter round | cover cap (97 % of the last 32,768 tokens repeat) |
-| The same doubt carried into the answer | `-5511170.918918...` without end, a recount of `19+1` | B: answer close |
-| The same value put again and again | `= 15/13 = 15/13 = ...` | the third put in a row of one expression is left to the model (echo guard) |
+| A cycle whose numbers change length | `$31090 / 10943 = 2.84...$ (Digit 5244: 2)` | shape cap: each digit run read as one token, an exact cycle of 1,024 rounds |
+| A cycle with odd rounds in it | long division where each zero digit makes a shorter round | cover cap: 97 % of the last 32,768 tokens repeat a 12-token stretch seen in the 2,048 before |
+| The doubt carried into the answer | `-5511170.918918...` without end, a recount of `19+1` | B: the cycle cut to one round, `The final answer is $\boxed{` put, one value of at most 64 tokens |
+| The same value put again and again | `= 15/13 = 15/13 = ...` | the third put in a row of one expression is left to the model |
 
-## MathBackend: how the exact value is computed
+A loop in the thinking is closed by A: `</think>` is put and the model answers from what it has worked out. Of 21 thinking loops A
+closed in the best config, 13 then answered right.
+
+## MathBackend
 
 `tools/igc/mathbackend/` is a registry of **387 operations in six modules**: numbers 100 (gcd, lcm, phi, modular inverse, digits,
-divisors, primes ...), geometry 86, algebra 70, counting 70 (C, P, Catalan, derangements ...), search 43, symbolic 18. The arithmetic
-reader (`mathexpr`) covers `+ - * / ^`, fractions, roots, absolute value, floor and ceiling, factorial and percent; `unified_detect`
-adds the calls a model writes (`\gcd(12, 18)`, `\binom{7}{3}`, `\phi(36)`).
+divisors, primes), geometry 86, algebra 70, counting 70 (C, P, Catalan, derangements), search 43, symbolic 18.
 
 - **Exact only.** Python's standard library: `Fraction` for rationals, `Surd` for `p + q*sqrt(d)`, `Decimal` where a decimal is asked
-  for. No floating point stands behind a put. A root or power that is not exact is refused, not rounded.
-- **Bounded.** Every operation states its bound (`@op(name, kind, bound=...)`); past it, or outside its domain, it raises `NotCovered`
-  or `BadInput`, and the caller must not guess: no put.
+  for. No floating point stands behind a put; a root or power that is not exact is refused, never rounded.
+- **Bounded.** Each operation declares its bound (`@op(name, kind, bound=...)`). Past it, or outside its domain, it raises
+  `NotCovered` or `BadInput`, and the caller must not guess: no put.
 - **Checked against independent libraries.** Each module has a `sim_*.py` that draws inputs and compares every operation with SymPy,
-  mpmath or NetworkX, which the backend itself never imports (`tools/test_mathbackend_*.py`; the 2026-11-05 review fixed or refused
-  every wrong value and removed contest formulas as operations, #17).
+  mpmath or NetworkX, which the backend itself never imports (`tools/test_mathbackend_*.py`).
 
-## Staying out of the way: why the other work is left alone
+## Staying out of the way
 
-MIP acts only where it is sure it is right and where the model is about to need the value. Everything else passes untouched.
+MIP acts only where it is sure the value is right and the model is about to need it.
 
-- **Only after an `=` the model wrote, only on exact arithmetic.** A symbol (algebra), a word, a mixed number (`2\frac{1}{3}`), an
-  inexact root, or a number too big to be a step: no put. On the broad set, puts went to 19,546 of the 19,636 readable `=`; the rest of
-  the text was never touched.
-- **Refused even when the arithmetic is right,** because the value is not what the model means there (each rule came from reading
-  stored traces, #18 / #19):
-  - a number alone: `m=4,512=8*64` is m=4 and 512, not 4512;
-  - nothing new: the value would repeat the expression (`15/13 = 15/13`);
+- **Only after an `=` the model wrote, only on exact arithmetic.** A symbol, a word, a mixed number (`2\frac{1}{3}`), an inexact root,
+  or a number too big to be a step: no put. On 120 questions it put values at 19,546 of the 19,636 readable `=`; no other text is touched.
+- **No put where the right value is not what the model means:**
+  - a number alone (`m=4,512=8*64` is m=4 and 512);
+  - nothing new (the value would repeat the expression);
   - an operand of a longer expression still being written;
-  - a column of a written subtraction that borrows (`0-9 = 1`), a count of coins (`2 \times 10 + 5 \times 1 = 7` coins);
-  - an operator the question defined otherwise (`a * b = a - b`);
+  - a borrowing column of a written subtraction (`0-9 = 1`), a count of coins;
+  - an operator the question defines otherwise (`a * b = a - b`);
   - a congruence with no modulus named;
-  - the third put in a row of the same expression (echo guard).
-- **Closers act only on a loop, with thresholds set above every right answer.** Each threshold sits over the longest stretch any
-  right answer reached in the stored traces (shape: 805 rounds against a cap of 1,024; cover: 0.92 against 0.97), and each closer
-  went to the A100 only after the replay gate showed it acting on no right answer, or every act read and understood.
-- **The model decides.** A put is a value on the page, not an instruction; a close hands the model `</think>` or the final-answer cue,
-  and the model writes the answer.
+  - the third put in a row of one expression.
+- **Closers act only on a loop, and every threshold sits above the right answers.** Shape cap: right answers reach 805 rounds, the
+  cap is 1,024. Cover cap: right answers reach a share of 0.92, the cap is 0.97. Each closer passes a replay of every stored A100 trace
+  before it runs on the A100: no act on a right answer, or every act read and understood, and no request vLLM would refuse.
+- **The model decides.** A put is a value on the page, not an instruction; a close hands the model `</think>` or the final-answer
+  cue, and the model writes the answer.
 
 ## No fine-tuning
 
-None of this changes a weight. MIP works on the text stream at inference time: it reads what the model writes and appends tokens to
-it. The model is the plain checkpoint (Qwen3.5-4B, bf16, from its model card), with the model card's own sampling. The digit set and
-the `=` and line-end tokens come from the tokenizer, so the same mechanisms run on another model's tokenizer; only the thresholds
-must be checked again there.
+MIP changes no weight. It reads the text stream at inference time and appends tokens to it. The model is the plain checkpoint with
+its model card's sampling. The digit set and the `=` and line-end tokens are read from the tokenizer, so the same mechanisms run on
+another model's tokenizer; the thresholds are checked again on each model.
 
-## Failures in the best-config tests
+## Failures
 
-From the A100 records of the four best-config arms (`loop-lc`, `loop-lcac`, `loop-lcacv7`, `loop-shape`; 156 answers), with
+The best config's A100 records (`loop-lcacv7`, 48 answers, and `loop-shape` with shape cap, 12 answers), counted with
 `scripts/fail_audit.py` and `scripts/put_reject.py`:
 
-| Failure | Count | How it was measured |
+| Failure | Count | How it is counted |
 |---|---|---|
-| A wrong value put (the arithmetic of the put is wrong) | **0 of 51,015** puts checked | every put re-computed by Python's `Fraction` on a normalised copy, not by MIP's own reader; 2,850 more (roots, mod, functions) were not plain enough to re-check this way |
-| A put the model pushed away | **4.1 %** of puts in loop-lcacv7 (832 of 20,490), 0.9 % in loop-shape | a rejection word (`wait`, `no,`, `wrong`, `actually`, `let me recheck` ...) within the next 40 tokens. Base rate: after the model's **own** `= value` in the no-MIP control, 15.2 %. The cases read were the model doubting a right value (`10856 / 5192 = 23/11? No, wait.`) |
-| A right answer made wrong | **2** in loop-lcacv7 (1 in loop-lc, 3 in loop-lcac) | same questions and seeds as the no-closer arm of the same round, answer by answer. Both loop-lcacv7 cases are MATH level-5 problems where **V7 closed the thinking too early** (at 8,433 and 6,582 tokens); without the closers the model finished right at 42,974 and 31,518. Against these, 14 answers went from wrong to right |
-| A closer acting on an answer that then ended wrong | loop-lcacv7: loop close 8 of 21, early cycle 6 of 17, answer close 6 of 6 | every act, and how its answer ended. B acts only when the answer is already looping, so its answers are mostly lost ones it turns into a value |
+| A wrong value put | **0 of 39,046** puts re-checked | every put re-computed by Python's `Fraction` on a normalised copy, independent of MIP's reader; 1,208 more (roots, mod, functions) cannot be re-checked this way |
+| A put the model pushed away | **4.1 %** (832 of 20,490) | a rejection word (`wait`, `no,`, `wrong`, `actually`, `let me recheck`) within the next 40 tokens. After the model's **own** `= value` with no MIP: 15.2 %. The cases read are the model doubting a right value (`10856 / 5192 = 23/11? No, wait.`) |
+| A right answer made wrong | **2 of 48** (14 wrong made right) | answer by answer against the inline-only arm of the same round, same questions and seeds. Both are MATH L5 problems where **V7 closed the thinking too early** (8,433 and 6,582 tokens); without the closers the model finished right at 42,974 and 31,518 |
+| A close on an answer that then ended wrong | A: 8 of 21; V7: 6 of 17; B: 6 of 6 | every act and how its answer ended. B acts only on an answer already looping, so it turns lost answers into one value |
+| Cover cap acting on a right answer | **0 of 1,078** right answers in replay | every stored A100 trace replayed with cover cap; it stops 12 of the 13 loops past 150k tokens, and the 13th fires at 58k when fed directly |
 
-Not paired across runs (#21): the right-to-wrong count is per answer between two runs with the same seeds, so a part of it can be
-sampling. The two V7 cases are read, and V7 caused them; whether a longer V7 span fixes them without losing what V7 catches is open.
+## Not measured yet
 
-## Easy math: tokens, time and answers
+- **The best config with every closer on a broad set, against the plain model** (#19): 120 questions x 2, both arms in one round;
+  the scripts are ready and wait for A100 compute units.
+- **V7's early closes** on long MATH derivations: whether a longer span keeps what V7 catches without the 2 lost answers.
+- **After a close the model can still be wrong** (it can go back to dividing in the answer).
+- **The thresholds on the target models** (Qwen3.8-Flash-Next, Qwen3.6-35B-A3B-NVFP4) and the put's time inside Strata's engine.
 
-Three measurements on simpler math, each with its own setup. They are not one series: read each with its line.
-
-**1. Qwen3.8-Flash-Next (Gyro-M) on Strata's engine, 49 questions (29 GSM8K, 20 MATH), 2 rounds (#3).** A different MIP
-mechanism from the General Style: the engine opens a program block in the thinking after 512 tokens and closes the thinking after
-a run that printed (`--igc-sandbox --igc-sandbox-after 512 --igc-sandbox-close`).
-
-| Arm | Tokens | Seconds | Stuck | Right |
-|---|---|---|---|---|
-| Plain | 247,162 | 3,817 | 2 | 73 of 98 |
-| Program, then close | **125,608 (0.508x)** | 2,114 (0.55x) | 0 | **77 of 98** |
-
-Tokens fell on 41 of 49 questions (sign test p < 0.00001). Right answers +4, p 0.29: no measured gain, and no loss, which is
-what the run was for. The seconds are as recorded in the rotation, not a speed claim (no ABBA); per token the decode was the same,
-14.5-15.1 ms in every arm. One wrong answer of 98 came from a wrong program that the close trusted. The close stays off by default:
-for coding it cut reasoning short, and the math result must hold on a paired machine before it counts.
-
-**2. Qwen3.5-4B on DeepMind arithmetic, Qwenputer's 160 rows and protocol (L4, greedy, thinking off, 4,096 tokens) (#12).** Before
-the General Style and the full-context rule.
-
-| Arm | Right | Tokens vs base |
-|---|---|---|
-| Base | 121 | 1.00x |
-| A value at every `=` (the early inline form) | 81 of 105 (base 85 on the same 105) | 0.71x; cut |
-| **The whole step computed by software** (`--whole-hint`) | **127** | **0.41x** |
-| Correcting values the model computed by hand (`--check-hand`) | 116 | 0.99x; cut |
-
-The early inline form lost answers because a value came in the middle of a method the model had started (a decimal sum given
-`9/2`, a long division given `21/19`). The General Style's forms (`4.5`, `1 rem 2`) were built from exactly these cases.
-
-**3. The General Style on the broad set (A100, full context, inline values only, round 1).**
-
-| Part | Arm | Right | Cut | Tokens | Median tokens | Median seconds |
-|---|---|---|---|---|---|---|
-| Arithmetic (160 answers) | control | 125 | 22 | 1,194k | 6,582 | 157 |
-| | General | 119 | 28 | 1,381k | 6,222 | 396 |
-| MATH-500 level 5 (80 answers) | control | 67 | 9 | 1,153k | 13,766 | 405 |
-| | General | 62 | 15 | 1,059k | 11,778 | 789 |
-
-The median answer is 5 % shorter on arithmetic and 14 % on MATH, but the loops that nothing closed in this round added cut
-answers and set the totals. The seconds here are the harness's, not the model's: `tir4b` on vLLM ends a request at every `=` and
-starts the next after the put, about 19,600 extra requests in this arm. Inside Strata's engine the put happens in the decode loop
-(`include/strata/core/igc_inline.hpp`), and its time there is not measured yet.
-
-**What the three say together.** Tokens fell most where software took over a whole step: a program (0.51x) or the whole expression
-(0.41x). Values put at each `=` shorten the typical answer a little; on their own they lose answers to loops, which is what the
-closers are for, and the round that measures the General Style with every closer on this set is the one waiting for compute units.
-
-## What did not work
-
-| Tried | Result | Why it was dropped |
-|---|---|---|
-| D: loop value (`--loop-value`): put the question's own exact value before the close | 11/20 on the 5 hardest rows | the model ignored the value it was given |
-| Suppress re-checks (`--suppress-recheck 60`) | 20/48, 28 cut (25/48 without) | holding the re-check words down made the loops worse |
-| check-hand: correct a value the model computed by hand | 6 of 6 corrections in the replay were false (#18) | the parser misreads too much text to correct it |
-| Logit bias over 1,024 tokens | vLLM refused the request; four arms died at start | the replay now counts every request vLLM would refuse (`vllm_refused`) |
-
-## Open
-
-- **The broad-set round with every closer** (#19): best config against the control on 120 questions x 2. Scripts are ready; it waits
-  for compute units.
-- After the loop is closed the model can still be wrong: on `div_big` it went back to dividing in the answer and lost the sign.
-- Thresholds were measured on Qwen3.5-4B traces. Before a model profile, every threshold is checked on the target model
-  (Qwen3.8-Flash-Next, Qwen3.6-35B-A3B-NVFP4).
-- The MIP core (inline writer and closers) will come out of `tir4b.py` as a package with one token-level API, which Strata-xeno will
-  take pinned.
-
-## The boundary with Strata-xeno
-
-Split out of Strata-xeno on 2026-11-08 with its git history; 21 issues moved with it (the old-to-new number map is pinned as #22,
-since a bare `#N` written before the move means Strata-xeno #N). The engine side stays there: `include/strata/core/igc_*.hpp` and
-`src/kernels/qwenputer.cu`. Generators here write those headers, and `tools/test_igc_adapter_artifact.py` checks the schema header
-against a Strata-xeno checkout when `STRATA_ROOT` names one. `tir4b --execute/--box` and `external_bench --tool-loop` import
-Strata's `serve.sandbox`, so they need Strata-xeno on `PYTHONPATH`.
+## Repo
 
 | Path | What |
 |---|---|
-| `tools/igc/tir4b.py` | The harness: the model in vLLM, inline values and every closer |
-| `tools/igc/sim_replay.py` | Replays stored traces with a mechanism added: where it acts, on how many cut answers, whether on a right one, what vLLM would refuse |
-| `tools/igc/mathbackend/` | The exact computation behind a put |
-| `tools/igc/answer_check.py` | The API reader beside the rule (its key stays on the machine that runs it, never on a VM) |
-| `tools/igc/` (rest) | Readouts, adapters, corpora, benchmarks (LiveBench, LCB, standard sets) |
+| `tools/igc/tir4b.py` | the harness: the model in vLLM, inline values and every closer |
+| `tools/igc/sim_replay.py` | replays stored traces with a mechanism added: where it acts, on how many cut answers, whether on a right one, what vLLM would refuse |
+| `tools/igc/mathbackend/`, `tools/igc/mathexpr.py` | the exact computation and the reader |
+| `tools/igc/answer_check.py` | the API reader beside the rule (its key stays on the machine that runs it) |
 | `tools/qwenputer/` | Native Qwenputer: computation compiled for the engine |
+| `scripts/` | the audits and the replay gate behind the numbers here |
 
-## Running
+The engine side of MIP lives in Strata-xeno (`include/strata/core/igc_*.hpp`, `src/kernels/qwenputer.cu`);
+`tools/test_igc_adapter_artifact.py` checks the schema header against a Strata-xeno checkout named by `STRATA_ROOT`.
+`tir4b --execute/--box` needs Strata-xeno on `PYTHONPATH`. Issue numbers from before the split are mapped in #22.
 
 ```sh
 python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 skip without a GPU, a model or STRATA_ROOT
 ```
 
-The rules of the work: simulate first, the A100 last; the full 262,144-token context, never `--max-tokens`; sampled at T 0.6 with
-several seeds; report caught / should have caught; never tune to the test sets.
-
 ---
 
 ## ภาษาไทย
 
-**MIP (Model Inline Processing): ให้ software คำนวณ ให้ model ใช้เหตุผล** ระหว่างที่ model คิด MIP จะอ่านนิพจน์ที่ model เขียนไว้ก่อน `=`
-คำนวณให้ตรงเป๊ะ แล้วใส่ค่าต่อท้าย `=` ให้ model ได้อ่านตัวเลขที่ถูกแทนที่จะคิดเลขเอง นอกจากนี้ MIP ยังคอยดูว่า model เล็กวนอยู่ใน loop
-ที่ออกเองไม่ได้หรือเปล่า ถ้าใช่ก็ปิดให้ model ยังตอบออกมาได้
+**MIP (Model Inline Processing): ให้ software คำนวณ ให้ model ใช้เหตุผล** ระหว่างที่ model คิด MIP จะอ่านนิพจน์ที่ model เขียนก่อน `=`
+คำนวณให้ตรงเป๊ะ แล้วใส่ค่าต่อท้าย `=` และยังปิด loop ที่ model เล็กออกเองไม่ได้ ให้ model ยังตอบออกมาได้ โดยไม่แตะน้ำหนักของ model เลย
 
-repo นี้เป็นฝั่งวิจัย มีเครื่องมือทดลอง ตัวกลไก sim และผลที่วัดได้ทั้งหมด ส่วน [Strata-xeno](https://github.com/xenodeve/Strata-xeno)
-เป็นที่ที่เอา MIP ไปรันจริงใน engine กับ server ให้ Qwen3.8-Flash-Next และ Qwen3.6-35B-A3B-NVFP4 งานที่ผ่านมาทำบน **Qwen3.5-4B**
-(bf16, vLLM 0.33, Colab A100 80 GB, T 0.6, context เต็ม 262,144 token) และใช้แค่ **General Style** คือรูปแบบที่ถูกไม่ว่าจะอ่านแบบไหน
-ยังไม่เปิด Profile ของ model ตัวไหน
+repo นี้เก็บกลไก เครื่องมือทดลอง และผลวัด ส่วน [Strata-xeno](https://github.com/xenodeve/Strata-xeno) เป็นที่ที่เอา MIP ไปรันจริงใน engine กับ server
+ให้ Qwen3.8-Flash-Next และ Qwen3.6-35B-A3B-NVFP4 เนื้อหาทั้งหมดในนี้เป็น **General Style** ตัวล่าสุด คือรูปแบบค่าที่ถูกไม่ว่าจะอ่านแบบไหน ไม่มี profile แยกตาม model
+วัดบน **Qwen3.5-4B** (bf16, vLLM 0.33, Colab A100 80 GB, T 0.6, top-p 0.95, top-k 20, context เต็ม 262,144 token)
 
-### best config ตอนนี้
+### best config
 
-ใช้ flag ตามคำสั่งข้างบน ประกอบด้วย 6 ชั้น
-- **ตัวเขียนค่า (General Style):** ทดสอบบน A100 แล้ว
-- **A: loop close:** A100 รอบ 4
-- **B: answer close:** A100 รอบ 5
-- **V7: early cycle:** A100 รอบ 7
-- **shape-cap:** A100 รอบ 8 บน 3 ข้อ
-- **cover-cap:** **ยังเป็นผลจาก sim อย่างเดียว** รอบ A100 พร้อมแล้ว รอ compute units
-
-คะแนนที่วัดได้มาจาก 4 ชั้นแรก (A+B+V7 ได้คะแนนเท่ากับ A ตัวเดียว) ส่วน shape-cap กับ cover-cap ปิด loop ที่ตัวอื่นพลาด แต่ยังไม่ได้วัดผลต่อคะแนนบนชุดเต็ม
+ใช้ flag ตามคำสั่งข้างบน ประกอบด้วย 6 ส่วน
+- **ตัวเขียนค่า (General Style):** วัดบน A100 แล้ว
+- **A: loop close:** วัดบน A100 แล้ว
+- **B: answer close:** วัดบน A100 แล้ว
+- **V7: early cycle:** วัดบน A100 แล้ว
+- **shape-cap:** วัดบน A100 แล้ว 3 ข้อ
+- **cover-cap:** วัดจาก replay ของ trace ที่เก็บจาก A100
 
 ### ผลการทดสอบ
 
-คะแนนทุกตัวคือจำนวนคำตอบที่ถูกจากทั้งหมด ข้อละ 2 คำตอบ ให้คะแนนด้วยกฎ มี API reader ตรวจคู่กัน และข้อไหนที่สองฝั่งให้ผลไม่ตรงกันก็อ่านเองทุกข้อ
-**vLLM ไม่ได้ให้คำตอบซ้ำเดิมข้ามรอบ (#21)** เลยเทียบ arm ต่างรอบกันแบบจับคู่ไม่ได้ ต่างกัน 1-2 คำตอบถือเป็น noise
+ใช้ 24 ข้อที่ model เปล่าวนติด ข้อละ 2 คำตอบ รวม 48 คำตอบ แบ่งเป็น
+- **เลขคณิต DeepMind 17 ข้อ (34 คำตอบ):** ลำดับ ราก หารเลขใหญ่ นิพจน์ผสม แปลงหน่วย
+- **MATH-500 ระดับ 5 อีก 7 ข้อ (14 คำตอบ)**
 
-**ชุดข้อที่วน (24 ข้อ 48 คำตอบ ข้อที่ arm ก่อน ๆ วนติด):** ทุก arm รันในรอบเดียวกัน ข้อเดียวกัน seed เดียวกัน
-- loop-gen (ตัวเขียนค่าอย่างเดียว ไม่มีตัวปิด loop) ได้ 25/48 ถูกตัดไม่มีคำตอบ 23
-- เพิ่ม A ได้ **37/48** ถูกตัดเหลือ 3
-- เพิ่ม A+B ได้ 37/48 ถูกตัดเหลือ 1
-- เพิ่ม A+B+V7 ได้ 37/48 ถูกตัดเหลือ 1
+ตรวจคำตอบด้วยกฎ มี API reader ตรวจคู่กัน และข้อไหนที่สองฝั่งให้ผลไม่ตรงกันก็อ่านเองทุกข้อ
 
-**คะแนนเพิ่ม 12 คำตอบ (25 เป็น 37 จาก 48)** และคำตอบที่ไม่มีคำตอบลดจาก 23 เหลือ 1 ส่วน control ที่ไม่มี MIP บน 24 ข้อเดียวกัน
-ได้ 24/48 กับ 19/48 แต่มาจากรอบอื่น และข้อพวกนี้ถูกเลือกมาเพราะวนในรอบนั้นพอดี เลยใช้ดูประกอบได้ แต่นับเป็นคะแนนที่เพิ่มไม่ได้
+| แขน | เลขคณิต | MATH L5 | รวม | ไม่มีคำตอบ (ถูกตัด) |
+|---|---|---|---|---|
+| model เปล่า ไม่มี MIP | 17/34 | 7/14 | 24/48 | 21 |
+| ใส่ค่าอย่างเดียว | 17/34 | 8/14 | 25/48 | 23 |
+| **best config** (ใส่ค่า + A + B + V7) | **27/34** | **10/14** | **37/48** | **1** |
 
-รอบ 8 (A+B+V7+shape-cap บน 3 ข้อที่ยากที่สุด ข้อละ 4 คำตอบ) ได้ 8/12
-- `div_big-2208` ไม่เคยมีใครตอบถูกเลยใน 28 คำตอบของ 13 arm ก่อนหน้า รอบนี้ถูกเป็นครั้งแรก 1/4
-- `simplify_surd-1931` ได้ 4/4 (control ได้ 0/2)
-- ไม่มีคำตอบไหนวนจนเต็ม context ทั้งที่รอบก่อนข้อเหล่านี้วิ่งไปถึง 210k-262k
+- **ตอบถูกเพิ่ม 13 คำตอบจาก model เปล่า (24 เป็น 37 จาก 48)** และเพิ่ม 12 คำตอบจากแบบใส่ค่าอย่างเดียว
+- **คำตอบที่จบแบบไม่มีคำตอบ** ลดจาก 21 เหลือ 1
+- **3 ข้อที่ยากที่สุดเมื่อเพิ่ม shape-cap (12 คำตอบ):** ถูก 8 และไม่มีคำตอบไหนวิ่งจนเต็ม context
+- **เงื่อนไขการเทียบ:** best config กับแขนใส่ค่าอย่างเดียวรันในรอบเดียวกัน ข้อเดียวกัน seed เดียวกัน ส่วน model เปล่ามาจากอีกรอบ และ vLLM ให้คำตอบซ้ำเดิมข้ามรอบไม่ได้ (#21) ต่างกัน 1-2 คำตอบจึงถือเป็น noise
 
-**ชุดกว้าง 120 ข้อ (240 คำตอบ) ใช้แค่ตัวเขียนค่า ยังไม่มีตัวปิด loop:**
-- control ได้ 192
-- General ได้ 181
-- Qwen profile ได้ 189
+### token และเวลา
 
-**ตัวเขียนค่าอย่างเดียวเสียไป 11 คำตอบ** ทั้งหมดมาจากคำตอบที่ถูกตัด (31 เพิ่มเป็น 43) เพราะพอมีค่าถูกวางอยู่ตรงหน้าตลอด model กลับวนบ่อยขึ้น
-แล้วก็ไม่มีอะไรปิด loop ให้ ตรงนี้เป็นเหตุผลที่สร้างตัวปิด loop ขึ้นมา ชุดกว้างนี้ยังไม่ได้รันพร้อมตัวปิด loop รอบนั้นคือรอบที่รอ compute units อยู่
-ส่วนอีกชุดคือ 52 ข้อที่ model เคยตอบผิด control ได้ 71 General ได้ 73 และ Qwen profile ได้ 78
+| แขน | token รวม | มัธยฐานต่อคำตอบ | มัธยฐานของคำตอบที่ถูก |
+|---|---|---|---|
+| model เปล่า | 631k | 10,096 | 7,144 |
+| ใส่ค่าอย่างเดียว | 754k | 11,360 | 10,221 |
+| **best config** | 936k | 10,961 | 8,829 |
 
-### token
+**คำตอบที่ถูกของ best config แยกตามประเภท (มัธยฐาน)**
+- **MATH:** 9,090 token เทียบกับ model เปล่า 15,260 สั้นลง 40%
+- **เลขคณิต:** 8,371 token เทียบกับ 6,472 ยาวขึ้น เพราะมีคำตอบเลขคณิตเพิ่มมาอีก 10 คำตอบที่ตอนนี้คิดจนจบได้ ส่วน model เปล่าวนจนถูกตัด
 
-- **คำตอบทั่วไปใช้ token เท่าเดิม:** ค่ามัธยฐานอยู่ที่ 10-11k ในชุดข้อที่วนทุก arm และ 7.3-7.4k ในชุดกว้าง จะมี MIP หรือไม่มีก็เท่ากัน
-- **ยอดรวมขึ้นอยู่กับไม่กี่คำตอบที่วิ่งจนเต็ม context:** คำตอบแบบนี้คำตอบเดียวกินไป 210-262k คิดเป็นประมาณหนึ่งในสี่ของทั้ง arm
-  ยอดรวมเลยขยับตามจำนวนคำตอบแบบนี้ ไม่ได้ขยับตามกลไก อีกเรื่องคือตัวปิด loop เปลี่ยนคำตอบที่เคยถูกตัดให้กลายเป็นคำตอบที่จบได้ ซึ่งก็ต้องใช้ token เขียนคำตอบด้วย
-- **ที่ประหยัดได้จริงคือไม่ต้องวิ่งจนเต็ม context:** รอบ 8 ปิด loop หารยาวได้ที่ 55k แทนที่จะเกิน 200k
-  และใน sim cover-cap หยุด loop ที่เคยเกิน 150k ได้ทุกตัวที่ 40k-114k
-- **V7 ปิด loop ได้เร็วขึ้น:** มัธยฐานของคำตอบที่ถูกลดจาก 10,723 เหลือ 8,829 แต่ไม่ได้จับคู่ ถือเป็นแนวโน้ม ยังไม่ใช่ผลวัด
+- **token รวมเพิ่มขึ้นเพราะคำตอบจบมากขึ้น:** best config ทำให้คำตอบที่เคยถูกตัด 20 คำตอบคิดจนจบได้ และคำตอบที่จบต้องใช้ token เขียนคำตอบด้วย อีกเรื่องคือคำตอบที่วิ่งจนเต็ม context คำตอบเดียวกินไป 210-262k ประมาณหนึ่งในสี่ของทั้งแขน ยอดรวมเลยขยับตามคำตอบแบบนี้ไม่กี่คำตอบ
+- **ที่ประหยัดได้จริงคือไม่ต้องวิ่งจนเต็ม context:** shape-cap ปิดการหารยาวได้ที่ 55k แทนที่จะเกิน 200k ส่วนใน replay cover-cap หยุด loop ที่เคยเกิน 150k ได้ทุกตัว ที่ 40k-114k
+- **เวลา:** ในเครื่องมือทดสอบนี้ best config ได้ 25.7 token/s ต่อคำตอบ ส่วน model เปล่าได้ 37.9 (vLLM รันหลายคำตอบพร้อมกันใน batch)
+  - สาเหตุมาจากเครื่องมือทดสอบ: `tir4b` ต้องจบ request ทุกครั้งที่เจอ `=` แล้วเริ่ม request ใหม่หลังใส่ค่า แขนหนึ่งมี request เพิ่มประมาณ 20,000 ครั้ง
+  - ใน engine ของ Strata การใส่ค่าเกิดอยู่ใน decode loop เลย (`include/strata/core/igc_inline.hpp`) แต่ยังไม่ได้วัดเวลาตรงนั้น
 
-### กลไกแต่ละตัวทำงานยังไง
+### จุดที่ตรวจจับ
 
-- **ตัวเขียนค่า (General Style):**
-  - ทุก `=` ที่ model เขียน นิพจน์ข้างหน้าจะถูก parse แล้วคำนวณตรงเป๊ะด้วย `mathbackend` (เศษส่วน ทศนิยม ราก ยกกำลัง mod) จากนั้นใส่ค่าเป็นข้อความธรรมดา ในรูปที่ถูกทุกการอ่าน
-  - `--no-digit-join` กันไม่ให้ตัวเลขที่ model เขียนต่อ ไปติดกับค่าที่ใส่ให้ เช่น `-5` ตามด้วย `75` กลายเป็น `-575` ก่อนแก้เคยเกิด 80 จาก 19,990 ครั้ง
-  - `--guard-progress` ปล่อยงานที่แต่ละรอบเป็นของใหม่เกือบหมดให้วิ่งต่อ เช่น ลองหารด้วยจำนวนเฉพาะไปทีละตัว
-  - ครอบคลุม **19,546 จาก 19,636** จุด `=` ที่อ่านได้ (99.5%) ไม่นับการคิดในหัวที่ไม่ได้เขียนนิพจน์ออกมา
-- **ตัวตรวจการวน (มีในทุก arm):** จับ cycle ที่ซ้ำตรงตัว 20 รอบ (8 รอบเมื่อยาวเกิน 512 token) การนับที่ซ้ำเมื่อปิดตัวเลขทิ้ง หรือบรรทัดที่วนกลับมา
-  ถ้าไม่มีตัวปิด loop คำตอบจะจบแบบ `stuck` ไม่มีคำตอบ 23 คำตอบที่ถูกตัดของ loop-gen หายไปตรงนี้
-- **A: loop close:** แทนที่จะจบคำตอบ ให้ใส่ `</think>` ปิดการคิด แล้วให้ model ตอบจากสิ่งที่คิดมาแล้ว
-  ปิดไป 15 ครั้ง ตอบถูก 12 ครั้ง ซึ่งก็คือ 12 คำตอบที่เพิ่มขึ้นมา
-- **B: answer close:** อีก 3 คำตอบพาความสงสัยเดิมเข้าไปในส่วนคำตอบแล้วไปวนต่อที่นั่น เช่น ทศนิยมไม่รู้จบ หรือนับ `19+1` ซ้ำไปเรื่อย ๆ
-  B ตัด cycle ให้เหลือรอบเดียว ใส่ `The final answer is $\boxed{` แล้วให้ model เขียนค่าเดียว ไม่เกิน 64 token
-- **V7: early cycle:** ทุกครั้งที่จบบรรทัด จะดูว่ามี cycle ที่ซ้ำตรงตัว 6 รอบ (3 รอบเมื่อยาวเกิน 512) และกินพื้นที่ตั้งแต่ 500 token ขึ้นไปหรือเปล่า ถ้ามีก็ปิดตรงนั้นเลย
-  ทำงานใน 17 จาก 48 คำตอบ คะแนนยังอยู่ที่ 37/48 เหมือนเดิม เป็น loop ชุดเดิม แค่ปิดได้เร็วขึ้น
-- **shape-cap:** มี loop สองแบบที่ผ่านตัวตรวจข้างบนทั้งหมด แบบแรกคือการนับที่ทุกรอบเป็นของใหม่ แบบที่สองคือการหารทีละหลักที่ตัวเลขยาวไม่เท่ากัน
-  shape-cap มองตัวเลขทั้งก้อนเป็น token เดียว แล้วปิดเมื่อเจอ cycle ที่ซ้ำตรงตัวครบ 1,024 รอบ
-  คำตอบที่ถูกไปได้สูงสุด 805 รอบ ส่วน loop อยู่ที่ 1,874-4,267 รอบ ในรอบ 8 จับได้ 1 จาก 2
-- **cover-cap:** ตัวที่ shape-cap พลาดคือการหารที่ทุกครั้งที่ผลหารได้หลัก 0 รอบนั้นจะสั้นลง cycle เลยขาดอยู่เรื่อย ๆ นับได้สูงสุดแค่ 46
-  - cover-cap ดู 32,768 token ล่าสุดแทน แล้วถามว่ากี่เปอร์เซ็นต์ที่ซ้ำท่อน 12 token ซึ่งเคยเห็นใน 2,048 token ก่อนหน้า ถ้าได้ 97% ขึ้นไปถือว่าเป็น loop
-    รอบแปลก ๆ หนึ่งรอบขยับสัดส่วนแค่ 1/32,768 เลยไม่ทำให้เริ่มนับใหม่
-  - คำตอบที่ถูกได้สูงสุด 0.92 ส่วน loop ที่เกิน 150k ทุกตัวได้ 0.999-1.0
-  - replay gate ไม่แตะคำตอบที่ถูกเลย 0 จาก 1,078 หยุด loop ยาวได้ 12 จาก 13 ส่วนตัวที่ 13 ถ้าป้อนเข้าตัวจับตรง ๆ จะจับได้ที่ 58k ยังไม่ได้รันบน A100
+MIP อ่านข้อความที่ model เขียนเองอยู่ 5 จุด prompt, การสุ่ม และน้ำหนักของ model ยังเหมือนเดิมทั้งหมด
 
-### ตั้งแต่ตรวจจับจนใส่ค่า: MIP ทำงานกี่จุด
-
-ใน best config MIP ดูข้อความที่ model เขียนเองอยู่ 5 จุด นอกนั้นไม่ได้แตะอะไรเลย prompt, การสุ่ม (T 0.6, top-p 0.95, top-k 20) และน้ำหนักของ model ยังเหมือนเดิมทั้งหมด
-
-1. **token `=`:** ทุก request หยุดตรง `=` ทั้งตอนคิดและตอนตอบ MIP จึงได้อ่านข้อความก่อน `=` ก่อนที่ model จะเขียน token ถัดไป จุดนี้ใส่ค่าที่ถูกต่อท้าย `=`
-2. **token ถัดจากค่าที่ใส่ ถ้าค่านั้นลงท้ายด้วยตัวเลข** (รวม `.` ที่ตามมาทันที): กดตัวเลขไว้ 1 token (`--no-digit-join`) ตัวเลขที่ model เขียนต่อจะได้ไม่ไปติดกับค่าที่ใส่
+1. **token `=`:** ทุก request หยุดที่ `=` ทั้งตอนคิดและตอนตอบ MIP จึงได้อ่านก่อนที่ model จะเขียน token ถัดไป จุดนี้ใส่ค่าที่ตรงเป๊ะ
+2. **token ถัดจากค่าที่ใส่ ถ้าค่านั้นลงท้ายด้วยตัวเลข** (รวม `.` ที่ตามมาทันที): กดตัวเลขไว้ 1 token ตัวเลขที่ model เขียนต่อจะได้ไม่ไปติดกับค่าที่ใส่
 3. **ทุกครั้งที่จบบรรทัดตอนคิด:** V7 ปิดการคิดเมื่อเจอ cycle สั้นที่ซ้ำตรงตัว
 4. **การคิดทั้งหมดตั้งแต่ครั้งล่าสุดที่ปิด หรือส่วนคำตอบทั้งหมด:** ตรวจทุก 1,024 token และทุกครั้งที่ request จบ ด้วยตัวตรวจการวน shape-cap และ cover-cap ถ้าเจอก็ปิดการคิด (A) หรือปิดคำตอบ (B)
-5. **ส่วนคำตอบหลังวางประโยคบังคับตอบของ B:** ไม่ทำอะไรเพิ่ม อ่านแค่ค่าเดียวจนจบบรรทัดหรือครบ 64 token แล้วจบคำตอบ
+5. **ส่วนคำตอบหลังประโยคบังคับตอบของ B:** ไม่ทำอะไรเพิ่ม อ่านแค่ค่าเดียวแล้วจบคำตอบ
 
-**ใส่ค่ายังไง:** ข้อความก่อน `=` จะถูกตัดเหลือนิพจน์เลขที่ยาวที่สุดที่จบตรงนั้น อ่านได้ทุกรูปแบบที่ model เขียน (`mathexpr`: ASCII, LaTeX ซ้อนกี่ชั้นก็ได้, Unicode)
-จากนั้นคำนวณให้ตรงเป๊ะด้วย MathBackend เขียนในรูปแบบ General Style แล้วเช็กกับเงื่อนไขที่ไม่ให้ใส่ (ดูหัวข้อถัดไป) ถ้าผ่าน ` value` ก็จะถูกต่อท้ายข้อความของ model
-เป็นข้อความธรรมดา แล้ว request ถัดไปก็เดินต่อจากตรงนั้น สำหรับ model ค่าที่ใส่ให้ก็คือคำถัดไปบนหน้ากระดาษเท่านั้น ถ้าขั้นไหนบอกว่าไม่ใส่ ก็ไม่ใส่อะไรเลย
-model จะเขียนค่าเองเหมือนตอนไม่มี MIP
+### ใส่ค่ายังไง
 
-**General Style คือค่าที่ถูกไม่ว่าจะอ่านแบบไหน:** `=` ตัวเดียวกันมีความหมายได้หลายแบบ เลยเลือกรูปที่ถูกทุกแบบ
+1. ตัดข้อความก่อน `=` ให้เหลือนิพจน์เลขที่ยาวที่สุดที่จบตรงนั้น อ่านได้ทุกรูปแบบที่ model เขียน (ASCII, LaTeX ซ้อนกี่ชั้นก็ได้, Unicode และการเรียกฟังก์ชันอย่าง `\gcd(12, 18)`, `\binom{7}{3}`)
+2. MathBackend คำนวณให้ตรงเป๊ะ
+3. เขียนค่าในรูปแบบ General Style แล้วเช็กกับเงื่อนไขที่ไม่ให้ใส่
+4. ต่อ ` value` ท้ายข้อความของ model เป็นข้อความธรรมดา แล้ว request ถัดไปก็เดินต่อจากตรงนั้น สำหรับ model ค่าที่ใส่ให้ก็คือคำถัดไปบนหน้ากระดาษ ถ้าขั้นไหนบอกว่าไม่ใส่ ก็ไม่ใส่อะไรเลย model จะเขียนค่าเอง
+
+**General Style คือค่าที่ถูกไม่ว่าจะอ่าน `=` แบบไหน**
 - `12 \times 7 =` ใส่ `84`
-- `9/2 =` ใส่ `4.5` เพราะเป็นทศนิยมที่จบได้ เขียนแบบเดียวกับที่ model เขียนเอง
+- `9/2 =` ใส่ `4.5` เป็นทศนิยมที่จบได้ แบบเดียวกับที่ model เขียน
 - `6/26 =` ใส่ `3/13` เพราะการย่อเศษส่วนก็คือขั้นนั้นพอดี
 - `34 \div 4 =` ระหว่างหารยาว ใส่ `8 \text{ rem } 2` ถูกทั้งในแง่ผลหารและในแง่การหาร
-- `1302 / 9 =` ตอนที่ model กำลังทำทศนิยม ใส่ `144.6666...` ตัดทศนิยมแล้วมีเครื่องหมายบอกไว้ จะได้ไม่เป็นสมการเท็จ
+- `1302 / 9 =` ตอนที่ model กำลังทำทศนิยม ใส่ `144.6666...` ตัดทศนิยมแล้วมีเครื่องหมายบอกไว้ ไม่เป็นสมการเท็จ
 - ระหว่างทำ mod ใส่เศษเหลือ เฉพาะเมื่อ `=` ตัวล่าสุดที่ model เขียนเองบนบรรทัดนั้นหมายถึงเศษเหลือ
 
-**loop ที่ป้องกันได้**
-- **cycle ที่ซ้ำตรงตัว ทั้งสั้นและยาว:** ตัวตรวจการวน (20 รอบ หรือ 8 รอบเมื่อยาวเกิน 512) และ V7 ที่จับได้เร็วกว่า (6 รอบ หรือ 3 รอบ ยาว 500 token ขึ้นไป)
-- **การนับเลขเมื่อปิดตัวเลขทิ้ง** เช่น `check 101. No. check 102. No.`: ตัวตรวจการนับ ส่วน `--guard-progress` ปล่อยให้วิ่งต่อถ้าแต่ละรอบเป็นของใหม่เกือบหมด
-- **บรรทัดที่วนกลับมาเรื่อย ๆ:** ตัวตรวจ line-back
-- **cycle ที่ตัวเลขยาวไม่เท่ากัน:** shape-cap
-- **cycle ที่มีรอบแปลก ๆ แทรก:** cover-cap
-- **ความสงสัยเดิมที่พาไปวนต่อในส่วนคำตอบ:** B
-- **ค่าเดิมถูกใส่ซ้ำไปซ้ำมา** เช่น `= 15/13 = 15/13 = ...`: ครั้งที่ 3 ติดกันของนิพจน์เดียวกันจะปล่อยให้ model เขียนเอง
+### loop ที่ป้องกันได้
 
-### MathBackend ทำงานยังไง
+- **cycle ที่ซ้ำตรงตัว:** ตัวตรวจการวน (20 รอบ หรือ 8 รอบเมื่อยาวเกิน 512 token) และ V7 ที่จับได้เร็วกว่า (6 รอบ หรือ 3 รอบ ยาว 500 token ขึ้นไป)
+- **การนับเลข** เช่น `check 101. No. check 102. No.`: ตัวตรวจการนับที่ปิดตัวเลขทิ้ง ส่วน `--guard-progress` ปล่อยให้วิ่งต่อถ้าแต่ละรอบเป็นของใหม่เกือบหมด เช่น ลองหารด้วยจำนวนเฉพาะไปทีละตัว
+- **บรรทัดที่วนกลับมาเรื่อย ๆ:** ตัวตรวจ line-back
+- **cycle ที่ตัวเลขยาวไม่เท่ากัน:** shape-cap มองตัวเลขทั้งก้อนเป็น token เดียว แล้วปิดเมื่อเจอ cycle ที่ซ้ำตรงตัวครบ 1,024 รอบ
+- **cycle ที่มีรอบแปลก ๆ แทรก** เช่น หารยาวที่ทุกหลัก 0 ทำให้รอบนั้นสั้นลง: cover-cap ปิดเมื่อ 97% ของ 32,768 token ล่าสุด ซ้ำท่อน 12 token ที่เคยเห็นใน 2,048 token ก่อนหน้า
+- **ความสงสัยเดิมที่พาไปวนในส่วนคำตอบ** เช่น ทศนิยมไม่รู้จบ: B ตัด cycle เหลือรอบเดียว ใส่ `The final answer is $\boxed{` แล้วให้ model เขียนค่าเดียว ไม่เกิน 64 token
+- **ค่าเดิมถูกใส่ซ้ำไปซ้ำมา:** ครั้งที่ 3 ติดกันของนิพจน์เดียวกันจะปล่อยให้ model เขียนเอง
+
+loop ในส่วนคิดจะถูกปิดด้วย A คือใส่ `</think>` แล้วให้ model ตอบจากสิ่งที่คิดมาแล้ว ใน best config A ปิดไป 21 ครั้ง และตอบถูก 13 ครั้ง
+
+### MathBackend
 
 `tools/igc/mathbackend/` เป็นที่รวม **387 operation แบ่งเป็น 6 module**:
-- numbers 100 (gcd, lcm, phi, inverse mod, หลักตัวเลข, ตัวหาร, จำนวนเฉพาะ ...)
+- numbers 100 (gcd, lcm, phi, inverse mod, หลักตัวเลข, ตัวหาร, จำนวนเฉพาะ)
 - geometry 86
 - algebra 70
-- counting 70 (C, P, Catalan, derangement ...)
+- counting 70 (C, P, Catalan, derangement)
 - search 43
 - symbolic 18
 
-ตัวอ่านนิพจน์รองรับ `+ - * / ^` เศษส่วน ราก ค่าสัมบูรณ์ floor/ceiling factorial และเปอร์เซ็นต์ ส่วน `unified_detect` เพิ่มการเรียกฟังก์ชันที่ model เขียน
-เช่น `\gcd(12, 18)`, `\binom{7}{3}`
-
-- **คำนวณแบบตรงเป๊ะเท่านั้น:** ใช้แค่ standard library ของ Python ได้แก่ `Fraction` สำหรับเศษส่วน `Surd` สำหรับ `p + q*sqrt(d)` และ `Decimal` เมื่อต้องการทศนิยม
-  ไม่มี floating point อยู่เบื้องหลังค่าที่ใส่ ถ้าราก ยกกำลัง ได้ค่าไม่ลงตัว จะไม่ใส่ ไม่ใช่ปัดเศษ
+หลักการทำงาน
+- **คำนวณแบบตรงเป๊ะเท่านั้น:** ใช้แค่ standard library ของ Python ได้แก่ `Fraction`, `Surd` (`p + q*sqrt(d)`) และ `Decimal` ไม่มี floating point อยู่เบื้องหลังค่าที่ใส่ ถ้าราก ยกกำลัง ได้ค่าไม่ลงตัวก็ไม่ใส่ ไม่ปัดเศษ
 - **มีขอบเขตชัด:** ทุก operation ประกาศขอบเขตของตัวเอง ถ้าเกินขอบเขตหรืออยู่นอกโดเมน จะโยน `NotCovered` หรือ `BadInput` แล้วห้ามเดา ผลคือไม่ใส่ค่า
 - **ตรวจกับ library อิสระ:** ทุก module มี `sim_*.py` ที่สุ่มค่าเข้าไป แล้วเทียบทุก operation กับ SymPy, mpmath หรือ NetworkX ซึ่งตัว backend เองไม่ได้ import
 
-### ไม่กระทบการทำงานอื่นได้ยังไง
+### ไม่กระทบการทำงานอื่น
 
-MIP แทรกเฉพาะตอนที่มั่นใจว่าถูก และ model กำลังจะต้องใช้ค่านั้นจริง ๆ นอกนั้นปล่อยผ่านหมด
-
+MIP แทรกเฉพาะตอนที่มั่นใจว่าค่าถูก และ model กำลังจะต้องใช้ค่านั้นจริง ๆ
 - **ใส่ค่าเฉพาะหลัง `=` ที่ model เขียนเอง และเฉพาะเลขคณิตที่คำนวณได้ตรงเป๊ะ:** ถ้ามีตัวแปร มีคำพูด มีจำนวนคละ มีรากที่ไม่ลงตัว หรือเลขใหญ่เกินกว่าจะเป็นขั้นหนึ่ง ก็ไม่ใส่
-  ในชุดกว้างใส่ไป 19,546 จาก 19,636 จุด `=` ที่อ่านได้ ข้อความส่วนอื่นไม่ถูกแตะเลย
-- **ถึงเลขจะถูก ก็ไม่ใส่ ถ้าค่านั้นไม่ใช่สิ่งที่ model หมายถึง:** ทุกกฎได้มาจากการอ่าน trace ที่เก็บไว้ ได้แก่
+  ใน 120 ข้อ ใส่ค่าไป 19,546 จาก 19,636 จุด `=` ที่อ่านได้ ข้อความส่วนอื่นไม่ถูกแตะเลย
+- **ถึงเลขจะถูก ก็ไม่ใส่ ถ้าค่านั้นไม่ใช่สิ่งที่ model หมายถึง:**
   - ตัวเลขเดี่ยว ๆ
   - ค่าที่ซ้ำกับนิพจน์ ไม่มีอะไรใหม่
   - ตัวเลขที่เป็นส่วนหนึ่งของนิพจน์ที่ยังเขียนไม่จบ
@@ -476,102 +319,46 @@ MIP แทรกเฉพาะตอนที่มั่นใจว่าถ�
   - operator ที่โจทย์นิยามไว้เป็นอย่างอื่น
   - congruence ที่ไม่ได้บอก modulus
   - การใส่ค่าครั้งที่ 3 ติดกันของนิพจน์เดียวกัน
-- **ตัวปิด loop ทำงานเฉพาะตอนที่วนจริง และเกณฑ์ตั้งไว้สูงกว่าคำตอบที่ถูกทุกตัว:** shape คำตอบที่ถูกได้สูงสุด 805 รอบ เกณฑ์อยู่ที่ 1,024 cover คำตอบที่ถูกได้สูงสุด 0.92 เกณฑ์อยู่ที่ 0.97
-  ทุกตัวต้องผ่าน replay gate ก่อนขึ้น A100 คือต้องไม่แตะคำตอบที่ถูกเลย หรือถ้าแตะ ต้องอ่านแล้วเข้าใจทุกครั้ง
+- **ตัวปิด loop ทำงานเฉพาะตอนที่วนจริง และเกณฑ์ตั้งไว้สูงกว่าคำตอบที่ถูกทุกตัว:**
+  - shape-cap: คำตอบที่ถูกได้สูงสุด 805 รอบ เกณฑ์อยู่ที่ 1,024
+  - cover-cap: คำตอบที่ถูกได้สูงสุด 0.92 เกณฑ์อยู่ที่ 0.97
+  - ทุกตัวต้องผ่าน replay ของ trace จาก A100 ทั้งหมดก่อนขึ้น A100 คือต้องไม่แตะคำตอบที่ถูก หรือถ้าแตะต้องอ่านแล้วเข้าใจทุกครั้ง และต้องไม่มี request ที่ vLLM จะไม่รับ
 - **model เป็นคนตัดสินใจ:** ค่าที่ใส่เป็นแค่ตัวเลขบนหน้ากระดาษ ไม่ใช่คำสั่ง ส่วนการปิด loop ก็แค่ยื่น `</think>` หรือประโยคบังคับตอบให้ แล้ว model เขียนคำตอบเอง
 
 ### ไม่ต้อง fine-tune
 
-ไม่มีอะไรไปแก้น้ำหนักของ model เลย MIP ทำงานกับข้อความระหว่าง inference อ่านสิ่งที่ model เขียน แล้วต่อ token ลงไป
-model ที่ใช้คือ checkpoint ปกติ (Qwen3.5-4B, bf16) ใช้ค่าการสุ่มตาม model card ส่วนชุดตัวเลข token `=` และ token จบบรรทัด ได้มาจาก tokenizer
-กลไกเดียวกันจึงใช้กับ tokenizer ของ model อื่นได้ แค่ต้องเช็กเกณฑ์ใหม่
+MIP ไม่ได้แก้น้ำหนักของ model เลย ทำงานกับข้อความตอน inference อ่านสิ่งที่ model เขียน แล้วต่อ token ลงไป model ที่ใช้คือ checkpoint ปกติ
+ใช้ค่าการสุ่มตาม model card ส่วนชุดตัวเลข token `=` และ token จบบรรทัด ได้มาจาก tokenizer กลไกเดียวกันจึงใช้กับ tokenizer ของ model อื่นได้ แค่ต้องเช็กเกณฑ์ใหม่ทีละ model
 
-### ความผิดพลาดในการทดสอบ best config
+### ความผิดพลาด
 
-นับจาก record บน A100 ของ arm ที่เป็น best config ทั้ง 4 ชุด (156 คำตอบ) ด้วย `scripts/fail_audit.py` และ `scripts/put_reject.py`
+นับจาก record บน A100 ของ best config ได้แก่ `loop-lcacv7` 48 คำตอบ และ `loop-shape` ที่เพิ่ม shape-cap 12 คำตอบ ด้วย `scripts/fail_audit.py` และ `scripts/put_reject.py`
 
-- **ใส่ค่าที่คำนวณผิด: 0 จาก 51,015 ครั้งที่ตรวจได้**
+- **ใส่ค่าที่คำนวณผิด: 0 จาก 39,046 ครั้งที่ตรวจได้**
   - คำนวณซ้ำทุกค่าด้วย `Fraction` ของ Python ไม่ได้ใช้ตัวอ่านของ MIP เอง
-  - อีก 2,850 ครั้ง (ราก mod ฟังก์ชัน) ตรวจด้วยวิธีนี้ไม่ได้
-- **model ปฏิเสธค่าที่ใส่ให้: 4.1%** ใน loop-lcacv7 (832 จาก 20,490) และ 0.9% ใน loop-shape
-  - นับจากคำอย่าง `wait`, `no,`, `wrong`, `actually` ที่โผล่ใน 40 token ถัดไป
-  - ตัวเทียบคือหลัง `=` ที่ model คิดเองใน control ซึ่งมี 15.2%
-  - ตัวอย่างที่อ่านดูเป็น model สงสัยค่าที่ถูกอยู่แล้ว เช่น `10856 / 5192 = 23/11? No, wait.`
-- **คำตอบที่ถูกกลายเป็นผิด: 2 คำตอบใน loop-lcacv7** (loop-lc 1, loop-lcac 3) เทียบทีละคำตอบกับ arm ที่ไม่มีตัวปิด loop ในรอบเดียวกัน ข้อเดียวกัน seed เดียวกัน
+  - อีก 1,208 ครั้ง (ราก mod ฟังก์ชัน) ตรวจด้วยวิธีนี้ไม่ได้
+- **model ปฏิเสธค่าที่ใส่ให้: 4.1% (832 จาก 20,490)**
+  - นับจากคำอย่าง `wait`, `no,`, `wrong`, `actually` ใน 40 token ถัดไป
+  - ตัวเทียบคือหลัง `=` ที่ model คิดเองโดยไม่มี MIP ซึ่งมี 15.2%
+  - กรณีที่อ่านดูเป็น model สงสัยค่าที่ถูกอยู่แล้ว
+- **คำตอบที่ถูกกลายเป็นผิด: 2 จาก 48** (ฝั่งกลับกัน ผิดกลายเป็นถูก 14)
+  - เทียบทีละคำตอบกับแขนใส่ค่าอย่างเดียวในรอบเดียวกัน ข้อเดียวกัน seed เดียวกัน
   - ทั้ง 2 คำตอบเป็นโจทย์ MATH ระดับ 5 ที่ **V7 ปิดการคิดเร็วเกินไป** ที่ 8,433 และ 6,582 token
-  - ถ้าไม่มีตัวปิด model คิดต่อจนตอบถูกที่ 42,974 และ 31,518 token
-  - ฝั่งกลับกัน มี 14 คำตอบที่จากผิดกลายเป็นถูก
-- **ตัวปิด loop ทำงานแล้วคำตอบยังผิด (loop-lcacv7):**
-  - loop close 8 จาก 21
-  - early cycle 6 จาก 17
-  - answer close 6 จาก 6 เพราะ B ทำงานเฉพาะตอนที่คำตอบวนอยู่แล้ว คำตอบส่วนใหญ่ที่ B แตะจึงเป็นคำตอบที่เสียไปแล้ว B แค่บังคับให้ออกมาเป็นค่าหนึ่งค่า
+  - ถ้าไม่มีตัวปิด loop model คิดต่อจนตอบถูกที่ 42,974 และ 31,518 token
+- **ปิด loop แล้วคำตอบยังผิด:**
+  - A: 8 จาก 21
+  - V7: 6 จาก 17
+  - B: 6 จาก 6 เพราะ B ทำงานเฉพาะกับคำตอบที่วนอยู่แล้ว คือเปลี่ยนคำตอบที่เสียไปแล้วให้ออกมาเป็นค่าหนึ่งค่า
+- **cover-cap แตะคำตอบที่ถูก: 0 จาก 1,078 ใน replay** หยุด loop ที่เกิน 150k ได้ 12 จาก 13 ส่วนตัวที่ 13 จับได้ที่ 58k เมื่อป้อนเข้าตัวจับตรง ๆ
 
-การเทียบข้ามรอบจับคู่ไม่ได้ (#21) ตัวเลข "ถูกกลายเป็นผิด" เลยอาจมีส่วนที่มาจากการสุ่ม แต่ 2 กรณีของ V7 ผมอ่านแล้ว เป็นเพราะ V7 จริง
-ส่วนการขยายช่วงของ V7 จะแก้ได้โดยไม่เสียสิ่งที่ V7 จับได้หรือเปล่า ยังต้องทดสอบ
+### ยังไม่ได้วัด
 
-### โจทย์คณิตง่าย: token เวลา และคำตอบ
+- **best config ที่มีตัวปิด loop ครบ บนชุดกว้าง เทียบกับ model เปล่า (#19):** 120 ข้อ ข้อละ 2 คำตอบ สองแขนรันในรอบเดียวกัน สคริปต์พร้อมแล้ว รอ compute units ของ A100
+- **V7 ที่ปิดเร็วเกินไปบนโจทย์ MATH ที่ต้องคิดยาว:** ถ้าขยายช่วงจะยังจับได้เท่าเดิมโดยไม่เสีย 2 คำตอบนั้นหรือเปล่า
+- **ปิด loop แล้ว model ยังตอบผิดได้:** เช่น กลับไปหารต่อในส่วนคำตอบ
+- **เกณฑ์บน model เป้าหมาย** (Qwen3.8-Flash-Next, Qwen3.6-35B-A3B-NVFP4) และเวลาของการใส่ค่าใน engine ของ Strata
 
-มีผลวัด 3 ชุด แต่ละชุดตั้งค่าต่างกัน ไม่ใช่การทดลองต่อเนื่องชุดเดียว ต้องอ่านทีละชุดพร้อมเงื่อนไขของมัน
+### repo
 
-**1. Qwen3.8-Flash-Next (Gyro-M) บน engine ของ Strata 49 ข้อ (GSM8K 29 ข้อ MATH 20 ข้อ) รัน 2 รอบ (#3)**
-ใช้กลไก MIP คนละตัวกับ General Style คือหลังคิดไปได้ 512 token engine จะเปิด block โปรแกรมในส่วนคิด พอโปรแกรมรันแล้วพิมพ์ผลออกมาก็ปิดการคิด
-
-| แขน | token | วินาที | ติดวน | ถูก |
-|---|---|---|---|---|
-| ไม่เปิด | 247,162 | 3,817 | 2 | 73 จาก 98 |
-| เปิดโปรแกรมแล้วปิด | **125,608 (0.508 เท่า)** | 2,114 (0.55 เท่า) | 0 | **77 จาก 98** |
-
-- **token** ลดลงใน 41 จาก 49 ข้อ (p < 0.00001)
-- **คำตอบถูก** เพิ่ม 4 ข้อ แต่ p เท่ากับ 0.29 ยังนับเป็นผลเพิ่มไม่ได้ เป้าของรอบนี้คือดูว่าไม่ทำให้ตอบผิดเพิ่ม ซึ่งก็ไม่เพิ่มจริง
-- **วินาที** เป็นตัวเลขตามที่บันทึกในรอบสลับ ยังอ้างเรื่องความเร็วไม่ได้เพราะไม่ได้ทำ ABBA ส่วน decode ต่อ token เท่ากันทุกแขน คือ 14.5–15.1 ms
-- **ที่ตอบผิดเพราะกลไกเองมี 1 จาก 98** เกิดจากโปรแกรมที่ผิด แล้วการปิดการคิดก็เชื่อผลนั้นไป
-- การปิดการคิดยังปิดไว้เป็นค่าเริ่มต้น เพราะงานเขียนโค้ดโดนตัดการคิดสั้นเกินไป ส่วนผลฝั่งคณิตต้องยืนยันบนเครื่องที่จับคู่ได้ก่อน
-
-**2. Qwen3.5-4B บนเลขคณิต DeepMind 160 ข้อ ใช้ชุดข้อและวิธีของ Qwenputer (L4, greedy, ปิดการคิด, 4,096 token) (#12)**
-ชุดนี้วัดก่อนจะมี General Style และก่อนกฎใช้ context เต็ม
-- base ถูก 121 ข้อ
-- ใส่ค่าทุก `=` (ตัวเขียนค่ารุ่นแรก) ถูก 81 จาก 105 ส่วน base ได้ 85 บน 105 ข้อเดียวกัน ใช้ token 0.71 เท่า แต่ตัดทิ้งไปเพราะตอบถูกน้อยกว่า
-- **ให้ software คำนวณทั้งขั้น** (`--whole-hint`) ถูก **127** ใช้ token **0.41 เท่า**
-- แก้ค่าที่ model คิดเอง (`--check-hand`) ถูก 116 ใช้ token 0.99 เท่า ตัดทิ้งไปเช่นกัน
-
-ตัวเขียนค่ารุ่นแรกเสียคำตอบเพราะใส่ค่ากลางวิธีที่ model ทำค้างอยู่ เช่น กำลังบวกทศนิยมแต่ได้ `9/2` หรือกำลังหารยาวแต่ได้ `21/19`
-รูปแบบของ General Style อย่าง `4.5` กับ `1 rem 2` ออกแบบมาจากกรณีพวกนี้โดยตรง
-
-**3. General Style บนชุดกว้าง (A100 context เต็ม ใส่ค่าอย่างเดียว ยังไม่มีตัวปิด loop รอบ 1)**
-- **เลขคณิต 160 คำตอบ:** control ถูก 125 ใช้ 1,194k token มัธยฐาน 6,582 ส่วน General ถูก 119 ใช้ 1,381k มัธยฐาน 6,222
-- **MATH-500 ระดับ 5 80 คำตอบ:** control ถูก 67 มัธยฐาน 13,766 ส่วน General ถูก 62 มัธยฐาน 11,778
-- **คำตอบทั่วไปสั้นลง:** 5% ในเลขคณิต และ 14% ใน MATH
-- **แต่ยอดรวมขึ้น:** รอบนี้ยังไม่มีอะไรปิด loop คำตอบที่ถูกตัดเลยเพิ่มขึ้น แล้วกลายเป็นตัวที่กำหนดยอดรวม
-- **เวลาในชุดนี้เป็นเวลาของเครื่องมือทดสอบ ไม่ใช่ของ model:** มัธยฐานเลขคณิต 157 เทียบ 396 วินาที เพราะ `tir4b` บน vLLM ต้องจบ request ทุกครั้งที่เจอ `=` แล้วเริ่ม request ใหม่หลังใส่ค่า แขนนี้มี request เพิ่มประมาณ 19,600 ครั้ง ส่วนใน engine ของ Strata การใส่ค่าเกิดอยู่ใน decode loop เลย และยังไม่ได้วัดเวลาตรงนั้น
-
-**สรุปจากทั้ง 3 ชุด**
-- token ลดมากที่สุดตอนที่ software รับไปทั้งขั้น เช่น ให้รันโปรแกรม (0.51 เท่า) หรือให้คำนวณนิพจน์ทั้งก้อน (0.41 เท่า)
-- การใส่ค่าทุก `=` ทำให้คำตอบทั่วไปสั้นลงนิดหน่อย แต่ถ้าใช้ตัวเดียวจะเสียคำตอบไปกับ loop ตัวปิด loop มีไว้แก้ตรงนี้
-- รอบที่จะวัด General Style พร้อมตัวปิด loop ครบบนชุดนี้ คือรอบที่ยังรอ compute units อยู่
-
-### สิ่งที่ไม่ได้ผล
-
-- **D: ใส่ค่าที่ถูกของโจทย์ให้ก่อนปิด loop:** model ไม่ใช้ค่านั้นเลย
-- **suppress-recheck:** แย่ลงเหลือ 20/48 ถูกตัด 28
-- **check-hand:** แก้ค่าที่ model คิดเอง ผลคือแก้ผิดทั้ง 6 จาก 6 ครั้ง (#18)
-- **logit bias เกิน 1,024 token:** vLLM ไม่รับ request ตอนนี้ replay นับ request ที่ vLLM จะไม่รับไว้ให้แล้ว
-
-### งานที่ยังค้าง
-
-- **รอบชุดกว้างที่เปิดตัวปิด loop ครบ (#19):** สคริปต์พร้อมแล้ว รอ compute units
-- **ปิด loop แล้ว model ยังตอบผิดได้:** ข้อ div_big กลับไปหารต่อในส่วนคำตอบ แล้วเครื่องหมายลบหาย
-- **เกณฑ์ทุกตัววัดจาก Qwen3.5-4B:** ก่อนทำ Profile ต้องเช็กกับ model เป้าหมายก่อน
-- **แยกแกน MIP ออกจาก `tir4b.py`:** ทำเป็น package ที่มี API ระดับ token ตัวเดียว ให้ Strata-xeno ดึงไปใช้แบบตรึงเวอร์ชัน
-
-### รอยต่อกับ Strata-xeno
-
-repo นี้แยกออกมาจาก Strata-xeno เมื่อ 2026-11-08 พร้อมประวัติ git และย้าย issue มาด้วย 21 ใบ ตารางเทียบเลขเดิมกับเลขใหม่ปักหมุดไว้ที่ #22
-ส่วน engine ยังอยู่ที่ Strata-xeno ได้แก่ `include/strata/core/igc_*.hpp` และ `src/kernels/qwenputer.cu`
-test จะเทียบ header กับ Strata-xeno ให้ เมื่อตั้ง `STRATA_ROOT` ไว้
-
-กติกาการทำงาน:
-- simulate ก่อน ขึ้น A100 เป็นอย่างสุดท้าย
-- ใช้ context เต็ม ไม่ใช้ `--max-tokens`
-- สุ่มที่ T 0.6 หลาย seed
-- รายงานกลไกเป็น "จับได้ / ควรจับ"
-- ห้ามจูนให้เข้ากับชุดทดสอบ
+ส่วน engine ของ MIP อยู่ที่ Strata-xeno (`include/strata/core/igc_*.hpp`, `src/kernels/qwenputer.cu`) test จะเทียบ header กับ Strata-xeno ให้ เมื่อตั้ง `STRATA_ROOT` ไว้
+ส่วน `tir4b --execute/--box` ต้องมี Strata-xeno อยู่ใน `PYTHONPATH` และเลข issue ก่อนแยก repo ดูเทียบได้ที่ #22
