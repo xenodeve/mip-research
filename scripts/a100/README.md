@@ -20,9 +20,11 @@ the closers (A, B, V7, `--shape-cap`, `--cover-cap`) were tuned on. `smoke-rows.
 1. `sh scripts/a100/gate9.sh` (background). Tests, the replay of every stored arm with the round-9 flags, and the shipped archive run
    alone: on the 5060 Ti's llama-server if it is up, else an import check. Writes `$WORK/sim/gate9.stamp`. Re-run after any commit
    to `tools/`, `serve/` or `third_party/`.
-2. On the 5060 Ti (preliminary): llama-server with the Q8_0 GGUF, `-c 262144 -np 4 -kvu` (each answer may use the whole context; the 4
-   slots share one 262,144-token cache), then `tir4b.py run --server http://127.0.0.1:8099` with `PYTHONPATH` at the repository.
-   Q8_0 weights and llama.cpp numerics are not the A100's bf16 vLLM: compare arms within the PC run only.
+2. The PC layer (`AGENTS.md` "The PC layer", scripts in `scripts/pc/`): the RTX 5060 Ti and RTX 4070 Super run Qwen3.5-4B NVFP4
+   (AxionML) as W4A8 from the sm_89-only llama.cpp build, KV q8_0, `-c 262144 -np 4 -kvu` (each answer may use the whole context; the
+   4 slots share one 262,144-token cache). `frozen9a`/`frozen9b` halves, one per card, both arms on each card:
+   `sh scripts/pc/pc_round9.sh 4 1 8099 <nvfp4.gguf> frozen9a-rows.jsonl a -ctk q8_0 -ctv q8_0` and the same with `0 8098 ... b` for
+   the 4070. A gain over control beyond noise sends the round to the A100; noise sends the method back for review.
 3. A100, when the account has the units: `COLAB_ACCOUNT=a sh scripts/a100/launch9.sh` (refuses under `MIN_CU`=20, without a PASS stamp
    for this exact code, or with uncommitted code), then in the background `COLAB_ACCOUNT=a sh scripts/a100/watch9.sh` and
    `sh scripts/a100/readers9.sh`. The watcher stops the VM itself when both arms are copied.

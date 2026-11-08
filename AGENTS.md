@@ -68,6 +68,34 @@ A100 can only be used for a limited time." The A100 runs on Colab compute units,
 - **Compute units.** Check the balance and tell the developer before opening a VM; stop the VM the moment the round ends. An idle
   VM burns units no test gets.
 
+## The PC layer: between the simulation and the A100 (developer, 2026-11-08)
+
+The order of a test is **simulation → PC layer → A100**. The PC layer is the developer's own RTX 5060 Ti and RTX 4070 Super running
+**Qwen3.5-4B NVFP4 (AxionML, ModelOpt) as W4A8** on llama-server. It is the first place the model writes after a mechanism acts, and
+what it is for:
+
+- **Test the project's hypothesis and the concept,** as a reference, not as the measured result. The A100 (bf16 on vLLM) stays the
+  result.
+- **A confirmation layer before the A100:** a round goes to the A100 only when the PC layer shows the gain. **If the General arm gets
+  more answers right than control, beyond noise, go to the A100. If it does not, or the difference is at noise level, review the
+  method before any A100 time.** Noise level, until an A/A of the PC layer exists: a one-sided sign test over the (row, sample) pairs
+  where only one arm is right, p < 0.05, on the rule score and on the API reader's corrected score both; anything weaker is noise.
+- **A record of the system in a normal user's environment:** consumer cards, Windows, a 4-bit model. Each environment is another
+  sample, so a result is read per environment and side by side, never pooled into the A100's numbers.
+
+How it runs (scripts in `scripts/pc/`, data in `WORK`, outside the repository):
+
+- **One config, locked, on both cards.** llama.cpp `1deefcca3` built for **sm_89 only** (`build-w4a8.cmd`): NVFP4 then multiplies
+  with q8_1 activations on both cards. A build that includes sm_120 uses FP4 activations (W4A4) on the 5060 Ti and would make the
+  two cards two different models. Same GGUF, KV `q8_0`, `-c 262144 -np 4 -kvu -fa on`, same flags and seed. Checked: greedy tokens
+  identical on the two cards (3 questions x 400 tokens, 2026-11-08). Each run writes the server's sha256 and arguments
+  (`r9<half>.setup`).
+- **Both arms on the same card.** The rows are split in two halves balanced by group; each card runs General and control on its
+  half, so a comparison never crosses cards.
+- **`-np 4` is the fastest** (sweep 2026-11-08, Q8_0: np 4 76 tok/s total, np 8 64; each answer decodes about 4x slower at np 8).
+  The 4070 Super is the display card: the server must leave the desktop its headroom (server about 7.9 GB, measured).
+- **The frozen rows are used here with no rule or threshold changed from the result,** so the same rows still count on the A100.
+
 ## How a test is run
 
 - **Full context, every round** (2026-11-06). Never `--max-tokens`; 262,144 tokens for the 4B. A cap turns "would have answered at

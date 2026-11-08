@@ -55,8 +55,13 @@ The learned / latent path stays paused (developer decision, Strata-xeno#276).
 4. M7: same-exe repeated test of the third-repeat close on Flash-Next.
 5. M5 pilot on llama-server (4B, thinking on).
 
+**Phase 1b, the PC layer (developer, 2026-11-08; `AGENTS.md` "The PC layer").** Round 9 runs first on the RTX 5060 Ti + RTX 4070 Super
+(Qwen3.5-4B NVFP4 W4A8, one locked config, both arms per card, frozen rows split in two halves): started 2026-11-08. More right
+answers than control beyond noise sends round 9 to the A100; noise-level sends the method back for review.
+
 **Phase 2, A100 (needs compute units; check the balance, say it, stop the VM after the round).**
-1. Round 9 first: it is the active goal, and anything else here would displace it.
+1. Round 9 first, once the PC layer passed: it is the active goal, and anything else here would displace it. Rows: `frozen9-rows.jsonl`
+   (`scripts/a100/frozen_rows.py`); round 1's rows hold the 24 loop rows the closers were tuned on.
 2. Flash-Next on the engine: General Style + closers vs plain, paired if M10's check holds (F5), thresholds from Flash-Next traces with closers off,
    tuned and tested on different rows.
 3. M6 arms, then M9.
