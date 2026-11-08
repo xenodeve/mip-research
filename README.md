@@ -9,6 +9,19 @@ its engine and server for Qwen3.8-Flash-Next and Qwen3.6-35B-A3B-NVFP4. Everythi
 under every reading, no per-model profile), measured on **Qwen3.5-4B** (bf16, vLLM 0.33, Colab A100 80 GB, T 0.6, top-p 0.95,
 top-k 20, the full 262,144-token context).
 
+## At a glance
+
+- **+13 right answers where a 4B model gets stuck.** On 24 questions where the plain model loops: 24 -> **37 of 48** right, and
+  answers with no answer at all fall from 21 to **1**.
+- **No fine-tuning, no second model.** The plain checkpoint, its own sampling; MIP only reads the text and adds tokens to it.
+- **Never a wrong number.** **0 wrong values in 39,046** puts, each re-checked by an independent evaluator. The math is exact
+  (387 operations, no floating point) and refuses rather than guesses.
+- **Ends runaway thinking.** Loops that ran 200k-262k tokens to the end of the context are stopped at 40k-114k; right answers on
+  MATH level 5 are **40 % shorter**.
+- **Stays out of the way.** It acts only after an `=` the model wrote, only on exact arithmetic, and every loop threshold sits above
+  all right answers: the newest closer touched **0 of 1,078** right answers in replay.
+- **Failures are counted, not hidden:** 2 of 48 right answers were lost to a close that came too early ([Failures](#failures)).
+
 Contents: [Best config](#best-config) · [Results](#results) · [Tokens and time](#tokens-and-time) · [Detection points](#detection-points) ·
 [How a value is put](#how-a-value-is-put) · [Loops it prevents](#loops-it-prevents) · [MathBackend](#mathbackend) ·
 [Staying out of the way](#staying-out-of-the-way) · [No fine-tuning](#no-fine-tuning) · [Failures](#failures) ·
@@ -205,6 +218,15 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
 repo นี้เก็บกลไก เครื่องมือทดลอง และผลวัด ส่วน [Strata-xeno](https://github.com/xenodeve/Strata-xeno) เป็นที่ที่เอา MIP ไปรันจริงใน engine กับ server
 ให้ Qwen3.8-Flash-Next และ Qwen3.6-35B-A3B-NVFP4 เนื้อหาทั้งหมดในนี้เป็น **General Style** ตัวล่าสุด คือรูปแบบค่าที่ถูกไม่ว่าจะอ่านแบบไหน ไม่มี profile แยกตาม model
 วัดบน **Qwen3.5-4B** (bf16, vLLM 0.33, Colab A100 80 GB, T 0.6, top-p 0.95, top-k 20, context เต็ม 262,144 token)
+
+### สรุปสั้น ๆ
+
+- **ตอบถูกเพิ่ม 13 คำตอบ ในโจทย์ที่ model 4B วนติด:** 24 ข้อที่ model เปล่าวน ตอบถูกจาก 24 เป็น **37 จาก 48** และคำตอบที่ไม่มีคำตอบเลยลดจาก 21 เหลือ **1**
+- **ไม่ต้อง fine-tune ไม่ต้องใช้ model ตัวที่สอง:** ใช้ checkpoint ปกติกับค่าการสุ่มของมันเอง MIP แค่อ่านข้อความแล้วต่อ token ลงไป
+- **ไม่เคยใส่เลขผิด:** ใส่ค่า 39,046 ครั้ง **ผิด 0 ครั้ง** ตรวจซ้ำทุกค่าด้วยตัวคำนวณอิสระ เพราะคำนวณแบบตรงเป๊ะ (387 operation ไม่มี floating point) และถ้าไม่แน่ใจจะไม่ใส่ ไม่เดา
+- **หยุดการคิดที่วนไม่จบ:** loop ที่เคยวิ่งไป 200k-262k token จนเต็ม context ถูกหยุดได้ที่ 40k-114k และคำตอบที่ถูกบน MATH ระดับ 5 **สั้นลง 40%**
+- **ไม่ไปยุ่งกับงานอื่น:** ใส่ค่าเฉพาะหลัง `=` ที่ model เขียนเอง และเฉพาะเลขคณิตที่คำนวณได้ตรงเป๊ะ ส่วนเกณฑ์ของตัวปิด loop ตั้งไว้สูงกว่าคำตอบที่ถูกทุกตัว ตัวปิด loop ตัวล่าสุดแตะคำตอบที่ถูก **0 จาก 1,078** ใน replay
+- **นับความผิดพลาดไว้ครบ ไม่ซ่อน:** มีคำตอบที่ถูกเสียไป 2 จาก 48 เพราะปิดการคิดเร็วเกินไป (ดูหัวข้อความผิดพลาด)
 
 ### best config
 
