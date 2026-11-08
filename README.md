@@ -13,6 +13,11 @@ current **General Style** (forms true under every reading, no per-model profile)
 - **Arithmetic: 95 % fewer tokens and more right answers.** When software takes the whole calculation, the 4B gets **156 of 160**
   DeepMind arithmetic questions right against 118, with **0.05x the tokens** (261,731 -> 12,062) and answers **85 % faster**
   ([Arithmetic mode](#arithmetic-mode-95--fewer-tokens)).
+- **On the target model in Strata's engine.** Qwen3.8-Flash-Next with inline values: 5-digit multiplication **-72 % tokens and
+  -56 % time**, GSM-Hard -22 % tokens and -18 % time, MATH -18 % tokens, with the same right answers
+  ([Flash-Next in Strata](#on-the-target-model-qwen38-flash-next-in-strata)).
+- **About 30 % fewer tokens on hard reasoning sets** with the tool route, at the same accuracy (MATH long 0.81x, GPQA 0.73x,
+  SuperGPQA 0.71x) ([Tool route](#tool-route-hard-reasoning-sets)).
 - **+13 right answers where a 4B model gets stuck.** On questions where the plain model loops: 24 -> **37 of 48** right, and
   answers with no answer at all fall from 21 to **1** ([Results](#results)).
 - **No fine-tuning, no second model.** The plain checkpoint with its own sampling; MIP only reads the text and adds tokens to it.
@@ -25,7 +30,9 @@ current **General Style** (forms true under every reading, no per-model profile)
 - **Stays out of the way.** It acts only after an `=` the model wrote, only on exact arithmetic, and every loop threshold sits above
   all right answers: the newest closer touched **0 of 1,078** right answers.
 
-Contents: [Arithmetic mode](#arithmetic-mode-95--fewer-tokens) · [Best config](#best-config) · [Results](#results) ·
+Contents: [Arithmetic mode](#arithmetic-mode-95--fewer-tokens) · [Flash-Next in Strata](#on-the-target-model-qwen38-flash-next-in-strata) ·
+[Tool route](#tool-route-hard-reasoning-sets) · [Best config](#best-config) · [Results](#results) ·
+[Seeing a calculation coming](#seeing-a-calculation-coming) ·
 [Tokens](#tokens) · [Ordinary math](#ordinary-math) · [Detection points](#detection-points) · [How a value is put](#how-a-value-is-put) ·
 [Loops it prevents](#loops-it-prevents) · [MathBackend](#mathbackend) · [Staying out of the way](#staying-out-of-the-way) ·
 [No fine-tuning](#no-fine-tuning) · [Accuracy audit](#accuracy-audit) · [Next](#next) · [Repo](#repo) · [ภาษาไทย](#ภาษาไทย)
@@ -66,6 +73,36 @@ multiply-divide chains), Qwen3.5-4B, thinking off, greedy, llama-server on an RT
 
 On the 117 answers right in both arms: **0.042x the tokens (-96 %) and 0.15x the seconds (-85 %)**, the same answer written
 without grinding the digits by hand. 39 answers gained. [^cap]
+
+## On the target model: Qwen3.8-Flash-Next in Strata
+
+The same idea inside Strata's own engine (`--igc-result-bridge --igc-inline-exec`): the engine reads `A op B =` as the model writes
+it and puts the exact value in the decode loop. Qwen3.8-Flash-Next (Gyro-M, Swift 1.5 IQ2_XS) on this PC, greedy, thinking on.
+
+| Set | Right, MIP on / off | Tokens per answer, on / off | Time per answer, on / off |
+|---|---|---|---|
+| 5-digit multiplication (40, two rounds each, ABBA) | 39, 39 / 40, 39 | **137, 142 / 491, 522 (-72 %)** | **2.80, 2.82 / 6.25, 6.61 s (-56 %)** |
+| 3-digit multiplication (40, ABBA) | 40 / 40 | 74, 72 / 118, 120 (-39 %) | |
+| MATH-500 integer answers (60, ABBA) | 58, 58 / 58, 57 | 854, 874 / 1,035, 1,085 (-18 %) | 15.7, 15.3 / 16.6, 17.5 s (-8 %) |
+| GSM-Hard (first 200 positive-integer cases) | 177 / 178 | **571 / 731 (-22 %)** | decode 1,942 / 2,363 s in total (-18 %) |
+| Word problems with long numbers (48) | 48 / 48 | 249 / 457 (-46 %) | 4.21 / 6.58 s (-36 %) |
+| Two-digit + - x, one call at the answer start (120) | 120 / 120 | 14.0 / 35.4, 13.1 / 32.9, 16.4 / 54.8 | 0.91 / 0.98, 0.79 / 0.85, 0.88 / 1.12 s |
+
+The answers stay the same and the work the model would do by hand disappears: the larger the numbers, the larger the cut.
+BigBench 3- and 5-digit arithmetic (240 questions): 240/240 with and without, 5-digit multiplication 146 against 485 tokens. [^flash]
+
+## Tool route: hard reasoning sets
+
+The reasoning-tool route (a Python sandbox the model may call, with its prompt line), Qwen3.5-4B on the A100, sampled at T 0.6,
+the API reader beside the rule:
+
+| Set | Right, without / with | Tokens with / without |
+|---|---|---|
+| MATH, long problems (22) | 21 / 21 | **0.81** (167,743 -> 135,772) |
+| GPQA (13) | 12 / 11 | **0.73** |
+| SuperGPQA, calculation questions (29) | 11 / 10 | **0.71** |
+
+About 30 % fewer tokens at the same accuracy, within one answer per set. [^tool]
 
 ## Best config
 
@@ -127,6 +164,21 @@ without software's values.
 
 Where the work is a fixed calculation the model would otherwise grind by hand, the right answer is up to a third shorter. [^ordinary]
 
+## Seeing a calculation coming
+
+Before a model writes a calculation, its hidden state already shows it. Over 46 stored traces (1.16 M tokens, 3 folds by trace,
+alarms set at 1 % of positions), the share of the 3,176 places where a calculation starts that each signal sees **2 tokens ahead**:
+
+| Signal | Seen ahead |
+|---|---|
+| Probe on the residual stream, Qwen3.5-4B | **89 %** (2,813) |
+| Probe on the residual stream, Qwen3.6-35B-A3B | **87 %** (2,769) |
+| The MoE router of Qwen3.6, a signal that costs nothing | **83 %** (2,639) |
+| The text alone | 53 % (1,690) |
+
+The start of a re-check (4,419 places) is seen by the next-token mass in 78 % (4B) and 70 % (Qwen3.6). These signals let MIP
+prepare a value before the `=` instead of after it. [^detect]
+
 ## Detection points
 
 MIP reads the model's own text at five points. The prompt, the sampling and the weights stay the model's own.
@@ -184,7 +236,12 @@ divisors, primes), geometry 86, algebra 70, counting 70 (C, P, Catalan, derangem
 - **Bounded.** Each operation declares its bound (`@op(name, kind, bound=...)`). Past it, or outside its domain, it raises
   `NotCovered` or `BadInput`, and the caller does not guess: no put.
 - **Checked against independent libraries.** Each module has a `sim_*.py` that draws inputs and compares every operation with SymPy,
-  mpmath or NetworkX, which the backend itself never imports (`tools/test_mathbackend_*.py`).
+  mpmath or NetworkX, which the backend itself never imports (`tools/test_mathbackend_*.py`): 387 of 387 operations, 31,064
+  cases, 0 disagreements.
+- **Fast.** 0.18 ms per `=` on the CPU. Its values match what the model went on to write in 3,896 places on 6 arms it was not built
+  from, and many of the rest are slips the model made and software got right.
+- **On the GPU too.** The engine's CUDA executor is byte-exact on 1,271 of 1,271 integer cases (floor division, mod, gcd, pow) and
+  1,403 of 1,403 rational and decimal cases (`0.1 + 0.2 -> 3/10`), at a median 0.066-0.093 ms per call.
 
 ## Staying out of the way
 
@@ -218,8 +275,12 @@ The best config's A100 records, counted with `scripts/fail_audit.py` and `script
 
 | Check | Result | How it is counted |
 |---|---|---|
+| Wrong values put, frozen test set | **0 of 41,176** puts | 1,526 stored traces set aside before the General Style was written; it puts a value at 94.4 % of the readable `=` there (30,194 of 31,996), and the model's own next value matches the put 31,621 of 32,812 times |
+| Digits glued onto a put | **0** (92 before `--no-digit-join`) | the model's next token read as a continuation of the number, over 17,485 puts |
 | Wrong values put | **0 of 39,046** puts | every put re-computed by Python's `Fraction` on a normalised copy, independent of MIP's reader [^recheck] |
 | The model doubting a value | **4.1 %** of software's values, against **15.2 %** of its own | a doubt word (`wait`, `no,`, `wrong`, `actually`, `let me recheck`) within the next 40 tokens; the cases read are doubts of a right value |
+| Loop close: tokens per right answer | **-35 %** (30,180 -> 19,570) | loop rows, the same round with and without A |
+| V7 on right answers | **0 of 915** | replay; it catches 212 of 243 loops sooner, 624k tokens earlier |
 | Cover cap on right answers | **0 of 1,078** | every stored A100 trace replayed with cover cap; it stops 12 of the 13 loops past 150k tokens, the 13th at 58k when fed directly |
 | Answers turned right | **14** | answer by answer against the inline-only arm of the same round [^lost] |
 
@@ -250,7 +311,18 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
 
 [^time-a]: Seconds per answer with 16 answers in flight, both arms on the same PC; not an ABBA timing.
 [^cap]: The plain model ran with a 4,096-token cap and 20 of its answers reached it. One answer right without MIP was wrong with it
-    (`add_or_sub_big-5409`). This mode is for calculation questions with thinking off.
+    (`add_or_sub_big-5409`). The hand-off rules were set while reading these same 160 questions, and two identical plain runs on this
+    PC gave 114 and 118, so a few rows move between runs. This mode is for calculation questions with thinking off; on LiveBench
+    the question reader finds a stated computation in 0 of 568 questions, so it applies where the question is a calculation.
+[^flash]: Greedy runs on this PC, which does not repeat itself token for token, so the arms are compared as totals, not per
+    question. These runs used the engine build before two later parser fixes (binding tokens, letter adjacency). On GSM8K the tokens
+    were equal and the time per token was about 5 % higher with MIP on. No accuracy gain was measured on these sets: the model's own
+    arithmetic was already right, and what moves is tokens and time.
+[^tool]: One sampled answer per question, the arm without the tool on one A100 account and the arm with it on another. HLE (10):
+    4 / 4 right at 1.05x tokens. Almost every call came after the thinking, so most of the saving comes from the tool route's prompt
+    line rather than from the calls themselves.
+[^detect]: These detectors read; they do not act yet. A put still waits for the `=` and an exact parse. The probes need the hidden
+    state, which the engine has and llama-server and vLLM do not expose.
 [^cover]: Cover cap is measured by replaying the stored A100 traces; its own A100 round is the next one (#19).
 [^pairing]: The best config and the inline-only arm ran in one round on the same questions and seeds; the plain model is another run.
     vLLM does not repeat an answer across runs (#21), so a difference of 1-2 answers is within run-to-run variation.
@@ -260,7 +332,9 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
     request at every `=` and starts the next after the put; inside Strata's engine the put happens in the decode loop
     (`include/strata/core/igc_inline.hpp`), not timed yet.
 [^ordinary]: Other kinds in the same comparison: multiply-divide chains 1.01, long mixed expressions 1.13 (the model checks a value it
-    was given), MATH-500 level 5 0.98; all 170 pairs 0.97 (fewer tokens in 93).
+    was given), MATH-500 level 5 0.98; all 170 pairs 0.97 (fewer tokens in 93). Right answers in that round, inline values alone
+    with no closer: 197 of 240 against 209 for the plain model; every miss in both arms was a loop, which is what the closers are for.
+    With thinking on, no mechanism alone has raised accuracy on a broad set yet; what it moves is tokens.
 [^recheck]: 1,208 more puts (roots, mod, functions) are outside what this re-check can evaluate.
 [^lost]: 2 answers right in the inline-only arm were wrong with the best config, both MATH level-5 problems where V7 closed the
     thinking at 8,433 and 6,582 tokens and the model had finished right at 42,974 and 31,518 without the closers. Of the closes, these
@@ -281,6 +355,9 @@ repo นี้เก็บกลไก เครื่องมือทดล�
 
 - **เลขคณิต: token ลดลง 95% และตอบถูกมากขึ้น:** พอให้ software คำนวณทั้งขั้น model 4B ตอบถูก **156 จาก 160** ข้อเลขคณิต DeepMind จากเดิม 118
   ใช้ token **0.05 เท่า** (261,731 เหลือ 12,062) และตอบ**เร็วขึ้น 85%**
+- **บน model เป้าหมายใน engine ของ Strata:** Qwen3.8-Flash-Next ที่เปิดตัวเขียนค่า คูณเลข 5 หลักใช้ **token ลดลง 72% และเวลาลดลง 56%**
+  GSM-Hard token ลดลง 22% เวลาลดลง 18% และ MATH token ลดลง 18% โดยคำตอบที่ถูกยังเท่าเดิม
+- **โจทย์เหตุผลยาก ๆ ใช้ token น้อยลงประมาณ 30%** เมื่อเปิด tool route และตอบถูกเท่าเดิม (MATH long 0.81 เท่า, GPQA 0.73 เท่า, SuperGPQA 0.71 เท่า)
 - **ตอบถูกเพิ่ม 13 คำตอบ ในโจทย์ที่ model 4B วนติด:** จาก 24 เป็น **37 จาก 48** และคำตอบที่ไม่มีคำตอบเลยลดจาก 21 เหลือ **1**
 - **ไม่ต้อง fine-tune ไม่ต้องใช้ model ตัวที่สอง:** ใช้ checkpoint ปกติกับค่าการสุ่มของมันเอง MIP แค่อ่านข้อความแล้วต่อ token ลงไป
 - **ไม่เคยใส่เลขผิด:** ใส่ค่า 39,046 ครั้ง **ผิด 0 ครั้ง** ตรวจซ้ำทุกค่าด้วยตัวคำนวณอิสระ คำนวณแบบตรงเป๊ะ (387 operation ไม่มี floating point) ถ้าไม่แน่ใจจะไม่ใส่ ไม่เดา
@@ -316,6 +393,35 @@ repo นี้เก็บกลไก เครื่องมือทดล�
 
 117 คำตอบที่ถูกทั้งสองฝั่ง: **token เหลือ 0.042 เท่า (ลด 96%) และเวลาเหลือ 0.15 เท่า (ลด 85%)** เป็นคำตอบเดียวกัน แค่ไม่ต้องไล่คิดตัวเลขเองทีละหลัก
 และมีคำตอบที่เปลี่ยนจากผิดเป็นถูก 39 คำตอบ [^th-cap]
+
+### บน model เป้าหมาย: Qwen3.8-Flash-Next ใน Strata
+
+แนวคิดเดียวกันนี้ทำงานอยู่ใน engine ของ Strata เอง (`--igc-result-bridge --igc-inline-exec`) engine อ่าน `A op B =` ตอนที่ model เขียน
+แล้วใส่ค่าที่ตรงเป๊ะลงไปใน decode loop ทดสอบกับ Qwen3.8-Flash-Next (Gyro-M, Swift 1.5 IQ2_XS) บนเครื่องนี้ แบบ greedy และเปิด thinking
+
+| ชุดทดสอบ | ตอบถูก เปิด / ปิด MIP | token ต่อคำตอบ เปิด / ปิด | เวลาต่อคำตอบ เปิด / ปิด |
+|---|---|---|---|
+| คูณเลข 5 หลัก (40 ข้อ อย่างละ 2 รอบ ABBA) | 39, 39 / 40, 39 | **137, 142 / 491, 522 (ลด 72%)** | **2.80, 2.82 / 6.25, 6.61 วินาที (ลด 56%)** |
+| คูณเลข 3 หลัก (40 ข้อ ABBA) | 40 / 40 | 74, 72 / 118, 120 (ลด 39%) | |
+| MATH-500 ข้อที่ตอบเป็นจำนวนเต็ม (60 ข้อ ABBA) | 58, 58 / 58, 57 | 854, 874 / 1,035, 1,085 (ลด 18%) | 15.7, 15.3 / 16.6, 17.5 วินาที (ลด 8%) |
+| GSM-Hard (200 ข้อแรกที่ตอบเป็นจำนวนเต็มบวก) | 177 / 178 | **571 / 731 (ลด 22%)** | เวลา decode รวม 1,942 / 2,363 วินาที (ลด 18%) |
+| โจทย์ประยุกต์ที่มีตัวเลขยาว (48 ข้อ) | 48 / 48 | 249 / 457 (ลด 46%) | 4.21 / 6.58 วินาที (ลด 36%) |
+| บวก ลบ คูณ เลข 2 หลัก เรียกครั้งเดียวตอนเริ่มตอบ (120 ข้อ) | 120 / 120 | 14.0 / 35.4, 13.1 / 32.9, 16.4 / 54.8 | 0.91 / 0.98, 0.79 / 0.85, 0.88 / 1.12 วินาที |
+
+คำตอบยังเหมือนเดิม แต่งานที่ model ต้องคิดเลขเองหายไป ตัวเลขยิ่งยาว ส่วนที่ลดได้ก็ยิ่งมาก
+เลขคณิต BigBench 3 และ 5 หลัก (240 ข้อ) ได้ 240/240 ทั้งตอนเปิดและปิด และคูณเลข 5 หลักใช้ 146 token เทียบกับ 485 [^th-flash]
+
+### tool route: โจทย์เหตุผลยาก ๆ
+
+เปิด tool route คือมี sandbox Python ที่ model เรียกใช้ได้ พร้อมบรรทัด prompt ของมัน ทดสอบกับ Qwen3.5-4B บน A100 แบบสุ่ม T 0.6 และมี API reader ตรวจคู่กับกฎ
+
+| ชุดทดสอบ | ตอบถูก ไม่เปิด / เปิด | token เปิด / ไม่เปิด |
+|---|---|---|
+| MATH ข้อยาว (22 ข้อ) | 21 / 21 | **0.81** (167,743 เหลือ 135,772) |
+| GPQA (13 ข้อ) | 12 / 11 | **0.73** |
+| SuperGPQA ข้อคำนวณ (29 ข้อ) | 11 / 10 | **0.71** |
+
+ใช้ token น้อยลงประมาณ 30% และตอบถูกเท่าเดิม ต่างกันไม่เกิน 1 คำตอบต่อชุด [^th-tool]
 
 ### best config
 
@@ -365,6 +471,20 @@ repo นี้เก็บกลไก เครื่องมือทดล�
 | หารมีเศษ | 18 | 0.97 |
 
 ถ้าเป็นงานคำนวณตายตัวที่ปกติ model ต้องคิดเองด้วยมือ คำตอบที่ถูกจะสั้นลงได้ถึงหนึ่งในสาม [^th-ordinary]
+
+### เห็นการคำนวณก่อนที่จะมาถึง
+
+ก่อน model จะเขียนการคำนวณ hidden state ของมันก็บอกไว้แล้ว วัดจาก trace ที่เก็บไว้ 46 ชุด (1.16 ล้าน token แบ่ง 3 fold ตาม trace ตั้งให้เตือนที่ 1% ของตำแหน่ง)
+ดูว่าแต่ละสัญญาณเห็นจุดเริ่มการคำนวณ 3,176 จุด **ล่วงหน้า 2 token** ได้กี่เปอร์เซ็นต์
+
+| สัญญาณ | เห็นล่วงหน้า |
+|---|---|
+| probe ที่อ่าน residual stream ของ Qwen3.5-4B | **89%** (2,813) |
+| probe ที่อ่าน residual stream ของ Qwen3.6-35B-A3B | **87%** (2,769) |
+| router ของ MoE ใน Qwen3.6 ซึ่งได้มาฟรีไม่มีต้นทุน | **83%** (2,639) |
+| ข้อความอย่างเดียว | 53% (1,690) |
+
+จุดที่ model เริ่มตรวจซ้ำ (4,419 จุด) next-token mass เห็นได้ 78% ใน 4B และ 70% ใน Qwen3.6 สัญญาณพวกนี้ทำให้ MIP เตรียมค่าไว้ก่อนถึง `=` ได้ ไม่ต้องรอหลัง `=` [^th-detect]
 
 ### จุดที่ตรวจจับ
 
@@ -418,6 +538,10 @@ loop ในส่วนคิดจะถูกปิดด้วย A คือ
 - **คำนวณแบบตรงเป๊ะเท่านั้น:** ใช้แค่ standard library ของ Python ได้แก่ `Fraction`, `Surd` (`p + q*sqrt(d)`) และ `Decimal` ไม่มี floating point อยู่เบื้องหลังค่าที่ใส่ ถ้าราก ยกกำลัง ได้ค่าไม่ลงตัวก็ไม่ใส่ ไม่ปัดเศษ
 - **มีขอบเขตชัด:** ทุก operation ประกาศขอบเขตของตัวเอง ถ้าเกินขอบเขตหรืออยู่นอกโดเมน จะโยน `NotCovered` หรือ `BadInput` แล้วไม่เดา ผลคือไม่ใส่ค่า
 - **ตรวจกับ library อิสระ:** ทุก module มี `sim_*.py` ที่สุ่มค่าเข้าไป แล้วเทียบทุก operation กับ SymPy, mpmath หรือ NetworkX ซึ่งตัว backend เองไม่ได้ import
+  ผลคือ 387 จาก 387 operation, 31,064 กรณี ไม่ตรงกัน 0 กรณี
+- **เร็ว:** 0.18 ms ต่อ `=` บน CPU ค่าที่ให้ตรงกับที่ model เขียนต่อ 3,896 จุด บน 6 arm ที่ไม่ได้ใช้ตอนสร้าง ส่วนที่ไม่ตรงหลายจุดเป็น model คิดพลาดแต่ software ถูก
+- **บน GPU ก็ทำได้:** ตัวคำนวณ CUDA ของ engine ตรงทุก byte ทั้งจำนวนเต็ม 1,271 จาก 1,271 กรณี (หารปัดลง mod gcd ยกกำลัง)
+  และเศษส่วนกับทศนิยม 1,403 จาก 1,403 กรณี (`0.1 + 0.2 -> 3/10`) ใช้เวลามัธยฐาน 0.066-0.093 ms ต่อครั้ง
 
 ### ไม่กระทบการทำงานอื่น
 
@@ -450,8 +574,12 @@ MIP ไม่ได้แก้น้ำหนักของ model เลย �
 
 | ตรวจอะไร | ผล | นับยังไง |
 |---|---|---|
+| ใส่ค่าผิด ชุดทดสอบที่แช่แข็งไว้ | **0 จาก 41,176** ครั้ง | trace 1,526 ชุดที่กันไว้ก่อนเขียน General Style ใส่ค่าได้ 94.4% ของ `=` ที่อ่านได้ (30,194 จาก 31,996) และค่าที่ model เขียนต่อตรงกับค่าที่ใส่ 31,621 จาก 32,812 ครั้ง |
+| ตัวเลขไปติดกับค่าที่ใส่ | **0** (ก่อนมี `--no-digit-join` มี 92) | token ถัดไปของ model ถูกอ่านเป็นตัวเลขต่อกัน นับจาก 17,485 ครั้งที่ใส่ |
 | ใส่ค่าผิด | **0 จาก 39,046** ครั้ง | คำนวณซ้ำทุกค่าด้วย `Fraction` ของ Python ไม่ได้ใช้ตัวอ่านของ MIP เอง [^th-recheck] |
 | model สงสัยค่าที่ได้ | ค่าจาก software **4.1%** ส่วนค่าที่ model คิดเอง **15.2%** | นับคำอย่าง `wait`, `no,`, `wrong`, `actually` ใน 40 token ถัดไป กรณีที่อ่านดูเป็นการสงสัยค่าที่ถูกอยู่แล้ว |
+| loop close: token ต่อคำตอบที่ถูก | **ลด 35%** (30,180 เหลือ 19,570) | ชุดข้อที่วน รอบเดียวกัน มีและไม่มี A |
+| V7 แตะคำตอบที่ถูก | **0 จาก 915** | replay จับ loop ได้เร็วขึ้น 212 จาก 243 เร็วกว่าเดิมรวม 624k token |
 | cover-cap แตะคำตอบที่ถูก | **0 จาก 1,078** | replay trace จาก A100 ทั้งหมด หยุด loop ที่เกิน 150k ได้ 12 จาก 13 ส่วนตัวที่ 13 จับได้ที่ 58k เมื่อป้อนเข้าตัวจับตรง ๆ |
 | คำตอบที่เปลี่ยนเป็นถูก | **14** | เทียบทีละคำตอบกับแขนใส่ค่าอย่างเดียวในรอบเดียวกัน [^th-lost] |
 
@@ -468,7 +596,13 @@ MIP ไม่ได้แก้น้ำหนักของ model เลย �
 
 [^th-time-a]: หมายเหตุ: วินาทีต่อคำตอบ ตอนที่รันพร้อมกัน 16 คำตอบ ทั้งสองฝั่งรันบนเครื่องเดียวกัน แต่ไม่ได้จับเวลาแบบ ABBA
 [^th-cap]: หมายเหตุ: model เปล่ารันโดยมีเพดาน 4,096 token และมี 20 คำตอบที่ชนเพดาน คำตอบที่ถูกตอนไม่มี MIP แต่ผิดตอนมี MIP มี 1 คำตอบ (`add_or_sub_big-5409`)
-    โหมดนี้ใช้กับโจทย์คำนวณตอนปิด thinking
+    กฎ hand-off ตั้งขึ้นระหว่างอ่าน 160 ข้อชุดเดียวกันนี้ และ model เปล่ารันซ้ำ 2 รอบบนเครื่องนี้ได้ 114 กับ 118 ผลจึงขยับได้ไม่กี่ข้อระหว่างรอบ
+    โหมดนี้ใช้กับโจทย์คำนวณตอนปิด thinking บน LiveBench ตัวอ่านโจทย์เจอการคำนวณที่โจทย์เขียนไว้ 0 จาก 568 ข้อ จึงใช้ได้เฉพาะเมื่อตัวโจทย์เป็นการคำนวณ
+[^th-flash]: หมายเหตุ: รันแบบ greedy บนเครื่องนี้ ซึ่งให้ token ซ้ำเดิมทุกตัวไม่ได้ จึงเทียบเป็นยอดรวม ไม่ได้เทียบทีละข้อ รอบนี้ใช้ engine รุ่นก่อนแก้ parser อีก 2 จุด (binding token กับตัวอักษรที่ติดกัน)
+    บน GSM8K token เท่าเดิม แต่เวลาต่อ token สูงขึ้นประมาณ 5% เมื่อเปิด MIP ชุดเหล่านี้ไม่มีความแม่นที่เพิ่มขึ้น เพราะ model คิดเลขเองถูกอยู่แล้ว ที่ขยับคือ token กับเวลา
+[^th-tool]: หมายเหตุ: ข้อละ 1 คำตอบแบบสุ่ม แขนไม่เปิดรันบน A100 บัญชีหนึ่ง แขนเปิดรันอีกบัญชีหนึ่ง HLE (10 ข้อ) ได้ 4 / 4 ที่ 1.05 เท่า
+    การเรียก tool เกือบทั้งหมดเกิดหลังการคิดจบแล้ว token ที่ลดได้ส่วนใหญ่จึงมาจากบรรทัด prompt ของ tool route มากกว่าจากการเรียก tool
+[^th-detect]: หมายเหตุ: ตัวตรวจจับเหล่านี้แค่อ่าน ยังไม่ได้ลงมือทำอะไร การใส่ค่ายังรอ `=` และการ parse ที่ตรงเป๊ะ probe ต้องใช้ hidden state ซึ่ง engine มี แต่ llama-server กับ vLLM ไม่เปิดให้อ่าน
 [^th-cover]: หมายเหตุ: cover-cap วัดจากการ replay trace ที่เก็บจาก A100 ส่วนรอบที่รันบน A100 เองคือรอบถัดไป (#19)
 [^th-pairing]: หมายเหตุ: best config กับแขนใส่ค่าอย่างเดียวรันในรอบเดียวกัน ข้อเดียวกัน seed เดียวกัน ส่วน model เปล่ามาจากอีกรอบ
     vLLM ให้คำตอบซ้ำเดิมข้ามรอบไม่ได้ (#21) ต่างกัน 1-2 คำตอบจึงอยู่ในช่วงที่ผลแต่ละรอบแกว่งได้
@@ -477,7 +611,8 @@ MIP ไม่ได้แก้น้ำหนักของ model เลย �
     ในเครื่องมือทดสอบ best config ได้ 25.7 token/s ต่อคำตอบ ส่วน model เปล่าได้ 37.9 เพราะ `tir4b` ต้องจบ request ทุกครั้งที่เจอ `=` แล้วเริ่ม request ใหม่หลังใส่ค่า
     ใน engine ของ Strata การใส่ค่าเกิดอยู่ใน decode loop (`include/strata/core/igc_inline.hpp`) และยังไม่ได้จับเวลา
 [^th-ordinary]: หมายเหตุ: ประเภทอื่นในการเทียบชุดเดียวกัน คูณหารต่อกัน 1.01 นิพจน์ผสมยาว 1.13 (model ตรวจค่าที่ได้รับซ้ำ) MATH-500 ระดับ 5 0.98
-    รวมทั้ง 170 คู่ 0.97 (ใช้ token น้อยลง 93 คู่)
+    รวมทั้ง 170 คู่ 0.97 (ใช้ token น้อยลง 93 คู่) คะแนนในรอบนั้น แบบใส่ค่าอย่างเดียวไม่มีตัวปิด loop ได้ 197 จาก 240 ส่วน model เปล่าได้ 209
+    ทุกข้อที่ผิดในทั้งสองแขนเกิดจากการวน ซึ่งเป็นสิ่งที่ตัวปิด loop มีไว้แก้ และตอนเปิด thinking ยังไม่มีกลไกไหนที่เพิ่มความแม่นบนชุดกว้างได้ด้วยตัวเอง สิ่งที่ขยับคือ token
 [^th-recheck]: หมายเหตุ: อีก 1,208 ครั้ง (ราก mod ฟังก์ชัน) อยู่นอกขอบเขตที่วิธีตรวจซ้ำนี้คำนวณได้
 [^th-lost]: หมายเหตุ: มี 2 คำตอบที่ถูกในแขนใส่ค่าอย่างเดียว แต่ผิดเมื่อใช้ best config ทั้งสองเป็นโจทย์ MATH ระดับ 5 ที่ V7 ปิดการคิดที่ 8,433 และ 6,582 token
     ส่วนตอนไม่มีตัวปิด loop model คิดจนตอบถูกที่ 42,974 และ 31,518 token
