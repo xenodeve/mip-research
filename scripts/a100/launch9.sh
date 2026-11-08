@@ -1,7 +1,7 @@
 #!/bin/sh
 # Round 9 launch from this PC: refuse unless the account has the compute units, the replay gate ran on this exact tools/ tree, and the
 # rows are there; then open the A100, upload setup + code (git archive of HEAD) + rows + queue, and start run_vm9.sh.
-#   COLAB_ACCOUNT=a|b|c sh scripts/a100/launch9.sh [ROWS]
+#   COLAB_ACCOUNT=a|b|c|d sh scripts/a100/launch9.sh [ROWS]
 # Env: WORK (default C:/Users/xenod/mip-work/a100: rows, out/, sim/, logs; outside the public repo), MIN_CU (default 20: ~2 h at 8.88/h
 # plus margin). After it: sh scripts/a100/watch9.sh and sh scripts/a100/readers9.sh, both in the background.
 K=$(cd "$(dirname "$0")" && pwd)
@@ -10,7 +10,7 @@ WORK=${WORK:-C:/Users/xenod/mip-work/a100}
 ROWS=${1:-frozen9-rows.jsonl}
 MIN_CU=${MIN_CU:-20}
 export PYTHONIOENCODING=utf-8
-[ -n "$COLAB_ACCOUNT" ] || { echo "set COLAB_ACCOUNT=a|b|c"; exit 1; }
+[ -n "$COLAB_ACCOUNT" ] || { echo "set COLAB_ACCOUNT=a|b|c|d"; exit 1; }
 [ -f "$WORK/$ROWS" ] && [ -f "$WORK/smoke-rows.jsonl" ] || { echo "rows missing in $WORK"; exit 1; }
 cd "$R" || exit 1
 git diff --quiet HEAD -- tools serve third_party || { echo "tools/ serve/ third_party/ have uncommitted changes: commit them and re-run the gate"; exit 1; }

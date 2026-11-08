@@ -5,7 +5,7 @@
 #   UNREACH   the session did not answer 4 times running (about 40 minutes)
 #   STALL     the GPU sat idle (under 5 %) for 3 checks while the run was alive (one answer can run >30 min under the full context)
 #   DEAD      neither the queue nor run9.done
-#   COLAB_ACCOUNT=a|b|c sh scripts/a100/watch9.sh      (in the background; log in $WORK/watch9.log)
+#   COLAB_ACCOUNT=a|b|c|d sh scripts/a100/watch9.sh      (in the background; log in $WORK/watch9.log)
 K=$(cd "$(dirname "$0")" && pwd)
 WORK=${WORK:-C:/Users/xenod/mip-work/a100}
 export PYTHONIOENCODING=utf-8

@@ -1,9 +1,13 @@
-"""Drive one Colab account's A100 session. The account is named on every call (COLAB_ACCOUNT=a|b|c) and asserted, so a job cannot
+"""Drive one Colab account's A100 session. The account is named on every call (COLAB_ACCOUNT=a|b|c|d) and asserted, so a job cannot
 land on another machine; results from different accounts are never compared (each is its own VM and vLLM install).
 
   a  C:\\Users\\xenod           session a1
   b  C:\\Users\\xenod\\colab-b   session b1
   c  C:\\Users\\xenod\\colab-c   session c1
+  d  C:\\Users\\xenod\\colab-d   session d1 (a friend's account, added 2026-11-08)
+
+A new account logs in once, in the developer's own PowerShell (copy-paste OAuth):
+  $env:USERPROFILE = 'C:\\Users\\xenod\\colab-d'; colab usage
 
 COLAB_ACCOUNT=a python vm.py new                     start the A100 session
 COLAB_ACCOUNT=a python vm.py usage                   compute units left (prints `CU <balance>` last)
@@ -19,10 +23,11 @@ import subprocess
 import sys
 import tempfile
 
-ACCOUNTS = {'a': (r'C:\Users\xenod', 'a1'), 'b': (r'C:\Users\xenod\colab-b', 'b1'), 'c': (r'C:\Users\xenod\colab-c', 'c1')}
+ACCOUNTS = {'a': (r'C:\Users\xenod', 'a1'), 'b': (r'C:\Users\xenod\colab-b', 'b1'), 'c': (r'C:\Users\xenod\colab-c', 'c1'),
+            'd': (r'C:\Users\xenod\colab-d', 'd1')}
 KEY = os.environ.get('COLAB_ACCOUNT', '')
 if KEY not in ACCOUNTS:
-    raise SystemExit('set COLAB_ACCOUNT to one of a, b, c')
+    raise SystemExit('set COLAB_ACCOUNT to one of a, b, c, d')
 ACCOUNT, SESSION = ACCOUNTS[KEY]
 assert SESSION == KEY + '1'
 
