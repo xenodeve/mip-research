@@ -9,7 +9,9 @@ The rules agents miss most, all in full in `AGENTS.md`:
    misreads, no act on a right answer (or every one read and understood), every test passing and `vllm_refused` 0. Then the **PC
    layer**: Qwen3.5-4B NVFP4 as W4A8 on the RTX 5060 Ti + RTX 4070 Super, one locked config (sm_89 build), both arms on the same
    card. It tests the concept, confirms before the A100, and records a normal user's environment. **More right answers than control
-   beyond noise (sign test p < 0.05, rule and API reader both): go to the A100; otherwise review the method first.** On the A100: a
+   beyond noise (sign test p < 0.05, rule and API reader both): go to the A100; otherwise review the method first.** NVFP4 loops
+   more than bf16, so it is the hardest test of the anti-loop software and a normal user's real result; report it per environment,
+   and never tune a rule on loops found in frozen rows (hunt on development rows). On the A100: a
    5-minute smoke run, then the rest; check the compute-unit balance before opening a VM and stop it when the round ends.
 2. **Software computes, the model reasons; never lower the model's ability.** A change that loses right answers fails, whatever it
    saves.

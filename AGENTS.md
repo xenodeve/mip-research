@@ -83,6 +83,19 @@ what it is for:
 - **A record of the system in a normal user's environment:** consumer cards, Windows, a 4-bit model. Each environment is another
   sample, so a result is read per environment and side by side, never pooled into the A100's numbers.
 
+Why NVFP4 matters here (developer, 2026-11-09):
+
+- **It is the hardest test the software meets.** A 4-bit model slips and loops more than bf16: on round 9's frozen rows the plain
+  arm was cut by the repeat check on 29 and 38 of 104 answers per half. The anti-loop closers and the inline values meet their
+  heaviest cases here, first, before any A100 time. What holds on NVFP4 is expected to hold on a model that loops less; what breaks
+  here breaks early and cheaply.
+- **Its result has its own weight.** People run 4-bit models on gaming cards; a gain measured here is the gain such a user gets,
+  not only an estimate of the A100's. Report it as that environment's result.
+- **Two cautions.** (1) The size of a gain here does not carry to bf16: a model that slips more leaves software more to fix, so the
+  A100 measures its own. (2) Loops found on frozen rows are never used to write or tune a rule, or the A100 run on the same rows no
+  longer counts. To hunt hard cases with NVFP4, use development rows (round 1's `fresh-rows.jsonl`, the loop rows) and measure
+  the result on a new frozen set.
+
 How it runs (scripts in `scripts/pc/`, data in `WORK`, outside the repository):
 
 - **One config, locked, on both cards.** llama.cpp `1deefcca3` built for **sm_89 only** (`build-w4a8.cmd`): NVFP4 then multiplies
