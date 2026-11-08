@@ -769,6 +769,19 @@ class HttpDrive(unittest.TestCase):
         self.assertEqual(sorted(map(tuple, bodies[0]['logit_bias'])), sorted(want.items()))
         self.assertEqual(bodies[0]['n_predict'], 1)   # one token carries the bias, as on vLLM
 
+    def test_a_drain_starts_no_new_answer_and_lets_the_running_one_end(self):
+        # `<out>/drain`: the answers in flight finish, no answer starts after it, and the run can --resume later
+        asked = []
+
+        def post(body):
+            asked.append(body['prompt'][:2])
+            return dict(content='', stop_type='eos', stopping_word='', tokens=[6])
+        rs = [tir4b.Rollout(ROW, 0, [1, 200 + i], tir4b.Arm(), IDS, TOK, seed=1, thinking=False) for i in range(3)]
+        flag = []
+        tir4b.drive_http(post, TOK, IDS, rs, lambda: Kernel([]), live_most=1, on_round=lambda: flag.append(1), drain=lambda: bool(flag))
+        self.assertEqual(asked, [[1, 200]])
+        self.assertEqual([bool(r.finish) for r in rs], [True, False, False])
+
     def test_no_logit_bias_key_without_a_bias(self):
         bodies = []
 

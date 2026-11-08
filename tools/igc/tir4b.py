@@ -1684,10 +1684,11 @@ def stop_words(stops, ids, tok):
     return sorted(words)
 
 
-def drive_http(post, tok, ids, rollouts, kernel_factory, live_most=16, on_round=None):
+def drive_http(post, tok, ids, rollouts, kernel_factory, live_most=16, on_round=None, drain=None):
     """drive() over llama-server's /completion, so the 5060 Ti runs the same rules on Windows, where vLLM does not (developer, 2026-11-04).
     Each answer runs on its own thread and the server batches its slots. The server stops on words and leaves the word out of the text, so
-    it is put back and the text encoded again: the same Rollout takes it."""
+    it is put back and the text encoded again: the same Rollout takes it.
+    drain: when it returns True, no answer starts; the ones in flight end, and the run is continued later with --resume."""
     import threading
     im_end = tok.convert_tokens_to_ids('<|im_end|>')
     lock = threading.Lock()
@@ -1695,6 +1696,8 @@ def drive_http(post, tok, ids, rollouts, kernel_factory, live_most=16, on_round=
                     presence_penalty=SAMPLING['presence_penalty'], repeat_penalty=SAMPLING['repetition_penalty'])
 
     def one(r):
+        if drain and drain():
+            return
         r.started = time.monotonic()
         while True:
             ask = r.request()
@@ -1786,6 +1789,10 @@ def run(args):
     # --resume: answers already written are kept and not run again. A restart to fix the live count lost every answer in flight but not these.
     kept = json.loads((out / 'records.json').read_text(encoding='utf-8')) if args.resume and (out / 'records.json').exists() else []
     have = {(r['id'], r['sample']) for r in kept}
+    # the kept answers' token ids too: ids.jsonl was rewritten with this session's answers only, and the replay needs every one
+    kept_ids = [line for line in (out / 'ids.jsonl').read_text(encoding='utf-8').splitlines()
+                if line.strip() and (json.loads(line)['id'], json.loads(line)['sample']) in have] \
+        if args.resume and (out / 'ids.jsonl').exists() else []
     rollouts = []
     for row in rows:
         # As text, then encoded: transformers 5 returns a dict from tokenize=True, and list() of it gave the keys as the prompt.
@@ -1849,6 +1856,8 @@ def run(args):
         (out / 'records.json').write_text(json.dumps(records, ensure_ascii=False), encoding='utf-8')
         if args.ids:
             with open(out / 'ids.jsonl', 'w', encoding='utf-8') as f:
+                for line in kept_ids:
+                    f.write(line + '\n')
                 for r in done:
                     f.write(json.dumps(dict(id=r.row['id'], sample=r.sample, prompt_ids=r.prompt, out_ids=r.out, spans=r.spans)) + '\n')
         print(f'{len(done)}/{len(rollouts)} done, {sum(x["right"] for x in records)} right, {round(time.monotonic() - began)} s', flush=True)
@@ -1860,7 +1869,14 @@ def run(args):
                                          headers={'Content-Type': 'application/json'})
             with urllib.request.urlopen(req, timeout=3600) as reply:
                 return json.loads(reply.read().decode('utf-8'))
-        drive_http(post, tok, ids, rollouts, kernel_factory, live_most=args.live, on_round=save)
+        # `touch <out>/drain`: the answers in flight end, no new one starts, the run exits 3 without a report; --resume goes on
+        flag = out / 'drain'
+        flag.unlink(missing_ok=True)
+        drive_http(post, tok, ids, rollouts, kernel_factory, live_most=args.live, on_round=save, drain=flag.exists)
+        if flag.exists() and not all(r.finish for r in rollouts):
+            save(last=True)
+            print(f'DRAINED: {sum(bool(r.finish) for r in rollouts)}/{len(rollouts)} answered; go on with --resume', flush=True)
+            raise SystemExit(3)
     else:
         drive(llm, rollouts, kernel_factory, live_most=args.live, on_round=save)
     save(last=True)
