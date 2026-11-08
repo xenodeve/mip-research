@@ -1,4 +1,5 @@
 import hashlib
+import os
 import struct
 import unittest
 import tempfile
@@ -56,10 +57,13 @@ class AdapterArtifact(unittest.TestCase):
 
     def test_native_schema_is_derived_from_current_architectures(self):
         from tools.igc.generate_adapter_schema import render
-        path=Path(__file__).resolve().parents[1]/'include/strata/core/igc_adapter_schema.hpp'
-        self.assertEqual(path.read_text(encoding='utf-8'),render())
         bad=dict(self.weights);key=next(iter(bad));bad[key]=bad[key].half()
         with self.assertRaises(ValueError):pack_state(1,bad,MODEL,TOKENIZER,STATE,PROTOCOL)
+        # The header lives in the engine (Strata-xeno), the one boundary between the two repos: checked when STRATA_ROOT names a checkout.
+        root=os.environ.get('STRATA_ROOT')
+        if not root:self.skipTest('STRATA_ROOT not set: the engine header igc_adapter_schema.hpp is not here')
+        path=Path(root)/'include/strata/core/igc_adapter_schema.hpp'
+        self.assertEqual(path.read_text(encoding='utf-8'),render())
 
 
 if __name__=='__main__':unittest.main()
