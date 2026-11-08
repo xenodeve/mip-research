@@ -754,6 +754,31 @@ class HttpDrive(unittest.TestCase):
         tir4b.drive_http(once, TOK, IDS, [r], lambda: Kernel([]), live_most=1)
         self.assertEqual(r.out, [1000 + ord('a'), 1000 + ord('b'), 271, 6])   # 271 kept, and no second end of turn
 
+    def test_the_logit_bias_goes_to_the_server(self):
+        # --no-digit-join on the 5060 Ti: the digit bias after a put travels in the /completion body as llama-server's [[id, bias], ...]
+        bodies = []
+
+        def post(body):
+            bodies.append(body)
+            return dict(content='', stop_type='eos', stopping_word='', tokens=[6])
+        r = tir4b.Rollout(ROW, 0, [1], tir4b.Arm(inline_calc=True, inline_plain=True, no_digit_join=True), IDS, TOK, seed=1, thinking=False)
+        r.join_guard = True
+        want = r.bias()
+        self.assertTrue(want)
+        tir4b.drive_http(post, TOK, IDS, [r], lambda: Kernel([]), live_most=1)
+        self.assertEqual(sorted(map(tuple, bodies[0]['logit_bias'])), sorted(want.items()))
+        self.assertEqual(bodies[0]['n_predict'], 1)   # one token carries the bias, as on vLLM
+
+    def test_no_logit_bias_key_without_a_bias(self):
+        bodies = []
+
+        def post(body):
+            bodies.append(body)
+            return dict(content='', stop_type='eos', stopping_word='', tokens=[6])
+        r = tir4b.Rollout(ROW, 0, [1], tir4b.Arm(inline_calc=True, inline_plain=True, no_digit_join=True), IDS, TOK, seed=1, thinking=False)
+        tir4b.drive_http(post, TOK, IDS, [r], lambda: Kernel([]), live_most=1)
+        self.assertNotIn('logit_bias', bodies[0])
+
     def test_the_stop_words_of_a_request(self):
         r = tir4b.Rollout(ROW, 0, [1], tir4b.Arm(inline_calc=True, execute=True), IDS, TOK, seed=1)
         most, stops = r.request()

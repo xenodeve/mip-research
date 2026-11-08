@@ -5,7 +5,7 @@ import json
 import sys
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
+HERE = Path(__import__('os').environ.get('WORK', r'C:\Users\xenod\mip-work\a100'))   # out/ and sim/, as sim_gate.py
 sys.stdout.reconfigure(encoding='utf-8')
 name = sys.argv[1]
 tot = {}

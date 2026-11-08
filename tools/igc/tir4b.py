@@ -1701,8 +1701,10 @@ def drive_http(post, tok, ids, rollouts, kernel_factory, live_most=16, on_round=
             if not ask:
                 break
             most, stops = ask
+            bias = r.bias()   # --no-digit-join's digit bias: llama-server takes it as [[id, bias], ...], like vLLM's dict
             reply = post(dict(prompt=r.prompt + r.out, n_predict=most, stop=stop_words(stops, ids, tok), cache_prompt=True,
-                              seed=(r.seed + len(r.out)) % 2**31, return_tokens=True, **sampling))
+                              seed=(r.seed + len(r.out)) % 2**31, return_tokens=True, **sampling,
+                              **(dict(logit_bias=[[int(t), float(v)] for t, v in bias.items()]) if bias else {})))
             if reply.get('tokens') is not None:
                 # the ids the model generated, its stop token among them: a stop on '\n' inside the token '\n\n' put back as '\n' fed the
                 # model a text it never wrote, every line (pc-check: 21 of 48 answers ran to the cap against base's 7)
@@ -1767,8 +1769,8 @@ def run(args):
               suppress_recheck=args.suppress_recheck, mathbackend=args.mathbackend, candidate_close=args.candidate_close,
               inline_style=args.inline_style, no_digit_join=args.no_digit_join, guard_progress=args.guard_progress, answer_close=args.answer_close,
               loop_value=args.loop_value, early_cycle=args.early_cycle, shape_cap=args.shape_cap, cover_cap=args.cover_cap)
-    if args.no_digit_join and (args.server or not (args.inline_calc and args.inline_plain)):
-        raise SystemExit('--no-digit-join holds digits down after a plain inline put: it needs --inline-calc --inline-plain, and vLLM (not --server)')
+    if args.no_digit_join and not (args.inline_calc and args.inline_plain):
+        raise SystemExit('--no-digit-join holds digits down after a plain inline put: it needs --inline-calc --inline-plain')
     if args.suppress_recheck and (args.server or not (args.inline_calc or args.logit_value)):
         raise SystemExit('--suppress-recheck lowers the re-check words after a value software gave: it needs --inline-calc or --logit-value, and vLLM (not --server)')
     if args.logit_value and (args.inline_calc or args.server or args.whole_hint or args.hand_off):

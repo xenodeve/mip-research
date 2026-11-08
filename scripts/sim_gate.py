@@ -1,13 +1,14 @@
 """#307 replay gate: every stored A100 arm replayed (--recorded) with its own flags, read from its arm.json, plus MECHS; 4 at a time.
 python sim_gate.py NAME MECHS [ARM...]   -> sim/cmb-NAME-ARM.json"""
 import json
+import os
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-HERE = Path(__file__).resolve().parent
-WT = r'D:\Github\Strata\.worktrees\gs-dev'
+HERE = Path(os.environ.get('WORK', r'C:\Users\xenod\mip-work\a100'))   # stored arms in out/, replays in sim/ (outside the repo)
+WT = str(Path(__file__).resolve().parents[1])   # this repository: the tools/ under test
 FLAGS = ('inline_calc', 'mathbackend', 'inline_plain', 'no_digit_join', 'guard_progress', 'loop_close', 'answer_close', 'early_cycle',
          'loop_value', 'candidate_close')
 VALUES = ('inline_style', 'suppress_recheck', 'shape_cap', 'cover_cap')
