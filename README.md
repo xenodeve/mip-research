@@ -11,7 +11,7 @@ context), the **General Style** only: forms that are true under every reading, n
 
 Contents: [Best config](#the-best-config-now) · [Results](#results) · [Tokens](#tokens) · [How each mechanism works](#how-each-mechanism-works) ·
 [Detection to put](#from-detection-to-put-every-point-mip-acts-at) · [MathBackend](#mathbackend-how-the-exact-value-is-computed) ·
-[Staying out of the way](#staying-out-of-the-way-why-the-other-work-is-left-alone) · [No fine-tuning](#no-fine-tuning) · [Failures](#failures-in-the-best-config-tests) ·
+[Staying out of the way](#staying-out-of-the-way-why-the-other-work-is-left-alone) · [No fine-tuning](#no-fine-tuning) · [Failures](#failures-in-the-best-config-tests) · [Easy math](#easy-math-tokens-time-and-answers) ·
 [What did not work](#what-did-not-work) · [Open](#open) · [The boundary with Strata-xeno](#the-boundary-with-strata-xeno) · [Running](#running) ·
 [ภาษาไทย](#ภาษาไทย)
 
@@ -230,6 +230,55 @@ From the A100 records of the four best-config arms (`loop-lc`, `loop-lcac`, `loo
 
 Not paired across runs (#21): the right-to-wrong count is per answer between two runs with the same seeds, so a part of it can be
 sampling. The two V7 cases are read, and V7 caused them; whether a longer V7 span fixes them without losing what V7 catches is open.
+
+## Easy math: tokens, time and answers
+
+Three measurements on simpler math, each with its own setup. They are not one series: read each with its line.
+
+**1. Qwen3.8-Flash-Next (Gyro-M) on Strata's engine, 49 questions (29 GSM8K, 20 MATH), 2 rounds (#3).** A different MIP
+mechanism from the General Style: the engine opens a program block in the thinking after 512 tokens and closes the thinking after
+a run that printed (`--igc-sandbox --igc-sandbox-after 512 --igc-sandbox-close`).
+
+| Arm | Tokens | Seconds | Stuck | Right |
+|---|---|---|---|---|
+| Plain | 247,162 | 3,817 | 2 | 73 of 98 |
+| Program, then close | **125,608 (0.508x)** | 2,114 (0.55x) | 0 | **77 of 98** |
+
+Tokens fell on 41 of 49 questions (sign test p < 0.00001). Right answers +4, p 0.29: no measured gain, and no loss, which is
+what the run was for. The seconds are as recorded in the rotation, not a speed claim (no ABBA); per token the decode was the same,
+14.5-15.1 ms in every arm. One wrong answer of 98 came from a wrong program that the close trusted. The close stays off by default:
+for coding it cut reasoning short, and the math result must hold on a paired machine before it counts.
+
+**2. Qwen3.5-4B on DeepMind arithmetic, Qwenputer's 160 rows and protocol (L4, greedy, thinking off, 4,096 tokens) (#12).** Before
+the General Style and the full-context rule.
+
+| Arm | Right | Tokens vs base |
+|---|---|---|
+| Base | 121 | 1.00x |
+| A value at every `=` (the early inline form) | 81 of 105 (base 85 on the same 105) | 0.71x; cut |
+| **The whole step computed by software** (`--whole-hint`) | **127** | **0.41x** |
+| Correcting values the model computed by hand (`--check-hand`) | 116 | 0.99x; cut |
+
+The early inline form lost answers because a value came in the middle of a method the model had started (a decimal sum given
+`9/2`, a long division given `21/19`). The General Style's forms (`4.5`, `1 rem 2`) were built from exactly these cases.
+
+**3. The General Style on the broad set (A100, full context, inline values only, round 1).**
+
+| Part | Arm | Right | Cut | Tokens | Median tokens | Median seconds |
+|---|---|---|---|---|---|---|
+| Arithmetic (160 answers) | control | 125 | 22 | 1,194k | 6,582 | 157 |
+| | General | 119 | 28 | 1,381k | 6,222 | 396 |
+| MATH-500 level 5 (80 answers) | control | 67 | 9 | 1,153k | 13,766 | 405 |
+| | General | 62 | 15 | 1,059k | 11,778 | 789 |
+
+The median answer is 5 % shorter on arithmetic and 14 % on MATH, but the loops that nothing closed in this round added cut
+answers and set the totals. The seconds here are the harness's, not the model's: `tir4b` on vLLM ends a request at every `=` and
+starts the next after the put, about 19,600 extra requests in this arm. Inside Strata's engine the put happens in the decode loop
+(`include/strata/core/igc_inline.hpp`), and its time there is not measured yet.
+
+**What the three say together.** Tokens fell most where software took over a whole step: a program (0.51x) or the whole expression
+(0.41x). Values put at each `=` shorten the typical answer a little; on their own they lose answers to loops, which is what the
+closers are for, and the round that measures the General Style with every closer on this set is the one waiting for compute units.
 
 ## What did not work
 
@@ -459,6 +508,46 @@ model ที่ใช้คือ checkpoint ปกติ (Qwen3.5-4B, bf16) ใ
 
 การเทียบข้ามรอบจับคู่ไม่ได้ (#21) ตัวเลข "ถูกกลายเป็นผิด" เลยอาจมีส่วนที่มาจากการสุ่ม แต่ 2 กรณีของ V7 ผมอ่านแล้ว เป็นเพราะ V7 จริง
 ส่วนการขยายช่วงของ V7 จะแก้ได้โดยไม่เสียสิ่งที่ V7 จับได้หรือเปล่า ยังต้องทดสอบ
+
+### โจทย์คณิตง่าย: token เวลา และคำตอบ
+
+มีผลวัด 3 ชุด แต่ละชุดตั้งค่าต่างกัน ไม่ใช่การทดลองต่อเนื่องชุดเดียว ต้องอ่านทีละชุดพร้อมเงื่อนไขของมัน
+
+**1. Qwen3.8-Flash-Next (Gyro-M) บน engine ของ Strata 49 ข้อ (GSM8K 29 ข้อ MATH 20 ข้อ) รัน 2 รอบ (#3)**
+ใช้กลไก MIP คนละตัวกับ General Style คือหลังคิดไปได้ 512 token engine จะเปิด block โปรแกรมในส่วนคิด พอโปรแกรมรันแล้วพิมพ์ผลออกมาก็ปิดการคิด
+
+| แขน | token | วินาที | ติดวน | ถูก |
+|---|---|---|---|---|
+| ไม่เปิด | 247,162 | 3,817 | 2 | 73 จาก 98 |
+| เปิดโปรแกรมแล้วปิด | **125,608 (0.508 เท่า)** | 2,114 (0.55 เท่า) | 0 | **77 จาก 98** |
+
+- **token** ลดลงใน 41 จาก 49 ข้อ (p < 0.00001)
+- **คำตอบถูก** เพิ่ม 4 ข้อ แต่ p เท่ากับ 0.29 ยังนับเป็นผลเพิ่มไม่ได้ เป้าของรอบนี้คือดูว่าไม่ทำให้ตอบผิดเพิ่ม ซึ่งก็ไม่เพิ่มจริง
+- **วินาที** เป็นตัวเลขตามที่บันทึกในรอบสลับ ยังอ้างเรื่องความเร็วไม่ได้เพราะไม่ได้ทำ ABBA ส่วน decode ต่อ token เท่ากันทุกแขน คือ 14.5–15.1 ms
+- **ที่ตอบผิดเพราะกลไกเองมี 1 จาก 98** เกิดจากโปรแกรมที่ผิด แล้วการปิดการคิดก็เชื่อผลนั้นไป
+- การปิดการคิดยังปิดไว้เป็นค่าเริ่มต้น เพราะงานเขียนโค้ดโดนตัดการคิดสั้นเกินไป ส่วนผลฝั่งคณิตต้องยืนยันบนเครื่องที่จับคู่ได้ก่อน
+
+**2. Qwen3.5-4B บนเลขคณิต DeepMind 160 ข้อ ใช้ชุดข้อและวิธีของ Qwenputer (L4, greedy, ปิดการคิด, 4,096 token) (#12)**
+ชุดนี้วัดก่อนจะมี General Style และก่อนกฎใช้ context เต็ม
+- base ถูก 121 ข้อ
+- ใส่ค่าทุก `=` (ตัวเขียนค่ารุ่นแรก) ถูก 81 จาก 105 ส่วน base ได้ 85 บน 105 ข้อเดียวกัน ใช้ token 0.71 เท่า แต่ตัดทิ้งไปเพราะตอบถูกน้อยกว่า
+- **ให้ software คำนวณทั้งขั้น** (`--whole-hint`) ถูก **127** ใช้ token **0.41 เท่า**
+- แก้ค่าที่ model คิดเอง (`--check-hand`) ถูก 116 ใช้ token 0.99 เท่า ตัดทิ้งไปเช่นกัน
+
+ตัวเขียนค่ารุ่นแรกเสียคำตอบเพราะใส่ค่ากลางวิธีที่ model ทำค้างอยู่ เช่น กำลังบวกทศนิยมแต่ได้ `9/2` หรือกำลังหารยาวแต่ได้ `21/19`
+รูปแบบของ General Style อย่าง `4.5` กับ `1 rem 2` ออกแบบมาจากกรณีพวกนี้โดยตรง
+
+**3. General Style บนชุดกว้าง (A100 context เต็ม ใส่ค่าอย่างเดียว ยังไม่มีตัวปิด loop รอบ 1)**
+- **เลขคณิต 160 คำตอบ:** control ถูก 125 ใช้ 1,194k token มัธยฐาน 6,582 ส่วน General ถูก 119 ใช้ 1,381k มัธยฐาน 6,222
+- **MATH-500 ระดับ 5 80 คำตอบ:** control ถูก 67 มัธยฐาน 13,766 ส่วน General ถูก 62 มัธยฐาน 11,778
+- **คำตอบทั่วไปสั้นลง:** 5% ในเลขคณิต และ 14% ใน MATH
+- **แต่ยอดรวมขึ้น:** รอบนี้ยังไม่มีอะไรปิด loop คำตอบที่ถูกตัดเลยเพิ่มขึ้น แล้วกลายเป็นตัวที่กำหนดยอดรวม
+- **เวลาในชุดนี้เป็นเวลาของเครื่องมือทดสอบ ไม่ใช่ของ model:** มัธยฐานเลขคณิต 157 เทียบ 396 วินาที เพราะ `tir4b` บน vLLM ต้องจบ request ทุกครั้งที่เจอ `=` แล้วเริ่ม request ใหม่หลังใส่ค่า แขนนี้มี request เพิ่มประมาณ 19,600 ครั้ง ส่วนใน engine ของ Strata การใส่ค่าเกิดอยู่ใน decode loop เลย และยังไม่ได้วัดเวลาตรงนั้น
+
+**สรุปจากทั้ง 3 ชุด**
+- token ลดมากที่สุดตอนที่ software รับไปทั้งขั้น เช่น ให้รันโปรแกรม (0.51 เท่า) หรือให้คำนวณนิพจน์ทั้งก้อน (0.41 เท่า)
+- การใส่ค่าทุก `=` ทำให้คำตอบทั่วไปสั้นลงนิดหน่อย แต่ถ้าใช้ตัวเดียวจะเสียคำตอบไปกับ loop ตัวปิด loop มีไว้แก้ตรงนี้
+- รอบที่จะวัด General Style พร้อมตัวปิด loop ครบบนชุดนี้ คือรอบที่ยังรอ compute units อยู่
 
 ### สิ่งที่ไม่ได้ผล
 
