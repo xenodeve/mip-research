@@ -21,7 +21,7 @@ quoted beside each rule.
 | Cover cap (`--cover-cap 32768`) | 97 % of the last 32,768 tokens repeat a 12-gram of the 2,048 before | tir4b (vLLM) | yes | Replay: 0 of 1,078 right touched, 12 of 13 runs past 150k stopped | in best config |
 | Echo guard | 3rd value in a row for one expression, each within 64 tokens, left to the model | tir4b (vLLM) | yes (part of `--inline-calc`) | Stored traces: an echo in 7 of 48 answers; A100 loop-lcacv7: 55 skips in 6 answers | in best config |
 | D: loop value (`--loop-value`) | Puts the question's own exact computation before a close | tir4b (vLLM) | no | A100: value right 12 of 20 times, adopted on none of the 2 division rows | built, measured, kept as option |
-| Loop nudge (`--candidate-close`, no candidate) | Cuts an exact cycle to one round and writes `Wait, let me rethink...` | tir4b (vLLM) | no | Replay: acts on 30 cut and 18 right answers | built, measured, kept as option |
+| Loop nudge (`--candidate-close`, no candidate) | Cuts an exact cycle to one round and writes `Wait, let me rethink...` | tir4b (vLLM) | no | Replay: acts on 30 cut and 18 right answers | built, measured, dropped from every arm |
 | CandidateAnswerTracker + candidate close | Closes on a final answer confirmed by a program's output (needs `--execute`) | tir4b (vLLM) | no | Replay: 0 closes, 0 regressions (no program in the traces) | built, not measured yet |
 | Engine exact-cycle close (`in_cycle`, period to 4,096) | Thinking tail is one exact cycle: close | Strata engine (xeno/mip-sandbox, not in main) | no | Threshold scan of 12,164 stored runs | engine only |
 | Engine counting / line / value-count closes | Masked 64-round cycle, line back 16 times, 256 values: close | Strata engine (xeno/mip-sandbox, not in main) | no | Threshold scans of 7,444 / 7,437 / 2,471 stored runs | engine only |
@@ -232,8 +232,9 @@ Strata-xeno xeno/mip-sandbox: include/strata/core/igc_inline.hpp:107-195. Each p
   | Tokens | 117,495 | 168,882 |
   | Stuck in a loop | 0 | 1 |
 
-  Removing it added 43.7 % tokens (more on 36 questions, fewer on 13, sign-flip p 0.0012); no question went from wrong to right when it
-  was removed. **Status:** engine only, default on with `--igc-inline-exec`. [^close3]
+  Removing it added 43.7 % tokens (more on 36 questions, fewer on 13); no question went from wrong to right when it
+  was removed. The arms ran on different exes and parted before the close on most questions: totals only, unconfirmed until the
+  same-exe test runs. **Status:** engine only, default on with `--igc-inline-exec`. [^close3]
 
 ## Strata engine: repeat note (`--igc-repeat-note`)
 

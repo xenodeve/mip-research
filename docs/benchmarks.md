@@ -22,7 +22,7 @@ Colab A100). A result is only comparable with another one from the same model, m
 | `fail_audit` / `put_reject` / `share_sim` | Audits behind the reported numbers: every put re-checked by `Fraction`, doubt after a put, the loop-share threshold | offline tool | used to report | share threshold: right answers reach 0.92, loops past 150k reach 0.999-1.0 | in best config |
 | `natural_problems` | 48 word problems with long numbers (not a benchmark) | offline tool + Strata engine | no | 48/48 both arms, 249 vs 457 tokens | engine only |
 | Colab parity + `STRATA_IGC_BINDING_CACHE` | The engine queue moved to a Colab A100 after a parity test fixed before the run | Strata engine (xeno/mip-sandbox) | no | A100 repeats itself: 49/49 identical replies in both arms | engine only |
-| Batch slots (`--slots`) | MIP state per engine, not per slot | Strata engine | no | — | spec only |
+| Batch slots (`--slots`) | MIP in the engine's batch slots | Strata engine (xeno/mip-sandbox) | no | A100, 8 questions, `--slots 4`: text identical to the arm alone 8 of 8; 99.8 against about 109 tok/s (different builds) | built, measured, kept as option |
 | Qwen3.6-35B-A3B NVFP4 target | The MIP target model on Strata's q36 path | Strata engine (xeno/q36-nvfp4) | no | No MIP run; router sees 83 % of computation starts 2 tokens ahead | built, not measured yet |
 | Qwen3.5-4B engine port | The 4B on Strata as `qwen35dense` (qwen4exp shape, Q8_0) | Strata engine (xeno/mip-sandbox, not in main) | no | No MIP run; decode 82.4-82.5 tok/s on the 5060 Ti | built, not measured yet |
 
@@ -73,7 +73,7 @@ The decoding of each run is as its source states; the 49-question rotation's sou
 | BIG-bench arithmetic 3- and 5-digit multiply, ABBA (on, off, off, on) | 40 per task | `--igc-result-bridge --igc-inline-exec` on vs off | 5-digit x: right 39, 39 / 40, 39; tokens 137, 142 / 491, 522; seconds 2.80, 2.82 / 6.25, 6.61. 3-digit x: 40 all; tokens 74, 72 / 118, 120. 3- and 5-digit + and -: 40/40 in all four arms | Strata-xeno#276, "ABBA: inline execution on and off" |
 | MATH-500, integer answers, same ABBA | 60 | same | right 58, 58 / 58, 57; tokens 854, 874 / 1,035, 1,085; seconds 15.7, 15.3 / 16.6, 17.5 | same |
 | GSM8K, same ABBA | 100 | same | right 94, 93 / 95, 94; tokens 290, 298 / 297, 298; seconds 6.14, 5.92 / 5.46, 5.51 (+10 % time) [^gsmcost] | same |
-| GSM8K 300 + MATH-500 integers 150 | 450 | on (on16) vs off (off15) | 433 vs 433 after reading every wrong answer; each right alone in 8 | Strata-xeno#276, "Rung 2 scores corrected" |
+| GSM8K 300 + MATH-500 integers 150 | 450 | on (on16) vs off (off15) | 433 vs 433 after reading every wrong answer [^perq] | Strata-xeno#276, "Rung 2 scores corrected" |
 | The 30 limit and loop cases of that run, run to the end of the context | 30 | on vs off | 23 vs 26 right; tokens per case GSM 2,052 / 2,036, MATH 4,197 / 7,697 [^limit30] | Strata-xeno#276, "Limit and loop cases run to the end" |
 | GSM-Hard v2, first 200 positive-integer cases | 200 | on vs off | 177 vs 178 after reading disagreements; 571 vs 731 tokens per case; decode 1,942 vs 2,363 s [^gsmhard] | Strata-xeno#276, "GSM-Hard 200" |
 | Word problems with long numbers (`natural_problems.py`) | 48 | on vs off | 48 / 48 right; 249 vs 457 tokens; 4.21 vs 6.58 s [^natural] | Strata-xeno#276, "Sidecar in the engine, and a parser bug" |
@@ -215,10 +215,10 @@ what acted. Fix: `log_inject(why, from)` at all 24 sites that set or extend `bri
 prove its arms differ only in the flag under test.
 
 ### Batch slots (Strata-xeno#284)
-`--batch N` decodes through `batch_step`, and every MIP use sits in the solo `GEN` path; the state (`bridge_tokens_`, `thinking_tail_`,
-the sandbox session) is one object per engine (Strata-xeno xeno/mip-sandbox: src/program/generate.cpp, `batch_step` and the solo GEN path).
-The test queue does not use slots: MIP-off alone could not either, since the arms would take different decode paths. Slot work stopped; the
-code stays opt-in. What it would take: per-slot MIP state, and a refusal of `--igc-* --batch` until then.
+MIP runs in the engine's slots (`--slots`): on the A100, 8 questions with `--slots 4` gave text identical to the same flags alone on 8 of 8
+(14,489 tokens each), at 99.8 tok/s against about 109 alone; the two arms ran on different builds, so the speed is not a comparison
+(Strata-xeno#284, last comment). It was not faster on this short workload, so slot work stopped and the code stays opt-in. `--batch N`
+(`batch_step`) is a different path and has no MIP.
 
 ### Pack tokenizer bytes (Strata-xeno#293)
 `tools/strata_tokenizer.py:325` and `:328` (Strata-xeno, as the issue cites them) write `merges.txt` and `tokenizer.json` with `write_text()`, so a Windows pack has CRLF and a
@@ -248,3 +248,4 @@ caught / should-catch.
 [^toolroute]: Flash-Next on the Strata engine (engine 6a3c527) on two A100s, not Qwen3.5-4B. One seed. The GPQA 13 rows are a greedy control's 7 misses + 6 right rows, the SuperGPQA 29 its 19 misses + 10 right rows (`select_rows.py`); rows picked as misses turn right on any new path by regression to the mean. HLE: the rule gave ON 5/10; the reader and a hand reading give 4/10 (a hedged exact-answer line). No call ever came inside the thinking, so the saving comes from the tool route's prompt and the thinking itself. On the greedy GPQA 13 rows a tool arm first looked like 11 vs 6; a sampled no-tool, MIP-off arm got 6 of the same 7 misses right, so those wins were the path, not the method.
 [^tokens]: Inside Strata's engine the put happens in the decode loop and costs no request (Strata-xeno xeno/mip-sandbox: include/strata/core/igc_inline.hpp); that path has not been timed with the best-config rules. Other results withdrawn and not used anywhere here: 43/48, 0/96 regressions, `inlineclose` 41/48, the sidecar results, the latent (learned) bundle results, the "one-token windows" result (Strata-xeno#276), and the 166 tok/s prompt figure on the A100 (Strata-xeno#283).
 [^port4b]: Long prompts drift: KL 0.103-0.125 at 2,048 positions on stage 3 (0.239-0.256 on stage 2), far past quantisation noise; being localised.
+[^perq]: Per-question differences between arms on this PC (each arm right alone on 8) are mostly path noise: an A/A of one exe parts before any rule fires (Strata-xeno#276, A/A comment). Only totals carry.

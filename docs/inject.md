@@ -165,8 +165,7 @@ relation on the line (`=` chains, `\approx`, arrows, congruences); a hand value 
 Whole-number work written with `=` is exact; `\approx` keeps a slack for the places written.
 
 **Measured.** DeepMind 160 (Qwen3.5-4B, L4, thinking off): 116 right against base 121 at 0.99x tokens; it corrected 22 hand values on 17
-rows, mostly right, but the model redid the work by hand after each correction (mip-research#12). On reasoning misses it caught 4 of 14
-wrong hand values (mip-research#12). On H3 its corrections fell from 432 to 303 after two rounds of misread fixes (mip-research#20). [^checkhand]
+rows, mostly right, but the model redid the work by hand after each correction (mip-research#12). On H3 its corrections fell from 432 to 303 after two rounds of misread fixes (mip-research#20). [^checkhand]
 
 **What it takes.** `--check-hand` on any tir4b arm. Not in the best config.
 
@@ -313,8 +312,9 @@ answers net +4 (p 0.29): no measured cost or gain. One sentence was cut by the c
 `--igc-sum-note` defaults to 1 since then; `--igc-inline-exec` itself stays opt-in.
 
 **The third-repeat close.** Removing it (Gyro-M, 49 selected questions, one run each) added 43.7 % tokens (117,495 against 168,882; more on
-36 questions, fewer on 13, sign-flip p 0.0012); right after reading 40 with the close against 37 without (Strata-xeno#276, "The
-third-repeat close stays"). [^closerepeat] [^repeatnote] [^notegyro]
+36 questions, fewer on 13); right after reading 40 with the close against 37 without (Strata-xeno#276, "The
+third-repeat close stays"). The two arms ran on different exes and parted before the close on most questions, so only the totals
+carry and the result is unconfirmed until the same-exe test runs (ERRATA X276). [^closerepeat] [^repeatnote] [^notegyro]
 
 ## Latent output path (output mapper)
 

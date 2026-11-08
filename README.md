@@ -230,6 +230,7 @@ Hidden-state signals let MIP prepare a value before `=` arrives instead of waiti
 | `scripts/` | Audits and replay gates behind all reported numbers |
 | [`docs/`](docs/INDEX.md) | The full catalog: every mechanism built or measured, by category (detection, inject, anti-loop, compute, sandbox, learned), engine-only ones included, and every benchmark with its setup |
 | `results/arithmetic-mode/` | The records behind the arithmetic-mode numbers (base and pc9) |
+| [`docs/ERRATA.md`](docs/ERRATA.md) | Claims in the issues that were later withdrawn, corrected, unconfirmed or superseded, each with the current reading |
 | [`AGENTS.md`](AGENTS.md) | The research rules: simulate before the A100, the General Style without test tuning, full context, sampled runs, the API reader, how results are reported |
 | [`docs/archive/`](docs/archive/README.md) | The 130 MIP / IGC / Qwenputer / sandbox plans and reports written in Strata-xeno, frozen as the record |
 | [Strata-xeno](https://github.com/xenodeve/Strata-xeno) (`include/strata/core/igc_*.hpp`, `src/kernels/qwenputer.cu`) | Engine-side MIP implementation (`tools/test_igc_adapter_artifact.py` checks schema headers against `STRATA_ROOT`; pre-split issues mapped in #22) |
@@ -477,6 +478,7 @@ tool route (ให้โมเดลเรียก `run_python` ได้ พ�
 | `scripts/` | สคริปต์ตรวจสอบและ replay gate ที่อยู่เบื้องหลังตัวเลขทั้งหมดในหน้านี้ |
 | [`docs/`](docs/INDEX.md) | แคตตาล็อกเต็ม: ทุกกลไกที่สร้างหรือวัดแล้ว แยกตามหมวด (detect ใส่ค่า ปิด loop ตัวคำนวณ sandbox learned) รวมตัวที่มีเฉพาะใน engine และ benchmark ทุกชุดพร้อม setup |
 | `results/arithmetic-mode/` | record ที่อยู่เบื้องหลังตัวเลขของโหมดเลขคณิต (base และ pc9) |
+| [`docs/ERRATA.md`](docs/ERRATA.md) | ข้ออ้างใน issue ที่ถูกถอน แก้ค่า ยังไม่ยืนยัน หรือถูกแทนที่ พร้อมค่าที่ใช้ได้ตอนนี้ |
 | [`AGENTS.md`](AGENTS.md) | กฎการวิจัย: simulate ก่อนใช้ A100, General Style ที่ไม่จูนตามข้อสอบ, context เต็ม, รันแบบ sampled, ตัวตรวจผ่าน API และวิธีรายงานผล |
 | [`docs/archive/`](docs/archive/README.md) | แผนและรายงาน 130 ฉบับเรื่อง MIP / IGC / Qwenputer / sandbox ที่เขียนไว้ใน Strata-xeno เก็บไว้เป็นบันทึก |
 | [Strata-xeno](https://github.com/xenodeve/Strata-xeno) (`include/strata/core/igc_*.hpp`, `src/kernels/qwenputer.cu`) | ส่วน engine ของ MIP (สคริปต์ test จะเทียบ schema header กับ `STRATA_ROOT` ให้; เลข issue ก่อนแยก repo ดูเทียบได้ที่ #22) |

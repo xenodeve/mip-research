@@ -308,7 +308,7 @@ cannot call it.
     `−` real operators. On the same build MATH-500 integers went 55 with against 59 without. The word-number sidecar was on and fired 0
     times. A later rung on GSM8K + MATH (Strata-xeno#276, comment `igc:ladder-rung2-scorer-20261101`) found 16 more wrong delivered
     values of 957 (13 a number written against a letter, `d12^2=` read as `12^2`; 2 a number after `√`; 1 a list read as thousands); the
-    comment says these are refused in the working tree, with the commit pending. No BigBench rerun on a fixed build was found. The
+    fix is commit `1be41906`, and later engine runs use it. No BigBench rerun on a fixed build was found. The
     "0 wrong values" of the audit above is a tir4b claim; no equivalent audit of the current engine path was found. Runs on this PC do
     not repeat token for token, so the arms are compared as totals. Engine results with time (5-digit multiplication 2.80 / 2.82 against 6.25 / 6.61 s per answer in an ABBA,
     Strata-xeno#276) are on the inject and benchmarks pages.

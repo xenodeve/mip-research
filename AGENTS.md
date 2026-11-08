@@ -120,6 +120,22 @@ The README and the catalog are read by people outside the work (developer, 2026-
 - **Withdrawn results never appear as results** (43/48, 0/96 regressions, inlineclose 41/48, sidecar results, latent bundle
   results); at most a footnote saying they were withdrawn.
 
+## The docs are the source of truth (developer, 2026-11-08)
+
+The docs in this repo are what agents and the project act on, so they are kept current **as information arrives**, not at the end:
+
+- **Where the truth lives.** The current state of every mechanism and result is the catalog (`docs/INDEX.md` and its category
+  pages); the open work is `docs/plans/`; claims that were withdrawn, corrected or never confirmed are in `docs/ERRATA.md`; the
+  rules are this file. Issues, comments and `docs/archive/` are the history, not the current state.
+- **Update the docs in the same turn as the information.** A measured result, a corrected number, a decision, a new mechanism
+  or a found bug goes into its catalog page (and the README if it is shown there) in the same commit or turn as the issue comment
+  that reports it. A result that lives only in an issue or in the chat is not yet known to the next agent.
+- **Never quote a number from an issue or the archive** without checking it against the catalog and `docs/ERRATA.md` first.
+- **A contradiction found is fixed at once:** correct the doc, add a row to `docs/ERRATA.md`, and put the banner at the top of the
+  issue body that holds the old claim (label `has-errata`). The old text stays as written; history is not rewritten.
+- **The engine side follows the same rule:** a change in Strata-xeno that changes a MIP mechanism or result updates the catalog
+  here too.
+
 ## Working rules
 
 - **Time spent is the cost** (2026-11-02): no machine sits idle unnoticed; check a job a minute after it starts; gate a scorer on

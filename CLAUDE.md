@@ -23,5 +23,10 @@ The rules agents miss most, all in full in `AGENTS.md`:
 9. **Present the latest state only;** negative or unconfirmed data goes in a footnote, never as a result.
 10. **Time spent is the cost:** parallel tracks, no idle machine, background only, one engine at a time on the developer's PC.
 11. **The tracker holds the knowledge:** bilingual issue posts at major progress, `gh --repo` always explicit.
+12. **The docs are the source of truth, updated as information arrives.** The catalog (`docs/INDEX.md` and its pages) is the
+   current state, `docs/plans/` the open work, `docs/ERRATA.md` the withdrawn and corrected claims; issues and `docs/archive/` are
+   history. A result, correction, decision or bug goes into the docs in the same turn as its issue comment. Never quote a number
+   from an issue without checking the catalog and the errata; a contradiction found gets the doc fixed, an errata row and a banner
+   on the issue.
 
 @AGENTS.md

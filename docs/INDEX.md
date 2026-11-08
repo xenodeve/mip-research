@@ -4,6 +4,8 @@ Everything built and measured in this research, by category, with every solid be
 [README](../README.md) tells the best config's story; this catalog lists **every** mechanism, including the many that are built and
 measured but not part of the best config, and says where each lives and what it takes to use it.
 
+Claims in the issues that were later withdrawn, corrected or never confirmed: [ERRATA](ERRATA.md). Check it before quoting an issue.
+
 [ภาษาไทย](#ภาษาไทย)
 
 ## Categories
@@ -93,11 +95,13 @@ The mechanisms most worth carrying over, with what each needs. Every one has its
 [^unpaired]: หมายเหตุ: a rerun of rows chosen because some arm got them wrong; not paired token for token across runs (mip-research#21).
 [^bigbench]: หมายเหตุ: measured on a build before the parser fix that refuses a number written against a letter; the same comment
     records 2 wrong delivered values ([compute](compute.md#engine-inline-execution---igc-inline-exec)).
-[^q49]: หมายเหตุ: +4 right is p 0.29, so the result is "no loss" at half the tokens; the close stays off by default because it cut
+[^q49]: หมายเหตุ: +4 right is p 0.29, so the result is "no loss" at half the tokens; one plain run was stopped by the bench on a 2-token
+    cycle before the engine's own close could act, so the plain arm's tokens are slightly low and one of its answers is unknown
+    (mip-research#6); the close stays off by default because it cut
     coding short ([sandbox](sandbox.md#forced-block--close-after-a-print)).
 [^tool]: หมายเหตุ: the saving comes mostly from the tool's prompt line; no call was made inside the thinking on these sets
     ([sandbox](sandbox.md#tool-route-the-models-own-run_python)).
-[^lcb]: หมายเหตุ: every sandbox close lost on the same 20 rows (14, 15, 13 right) ([benchmarks](benchmarks.md#master-results-table)).
+[^lcb]: หมายเหตุ: greedy, one paired run; every sandbox close lost on the same 20 rows (14, 15, 13 right) ([benchmarks](benchmarks.md#master-results-table)).
 
 ## ภาษาไทย
 
