@@ -12,7 +12,7 @@ Status: decisions D1-D5 taken (below). Phase 0 starting.
 | F2 | `xeno/q36-nvfp4` (the Qwen3.6-35B-A3B target) does **not** contain `xeno/mip-sandbox` | `git merge-base --is-ancestor` |
 | F3 | Qwen3.5-4B on Strata's engine drifts on long prompts (KL 0.10-0.26 at 2,048 tokens, greedy parts at position 3-26), so the best config's own model cannot run on the engine yet | Strata-xeno#297, HF gate table |
 | F4 | `sim_replay` reads tir4b records only; `external_bench` keeps the text, not token ids, so no replay gate exists for engine runs | `tools/igc/sim_replay.py`, `external_bench.py`:210 |
-| F5 | vLLM does not repeat across runs (mip-research#21); the Strata engine on the A100 repeats 49/49 (Strata-xeno#283) | catalog, benchmarks |
+| F5 | vLLM does not repeat across runs (mip-research#21); the Strata engine on the A100 repeated 49/49 **greedy** (Strata-xeno#283). Whether it repeats a sampled run (T 0.6, same seed) is not measured | catalog, benchmarks |
 | F6 | The `(exact)` note draws re-checks on Qwen3.5-4B (+22-24 points). The Gyro-M arm where removing it cost +26.6 % tokens used the early engine delivery, one unpaired run per arm, median question unchanged: not evidence for a note under the General Style | [inject](../inject.md), Strata-xeno#276 `igc:note-and-effort-20261101` |
 | F7 | Compute units: about 3.6 on all accounts; round 9 (best config vs control, 120 fresh rows x 2) needs 12-20 and is the active goal | session record |
 | F8 | tir4b has no sum note or repeat note; `test_unified_detect.py` and `test_ood_metrics.py` exist only in Strata-xeno | grep |
@@ -29,7 +29,7 @@ Status: decisions D1-D5 taken (below). Phase 0 starting.
 | M6 | Sandbox close (0.508x) and tool route (0.71-0.81x) never combined with the General Style | [sandbox](../sandbox.md) | Arms on the engine after M1: General + forced block + close; General + tool route | Engine A100 paired A/B; off for coding | M1; `--execute` on this PC needs a new approval (D1 approval was for one round) | A100 |
 | M7 | Engine notes: sum note (13 -> 0 delivered-sum events), repeat note, third-repeat close | [inject](../inject.md), [anti-loop](../antiloop.md) | Sum note: first count the delivered-sum pattern (mip-research#1) in the 4B records, add to tir4b only if it occurs. Repeat note / third-repeat close: Flash-Next only | Third-repeat close: the same-exe repeated test that never ran (`tl-otra` / `tl-otrb`). Repeat note: replay plus the mip-research#5 cases (`stop checking` ended thinking mid-work) | On the 4B the replay already rejected the repeat-close family (mip-research#13: 44 of 48 rows not looping) | local |
 | M9 | CandidateAnswerTracker + candidate close never measured | [anti-loop](../antiloop.md) | Measure after M6, on runs that have program output | Replay on M6's traces, then live | M6 | with M6 |
-| M10 | Paired A/B only on the engine | F5 | Move every A/B that can run on the engine there; tir4b on vLLM stays the reference for the 4B | — | F3 for the 4B | — |
+| M10 | Paired A/B only on the engine | F5 | First measure whether the engine repeats a sampled run with the same seed (two rounds of one arm, T 0.6); if it does, move every A/B that can run on the engine there; tir4b on vLLM stays the reference for the 4B | identical text per seed across two rounds | F3 for the 4B | one short A100 or local run |
 | M11 | Missing pieces in the repo | F8 | Move the two test files; keep threshold scripts beside the numbers (done for shape / V7) | test suite green | none | none |
 
 Kept as options and **not scheduled**, with the reason: `--suppress-recheck` (re-check 38.5 -> 16.1 %, tokens -10-15 %, no gain in
@@ -57,7 +57,7 @@ The learned / latent path stays paused (developer decision, Strata-xeno#276).
 
 **Phase 2, A100 (needs compute units; check the balance, say it, stop the VM after the round).**
 1. Round 9 first: it is the active goal, and anything else here would displace it.
-2. Flash-Next on the engine: General Style + closers vs plain, paired (F5), thresholds from Flash-Next traces with closers off,
+2. Flash-Next on the engine: General Style + closers vs plain, paired if M10's check holds (F5), thresholds from Flash-Next traces with closers off,
    tuned and tested on different rows.
 3. M6 arms, then M9.
 

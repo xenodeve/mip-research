@@ -64,7 +64,9 @@ Only the latest state of each line of work. Arms are compared within one round o
 | DeepMind arithmetic (Qwenputer's 160 rows: add_or_sub_big, div_big, mul_big, mul_div_multiple_longer, 40 each, seed 0) | 160, greedy, no thinking, 4,096 cap, system "Do every arithmetic step exactly." | base / arithmetic mode (pc9: `--whole-hint --whole-plain --hand-off --question-value` with the fraction close) / ablation: whole step only, no hand-off or question value | right 118 / **156** / 138; tokens vs base 1.00 / **0.05** / 0.11 [^dm160] | Strata-xeno#298, "pc9: 156/160"; mip-research#12, "PC run: whole-plain vs base" |
 | Same 160, question reader offline | 160 | `question_read.py` | 160/160 equal to gold's exact value | Strata-xeno#298, "Catch point 1" |
 
-### Qwen3.8-Flash-Next (Gyro-M), Strata engine, this PC (D2x: RTX 5060 Ti + RTX 4070 SUPER + CPU pool), greedy, thinking on
+### Qwen3.8-Flash-Next (Gyro-M), Strata engine, this PC (D2x: RTX 5060 Ti + RTX 4070 SUPER + CPU pool), thinking on
+
+The decoding of each run is as its source states; the 49-question rotation's source does not state it.
 
 | Set | n | Arms | Result | Source |
 |---|---|---|---|---|

@@ -1,6 +1,6 @@
 # mip-research
 
-**MIP (Model Inline Processing): software computes, the model reasons.** While an LLM reasons, MIP intercepts arithmetic expressions at `=` ([Detection points](#detection-points)), injects exact computed values inline ([How a value is put](#how-a-value-is-put)) via a 387-operation zero-float CPU/CUDA engine ([MathBackend](#mathbackend)), and closes repetitive loops that trap smaller models ([Loops it prevents](#loops-it-prevents))—requiring **zero weight changes and no second model** ([No fine-tuning](#no-fine-tuning)). Across benchmarks, MIP cuts tokens by **95%** and boosts accuracy from **118 to 156/160** on single-step calculations ([Arithmetic mode](#arithmetic-mode-95--fewer-tokens)), speeds up 5-digit multiplication by **56% (-72% tokens)** inside [Strata-xeno](https://github.com/xenodeve/Strata-xeno)'s native decode loop on **Qwen3.8-Flash-Next** ([Flash-Next in Strata](#on-the-target-model-qwen38-flash-next-in-strata)), saves **~30% tokens** on hard reasoning via sandbox calls ([Tool route](#tool-route-hard-reasoning-sets)), rescues **+13 looping problems** (`24 -> 37/48`) while cutting unanswered timeouts from **21 to 1** ([Best config](#best-config) · [Results](#results)), shortens MATH Level 5 solutions by **40%** ([Tokens](#tokens)) and routine CoT math by up to **33%** ([Ordinary math](#ordinary-math)), predicts upcoming calculations **2 tokens ahead** at **83%–89%** recall ([Seeing a calculation coming](#seeing-a-calculation-coming)), and maintains **0 wrong values** across **41,176** frozen + **39,046** live insertions with **0 false loop closes** on **1,078** correct answers ([Staying out of the way](#staying-out-of-the-way) · [Accuracy audit](#accuracy-audit) · [Next](#next) · [Repo](#repo) · [ภาษาไทย](#ภาษาไทย)).
+**MIP (Model Inline Processing): software computes, the model reasons.** While an LLM reasons, MIP intercepts arithmetic expressions at `=` ([Detection points](#detection-points)), injects exact computed values inline ([How a value is put](#how-a-value-is-put)) computed with zero floating point ([MathBackend](#mathbackend): 387 operations on CPU; Strata's engine has its own CUDA executors), and closes repetitive loops that trap smaller models ([Loops it prevents](#loops-it-prevents))—requiring **zero weight changes and no second model** ([No fine-tuning](#no-fine-tuning)). Across benchmarks, MIP cuts tokens by **95%** and boosts accuracy from **118 to 156/160** on single-step calculations ([Arithmetic mode](#arithmetic-mode-95--fewer-tokens)), speeds up 5-digit multiplication by **56% (-72% tokens)** inside [Strata-xeno](https://github.com/xenodeve/Strata-xeno)'s native decode loop on **Qwen3.8-Flash-Next** ([Flash-Next in Strata](#on-the-target-model-qwen38-flash-next-in-strata)), saves **~30% tokens** on hard reasoning sets with a tool route on Flash-Next ([Tool route](#tool-route-hard-reasoning-sets)), raises right answers on loop-prone questions from **24 to 37 of 48** while answers that end with no answer fall from **21 to 1** ([Best config](#best-config) · [Results](#results)), shortens MATH Level 5 solutions by **40%** ([Tokens](#tokens)) and routine CoT math by up to **33%** ([Ordinary math](#ordinary-math)), predicts upcoming calculations **2 tokens ahead** at **83%–89%** recall ([Seeing a calculation coming](#seeing-a-calculation-coming)), and puts **0 wrong values** in **41,176** frozen + **39,046** live insertions checked, while in replay its loop closers touch **0 of 1,078** right answers ([Staying out of the way](#staying-out-of-the-way) · [Accuracy audit](#accuracy-audit) · [Next](#next) · [Repo](#repo) · [ภาษาไทย](#ภาษาไทย)).
 
 ## At a glance
 
@@ -8,13 +8,13 @@
 |---|---|---|---|
 | **Single-step arithmetic** (DeepMind 160, Qwen3.5-4B) | **156 / 160** correct (vs. 118) | **-95% tokens** (`0.046x`: 261,731 -> 12,062) · **85% faster** (`61s -> 8s`) | [Arithmetic mode](#arithmetic-mode-95--fewer-tokens) |
 | **Native decode-loop execution** (Qwen3.8-Flash-Next in Strata) | **-72% tokens** · **-56% time** on 5-digit mult | GSM-Hard **-22% tokens / -18% time** · MATH **-18% tokens** · long-number word problems **-46% tokens** at matched accuracy | [Flash-Next in Strata](#on-the-target-model-qwen38-flash-next-in-strata) |
-| **Hard reasoning tool route** (MATH long, GPQA, SuperGPQA) | **~30% fewer tokens** (`0.71x–0.81x`) | Same accuracy (within 1 answer per set) on Qwen3.5-4B | [Tool route](#tool-route-hard-reasoning-sets) |
-| **Loop recovery on hard problems** (48 loop-prone runs) | **24 -> 37 / 48** correct (**+13**) | Unanswered timeouts drop from **21 to 1** · Best config combines inline eval + loop closers | [Best config](#best-config) · [Results](#results) |
-| **Runaway thinking & token control** | **-40% tokens** on MATH Level 5 | Cuts 200k–262k context-limit loops down to **40k–114k** (`15,260 -> 9,090` median tokens on MATH L5) | [Tokens](#tokens) · [Loops it prevents](#loops-it-prevents) |
+| **Hard reasoning tool route** (MATH long, GPQA, SuperGPQA) | **~30% fewer tokens** (`0.71x–0.81x`) | Same accuracy (within 1 answer per set) on Qwen3.8-Flash-Next (Strata engine, A100) | [Tool route](#tool-route-hard-reasoning-sets) |
+| **Loop recovery on hard problems** (48 loop-prone runs) | **24 -> 37 / 48** right answers | Answers with no answer drop from **21 to 1** · Inline values + closers A, B, V7 [^r7] | [Best config](#best-config) · [Results](#results) |
+| **Runaway thinking & token control** | **-40% tokens** on MATH Level 5 | `15,260 -> 9,090` median tokens of right answers on MATH L5 · in replay, `cover-cap` stops 12 of 13 loops past 150k at **40k–114k** | [Tokens](#tokens) · [Loops it prevents](#loops-it-prevents) |
 | **Routine math inside CoT** (120 ordinary problems) | Up to **-33% tokens** on identical answers | Polynomials **-33%** (`0.67x`) · Surds **-29%** (`0.71x`) · Units & sequences **-11%** (`0.89x`) | [Ordinary math](#ordinary-math) |
 | **Predictive lookahead** (2 tokens before calculation starts) | **89%** (4B) / **87%** (35B) via residual probe | **83%** recall at **zero compute cost** from Qwen3.6's MoE router (vs. 53% from text alone) | [Seeing a calculation coming](#seeing-a-calculation-coming) |
-| **Exact CPU & CUDA MathBackend** (387 operations) | **0 wrong values** in **41,176** + **39,046** puts | `0.18 ms` CPU / `0.066–0.093 ms` CUDA · **0 disagreements** in 31,064 cross-checked test cases | [Detection points](#detection-points) · [How a value is put](#how-a-value-is-put) · [MathBackend](#mathbackend) |
-| **Non-intrusive guardrails** (1,526 frozen + A100 traces) | **0 / 1,078** (`cover-cap`) · **0 / 915** (`V7`) false closes | Model doubts MIP values only **4.1%** of the time (vs. **15.2%** for its own) · Tokenizer-portable | [Staying out of the way](#staying-out-of-the-way) · [No fine-tuning](#no-fine-tuning) · [Accuracy audit](#accuracy-audit) |
+| **Exact computation** (MathBackend, 387 operations on CPU) | **0 wrong values** in **41,176** + **39,046** puts checked | `0.18 ms` per `=` on CPU · **0 disagreements** in 31,064 cross-checked cases · Strata's CUDA executors byte-exact on **1,271 + 1,403** cases | [Detection points](#detection-points) · [How a value is put](#how-a-value-is-put) · [MathBackend](#mathbackend) |
+| **Non-intrusive guardrails** (1,526 frozen + A100 traces) | In replay: **0 / 1,078** (`cover-cap`) · **0 / 915** (`V7`) right answers touched [^lost] | Model doubts MIP values only **4.1%** of the time (vs. **15.2%** for its own) · Reads its tokens from the tokenizer | [Staying out of the way](#staying-out-of-the-way) · [No fine-tuning](#no-fine-tuning) · [Accuracy audit](#accuracy-audit) |
 
 Everything else that was built and measured, including the engine-side mechanisms not in the best config: **[the catalog](docs/INDEX.md)**.
 
@@ -62,22 +62,22 @@ Strata's engine reads `A op B =` as the model writes it and injects the exact va
 
 ## Tool route: hard reasoning sets
 
-| Set (Qwen3.5-4B on A100, T 0.6, rule + API reader) | Right, without / with tool | Tokens with / without tool |
+| Set (Qwen3.8-Flash-Next, Gyro-M, Strata engine, A100, T 0.6, rule + API reader) | Right, without / with tool | Tokens with / without tool |
 |---|---|---|
 | **SuperGPQA, calculation questions** (29) | 11 / 10 | **0.71 (-29 %)** |
 | **GPQA** (13) | 12 / 11 | **0.73 (-27 %)** |
 | **MATH, long problems** (22) | 21 / 21 | **0.81 (-19 %)** (167,743 -> 135,772) |
 
-A callable Python sandbox (with its prompt line) saves **~30% tokens** on hard reasoning sets at the same accuracy (within 1 answer per set). [^tool]
+The tool route (a callable `run_python` and its prompt line) saves **~30% tokens** on hard reasoning sets at the same accuracy (within 1 answer per set). [^tool]
 
 ## Best config
 
 | Part (Qwen3.5-4B, bf16, vLLM 0.33, Colab A100 80 GB, T 0.6, top-p 0.95, top-k 20, 262,144-token context) | Flags | Role in CoT Reasoning (`thinking` on) |
 |---|---|---|
 | **Inline values (General Style)** | `--inline-calc --mathbackend --inline-plain --inline-style general --no-digit-join --guard-progress` | Exact inline values after `=`, prevents digit gluing, and guards prime-trial progress |
-| **A: loop close** | `--loop-close` | Closes `<think>` on a thinking loop so the model writes its answer |
+| **A: loop close** | `--loop-close` | Puts `</think>` on a thinking loop so the model writes its answer |
 | **B: answer close** | `--answer-close` | Cuts answer-stage loops to 1 round and cues `The final answer is $\boxed{` |
-| **V7: early cycle** | `--early-cycle` | Closes `<think>` early on short exact cycles at line ends |
+| **V7: early cycle** | `--early-cycle` | Puts `</think>` early on short exact cycles at line ends |
 | **Shape cap** | `--shape-cap 1024` | Masks digit runs to close 1,024-round structural cycles with changing number lengths |
 | **Cover cap** | `--cover-cap 32768` [^cover] | Closes irregular loops when 97% of the last 32,768 tokens repeat 12-token stretches from the 2,048 before |
 
@@ -93,8 +93,8 @@ python tools/igc/tir4b.py run --model <Qwen3.5-4B> --rows rows.jsonl --samples 2
 |---|---|---|---|---|
 | Plain model | 17 / 34 | 7 / 14 | 24 / 48 | 21 |
 | Inline values only | 17 / 34 | 8 / 14 | 25 / 48 | 23 |
-| **Best config** | **27 / 34** | **10 / 14** | **37 / 48 (+13)** | **1 (-20)** |
-| **3 hardest questions with `shape-cap`** | — | — | **8 / 12** | **0** hitting context end [^pairing] |
+| **Best config** [^r7] | **27 / 34** | **10 / 14** | **37 / 48 (+13)** | **1 (-20)** |
+| **3 hardest questions with `shape-cap`** | — | — | **8 / 12** | **1** ran to the context end [^shape8] [^pairing] |
 
 ## Tokens
 
@@ -102,7 +102,7 @@ python tools/igc/tir4b.py run --model <Qwen3.5-4B> --rows rows.jsonl --samples 2
 |---|---|---|---|
 | **MATH Level 5 median tokens** (right answers) | 15,260 | **9,090** | **40 % shorter** right answers |
 | **Long-division loops** (`shape-cap`) | > 200,000 (to context end) | **55,000** | Stops runaway long division early |
-| **Loops running past 150k tokens** (`cover-cap`) | 150,000 – 262,144 | **40,000 – 114,000** | Stops every >150k loop well before context limit |
+| **Loops running past 150k tokens** (`cover-cap`, replay) | 150,000 – 262,144 | **40,000 – 114,000** | Stops 12 of 13 in replay, well before the context limit [^cover] |
 | **Previously unanswered runs** | 21 with no answer | **1 with no answer** | **20 answers that had no answer now finish** [^tokens] |
 
 ## Ordinary math
@@ -179,7 +179,7 @@ Hidden-state signals let MIP prepare a value before `=` arrives instead of waiti
 | **Bounded** | Each operation declares `@op(name, kind, bound=...)` | Past its bound or domain, raises `NotCovered` or `BadInput` -> no put, zero guessing |
 | **Checked against independent libraries** | `sim_*.py` compares every op against `SymPy`, `mpmath`, or `NetworkX` (`tools/test_mathbackend_*.py`) | **387 / 387 operations · 31,064 cases · 0 disagreements** |
 | **Fast on CPU** | **0.18 ms per `=`** | Matches what the model went on to write in **3,896 places** on 6 unseen arms (most differences are model slips that software got right) |
-| **Byte-exact on GPU (CUDA)** | **0.066 – 0.093 ms median per call** | **1,271 / 1,271** integer cases (`//`, `mod`, `gcd`, `pow`) and **1,403 / 1,403** rational/decimal cases (`0.1 + 0.2 -> 3/10`) |
+| **Strata's CUDA executors** (in the engine; separate from MathBackend) | Integer `+ - ×` **0.066 – 0.093 ms** median per call | Byte-exact: **1,271 / 1,271** integer cases (`//`, `mod`, `gcd`, `pow`) and **1,403 / 1,403** rational/decimal cases (`0.1 + 0.2 -> 3/10`) [^cuda] |
 
 ## Staying out of the way
 
@@ -187,7 +187,7 @@ Hidden-state signals let MIP prepare a value before `=` arrives instead of waiti
 |---|---|---|
 | **Strict trigger** | Only after a model-written `=`, only on exact arithmetic (skips symbols, words, mixed numbers `2\frac{1}{3}`, inexact roots, oversized numbers) | Put values at **19,546 of 19,636** readable `=` across 120 questions; no other text touched |
 | **Semantic refusals** (when literal value != model intent) | No put on: standalone numbers (`m=4,512=8*64`), no-op repeats, partial operands still being written, subtraction borrowing columns (`0-9 = 1`), coin counts, redefined operators (`a * b = a - b`), congruences without modulus, or 3rd consecutive repeat | Never overwrites non-standard or partial notation |
-| **Loop thresholds above all right answers** | `shape-cap`: right answers reach **805 rounds** (cap is **1,024**) · `cover-cap`: right answers reach **0.92** (cap is **0.97**) | Every closer passes full A100 trace replay: **0 acts on right answers** and **0 requests refused by vLLM** |
+| **Loop thresholds above all right answers** | `shape-cap`: right answers reach **805 rounds** (cap is **1,024**) · `cover-cap`: right answers reach **0.92** (cap is **0.97**) | Every closer passed the replay of the stored A100 traces before its A100 run: no act on a right answer, or every act read and understood, and **0 requests refused by vLLM** [^lost] |
 | **The model decides** | A put is plain text on the page (not an instruction); a close only hands `</think>` or the final-answer cue | The model writes the final answer itself |
 
 ## No fine-tuning
@@ -195,7 +195,7 @@ Hidden-state signals let MIP prepare a value before `=` arrives instead of waiti
 | Feature | Detail |
 |---|---|
 | **Zero weight changes** | Reads the inference text stream and appends tokens; uses the plain checkpoint with its model-card sampling |
-| **Tokenizer-agnostic** | Reads digit tokens, `=`, and line-end tokens directly from the tokenizer, running unchanged on another model's tokenizer |
+| **Tokenizer-agnostic** | Reads digit tokens, `=`, and line-end tokens directly from the tokenizer, so the mechanisms run on another model's tokenizer; the loop thresholds were set from Qwen3.5-4B traces and are checked again on each new model |
 
 ## Accuracy audit
 
@@ -244,6 +244,9 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
 [^tool]: One sampled answer per question, the arm without the tool on one A100 account and the arm with it on another. HLE (10): 4 / 4 right at 1.05x tokens. Almost every call came after the thinking, so most of the saving comes from the tool route's prompt line rather than from the calls themselves.
 [^detect]: These detectors read; they do not act yet. A put still waits for the `=` and an exact parse. The probes need the hidden state, which the engine has and llama-server and vLLM do not expose.
 [^cover]: Cover cap is measured by replaying the stored A100 traces; its own A100 round is the next one (#19).
+[^r7]: Measured with the inline values and closers A, B and V7 (one round). The shape cap then ran on the 3 hardest questions, and the cover cap so far only in replay; the round with every part on is next (#19).
+[^shape8]: In one long division every zero quotient digit made a shorter round, so no exact cycle formed and the shape cap never reached its count; the cover cap was built for this case and stops it in replay.
+[^cuda]: Latency was measured on the integer `+ - ×` executor (4 calls per task); the other two executors were checked for exactness, not timed. The model's text reaches 18 of MathBackend's 387 operations; the rest are callable from code.
 [^pairing]: The best config and the inline-only arm ran in one round on the same questions and seeds; the plain model is another run. vLLM does not repeat an answer across runs (#21), so a difference of 1-2 answers is within run-to-run variation.
 [^tokens]: Totals over all answers: plain 631k, inline only 754k, best config 936k, because more answers finish and one answer that runs to the context end weighs 210-262k. On arithmetic the median right answer is 8,371 tokens with the best config against 6,472, since 10 more of them now finish. In this harness the best config runs at 25.7 tokens/s per answer against 37.9: `tir4b` ends a vLLM request at every `=` and starts the next after the put; inside Strata's engine the put happens in the decode loop (`include/strata/core/igc_inline.hpp`), not timed yet.
 [^ordinary]: Other kinds in the same comparison: multiply-divide chains 1.01, long mixed expressions 1.13 (the model checks a value it was given), MATH-500 level 5 0.98; all 170 pairs 0.97 (fewer tokens in 93). Right answers in that round, inline values alone with no closer: 197 of 240 against 209 for the plain model; every miss in both arms was a loop, which is what the closers are for. With thinking on, no mechanism alone has raised accuracy on a broad set yet; what it moves is tokens.
@@ -255,7 +258,7 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
 
 ## ภาษาไทย
 
-**MIP (Model Inline Processing): ให้ซอฟต์แวร์คิดเลข ให้โมเดลคิดเหตุผล** ระหว่างที่โมเดลกำลังคิด MIP จะดักอ่านสมการหน้าเครื่องหมาย `=` ([จุดที่ตรวจจับ](#จุดที่ตรวจจับ)) แล้วคำนวณค่าที่แม่นยำเป๊ะด้วยคลังคณิตศาสตร์ 387 ฟังก์ชันแบบไร้ floating point ทั้งบน CPU และ CUDA ([MathBackend](#mathbackend-1)) เพื่อเติมคำตอบต่อท้าย `=` ทันทีในระดับเสี้ยววินาที ([ใส่ค่ายังไง](#ใส่ค่ายังไง)) พร้อมตัดจบ loop ที่โมเดลขนาดเล็กชอบคิดวนจนตัน ([loop ที่ป้องกันได้](#loop-ที่ป้องกันได้)) โดย**ไม่ต้องแก้ weight ไม่ต้อง fine-tune และไม่ต้องใช้โมเดลตัวที่สอง** ([ไม่ต้อง fine-tune](#ไม่ต้อง-fine-tune)) ผลลัพธ์คือ: ลด token ลง **95%** (ตอบเร็วขึ้น **85%**) และเพิ่มความแม่นยำจาก **118 เป็น 156/160** ในงานคิดเลขก้อนเดียวจบ ([โหมดเลขคณิต](#โหมดเลขคณิต-token-ลดลง-95)), ลดเวลาคูณเลข 5 หลักลง **56% (token ลด 72%)** เมื่อรันใน decode loop ของ [Strata-xeno](https://github.com/xenodeve/Strata-xeno) บน **Qwen3.8-Flash-Next** ([บน model เป้าหมาย](#บน-model-เป้าหมาย-qwen38-flash-next-ใน-strata)), ประหยัด token ลง **~30%** บนโจทย์เหตุผลระดับยากด้วย Python sandbox ([tool route](#tool-route-โจทย์เหตุผลยาก-ๆ)), กู้คืนคำตอบในโจทย์ที่ชอบติด loop ได้เพิ่ม **+13 ข้อ** (`24 -> 37/48`) และลดเคสไร้คำตอบจาก **21 เหลือ 1** ([best config](#best-config-1) · [ผลการทดสอบ](#ผลการทดสอบ)), ย่อคำตอบที่ถูกบน MATH ระดับ 5 ให้**สั้นลง 40%** ([token](#token)) และโจทย์คณิตทั่วไปสั้นลงสูงสุด **33%** ([โจทย์คณิตทั่วไป](#โจทย์คณิตทั่วไป)), พยากรณ์จังหวะเริ่มคิดเลขล่วงหน้าได้ถึง **2 token** ด้วยความแม่นยำ **83%–89%** ([เห็นการคำนวณก่อนที่จะมาถึง](#เห็นการคำนวณก่อนที่จะมาถึง)) และการันตี**เติมเลขผิด 0 ครั้ง** จากการเติมค่ากว่า **41,176 + 39,046 ครั้ง** โดยไม่ไปแตะคำตอบที่ถูกเลยแม้แต่ข้อเดียว (**0 จาก 1,078**) ([ไม่กระทบการทำงานอื่น](#ไม่กระทบการทำงานอื่น) · [ตรวจความแม่นยำ](#ตรวจความแม่นยำ) · [ขั้นต่อไป](#ขั้นต่อไป) · [repo](#repo-1))
+**MIP (Model Inline Processing): ให้ซอฟต์แวร์คิดเลข ให้โมเดลคิดเหตุผล** ระหว่างที่โมเดลกำลังคิด MIP จะดักอ่านสมการหน้าเครื่องหมาย `=` ([จุดที่ตรวจจับ](#จุดที่ตรวจจับ)) แล้วคำนวณค่าที่แม่นยำเป๊ะแบบไร้ floating point ([MathBackend](#mathbackend-1): 387 ฟังก์ชันบน CPU ส่วน engine ของ Strata มีตัวคำนวณ CUDA ของตัวเอง) เพื่อเติมคำตอบต่อท้าย `=` ทันทีในระดับเสี้ยววินาที ([ใส่ค่ายังไง](#ใส่ค่ายังไง)) พร้อมตัดจบ loop ที่โมเดลขนาดเล็กชอบคิดวนจนตัน ([loop ที่ป้องกันได้](#loop-ที่ป้องกันได้)) โดย**ไม่ต้องแก้ weight ไม่ต้อง fine-tune และไม่ต้องใช้โมเดลตัวที่สอง** ([ไม่ต้อง fine-tune](#ไม่ต้อง-fine-tune)) ผลลัพธ์คือ: ลด token ลง **95%** (ตอบเร็วขึ้น **85%**) และเพิ่มความแม่นยำจาก **118 เป็น 156/160** ในงานคิดเลขก้อนเดียวจบ ([โหมดเลขคณิต](#โหมดเลขคณิต-token-ลดลง-95)), ลดเวลาคูณเลข 5 หลักลง **56% (token ลด 72%)** เมื่อรันใน decode loop ของ [Strata-xeno](https://github.com/xenodeve/Strata-xeno) บน **Qwen3.8-Flash-Next** ([บน model เป้าหมาย](#บน-model-เป้าหมาย-qwen38-flash-next-ใน-strata)), ประหยัด token ลง **~30%** บนโจทย์เหตุผลระดับยากด้วย tool route บน Flash-Next ([tool route](#tool-route-โจทย์เหตุผลยาก-ๆ)), เพิ่มคำตอบที่ถูกในโจทย์ที่ชอบติด loop จาก **24 เป็น 37 จาก 48 คำตอบ** และคำตอบที่จบแบบไม่มีคำตอบลดจาก **21 เหลือ 1** ([best config](#best-config-1) · [ผลการทดสอบ](#ผลการทดสอบ)), ย่อคำตอบที่ถูกบน MATH ระดับ 5 ให้**สั้นลง 40%** ([token](#token)) และโจทย์คณิตทั่วไปสั้นลงสูงสุด **33%** ([โจทย์คณิตทั่วไป](#โจทย์คณิตทั่วไป)), พยากรณ์จังหวะเริ่มคิดเลขล่วงหน้าได้ถึง **2 token** ด้วยความแม่นยำ **83%–89%** ([เห็นการคำนวณก่อนที่จะมาถึง](#เห็นการคำนวณก่อนที่จะมาถึง)) และ**เติมเลขผิด 0 ครั้ง** จากการเติมค่า **41,176 + 39,046 ครั้ง**ที่ตรวจ ส่วนตัวปิด loop ใน replay ไม่แตะคำตอบที่ถูกเลย (**0 จาก 1,078**) ([ไม่กระทบการทำงานอื่น](#ไม่กระทบการทำงานอื่น) · [ตรวจความแม่นยำ](#ตรวจความแม่นยำ) · [ขั้นต่อไป](#ขั้นต่อไป) · [repo](#repo-1))
 
 ### สรุปสั้น ๆ
 
@@ -263,13 +266,13 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
 |---|---|---|---|
 | **โหมดเลขคณิตก้อนเดียวจบ** (DeepMind 160 ข้อ, Qwen3.5-4B) | ตอบถูก **156 / 160** (จากเดิม 118) | **token ลดลง 95%** (`0.046x`: 261,731 เหลือ 12,062) · **เร็วขึ้น 85%** (`61s -> 8s`) | [โหมดเลขคณิต](#โหมดเลขคณิต-token-ลดลง-95) |
 | **รันใน Decode Loop ของ Strata** (Qwen3.8-Flash-Next) | คูณเลข 5 หลัก **token ลด 72% · เวลาลด 56%** | GSM-Hard **token ลด 22% / เวลาลด 18%** · MATH **token ลด 18%** · โจทย์เลขยาว **ลด 46%** โดยความแม่นยำเท่าเดิม | [บน model เป้าหมาย](#บน-model-เป้าหมาย-qwen38-flash-next-ใน-strata) |
-| **Tool Route บนโจทย์เหตุผลยาก ๆ** (MATH ข้อยาว, GPQA, SuperGPQA) | **token ลดลง ~30%** (`0.71x–0.81x`) | ความแม่นยำเท่าเดิม (ต่างกันไม่เกิน 1 ข้อต่อชุด) บน Qwen3.5-4B | [tool route](#tool-route-โจทย์เหตุผลยาก-ๆ) |
-| **แก้โจทย์ที่โมเดล 4B ชอบคิดวน** (48 รอบที่โมเดลปกติติด loop) | ตอบถูกเพิ่มจาก **24 เป็น 37 / 48 (+13)** | คำตอบที่จบแบบไม่มีคำตอบเลยลดจาก **21 เหลือ 1** ด้วยชุดตั้งค่า Best Config | [best config](#best-config-1) · [ผลการทดสอบ](#ผลการทดสอบ) |
-| **หยุดการคิดที่วนไม่จบ & ลด Token** | คำตอบที่ถูกบน MATH ระดับ 5 **สั้นลง 40%** | หยุด loop ที่เคยวิ่ง 200k–262k token จนเต็ม context ได้ที่ **40k–114k** (มัธยฐาน MATH L5 ลดจาก `15,260 เหลือ 9,090`) | [token](#token) · [loop ที่ป้องกันได้](#loop-ที่ป้องกันได้) |
+| **Tool Route บนโจทย์เหตุผลยาก ๆ** (MATH ข้อยาว, GPQA, SuperGPQA) | **token ลดลง ~30%** (`0.71x–0.81x`) | ความแม่นยำเท่าเดิม (ต่างกันไม่เกิน 1 ข้อต่อชุด) บน Qwen3.8-Flash-Next (engine ของ Strata, A100) | [tool route](#tool-route-โจทย์เหตุผลยาก-ๆ) |
+| **แก้โจทย์ที่โมเดล 4B ชอบคิดวน** (48 รอบที่โมเดลปกติติด loop) | คำตอบที่ถูกเพิ่มจาก **24 เป็น 37 / 48** | คำตอบที่จบแบบไม่มีคำตอบเลยลดจาก **21 เหลือ 1** ด้วยการใส่ค่าและตัวปิด A, B, V7 [^th-r7] | [best config](#best-config-1) · [ผลการทดสอบ](#ผลการทดสอบ) |
+| **หยุดการคิดที่วนไม่จบ & ลด Token** | คำตอบที่ถูกบน MATH ระดับ 5 **สั้นลง 40%** | มัธยฐาน token ของคำตอบที่ถูกบน MATH L5 ลดจาก `15,260 เหลือ 9,090` · ใน replay `cover-cap` หยุด loop ที่เกิน 150k ได้ 12 จาก 13 ที่ **40k–114k** | [token](#token) · [loop ที่ป้องกันได้](#loop-ที่ป้องกันได้) |
 | **ลด Token ในโจทย์คณิตทั่วไป** (เทียบคำตอบที่ถูกเหมือนกัน 120 ข้อ) | สั้นลงสูงสุด **33%** | แทนค่าในพหุนาม **-33%** (`0.67x`) · จัดรูปราก **-29%** (`0.71x`) · แปลงหน่วยกับลำดับ **-11%** (`0.89x`) | [โจทย์คณิตทั่วไป](#โจทย์คณิตทั่วไป) |
 | **เห็นการคำนวณล่วงหน้า 2 Token** (ก่อนโมเดลเริ่มเขียนสมการ) | แม่นยำ **89%** (4B) / **87%** (35B) ด้วย probe | อ่านจาก MoE router ของ Qwen3.6 ได้ฟรีโดยไม่มีต้นทุน แม่นยำ **83%** (ดูข้อความอย่างเดียวได้ 53%) | [เห็นการคำนวณก่อนที่จะมาถึง](#เห็นการคำนวณก่อนที่จะมาถึง) |
-| **MathBackend แม่นยำ 100% ทั้ง CPU & GPU** (387 ฟังก์ชัน) | **ใส่เลขผิด 0 ครั้ง** จาก **41,176** และ **39,046** ครั้ง | เร็ว `0.18 ms` บน CPU / `0.066–0.093 ms` บน CUDA · เทียบผล 31,064 กรณีกับไลบรารีอิสระ **ตรงกัน 100%** | [จุดที่ตรวจจับ](#จุดที่ตรวจจับ) · [ใส่ค่ายังไง](#ใส่ค่ายังไง) · [MathBackend](#mathbackend-1) |
-| **ไม่กระทบงานอื่น & ไม่ต้อง Fine-tune** | แตะคำตอบที่ถูก **0 / 1,078** (`cover-cap`) และ **0 / 915** (`V7`) | โมเดลสงสัยค่าจากซอฟต์แวร์เพียง **4.1%** (เทียบกับคิดเอง **15.2%**) · ใช้กับ tokenizer อื่นได้ทันที | [ไม่กระทบการทำงานอื่น](#ไม่กระทบการทำงานอื่น) · [ไม่ต้อง fine-tune](#ไม่ต้อง-fine-tune) · [ตรวจความแม่นยำ](#ตรวจความแม่นยำ) |
+| **คำนวณแบบตรงเป๊ะ** (MathBackend 387 ฟังก์ชันบน CPU) | **ใส่เลขผิด 0 ครั้ง** จาก **41,176** และ **39,046** ครั้งที่ตรวจ | `0.18 ms` ต่อ `=` บน CPU · เทียบ 31,064 กรณีกับไลบรารีอิสระ **ไม่ต่างกันเลย** · ตัวคำนวณ CUDA ใน engine ของ Strata ตรงทุก byte **1,271 + 1,403** กรณี | [จุดที่ตรวจจับ](#จุดที่ตรวจจับ) · [ใส่ค่ายังไง](#ใส่ค่ายังไง) · [MathBackend](#mathbackend-1) |
+| **ไม่กระทบงานอื่น & ไม่ต้อง Fine-tune** | ใน replay แตะคำตอบที่ถูก **0 / 1,078** (`cover-cap`) และ **0 / 915** (`V7`) [^th-lost] | โมเดลสงสัยค่าจากซอฟต์แวร์เพียง **4.1%** (เทียบกับคิดเอง **15.2%**) · อ่าน token ที่ใช้จาก tokenizer โดยตรง | [ไม่กระทบการทำงานอื่น](#ไม่กระทบการทำงานอื่น) · [ไม่ต้อง fine-tune](#ไม่ต้อง-fine-tune) · [ตรวจความแม่นยำ](#ตรวจความแม่นยำ) |
 
 กลไกอื่นทั้งหมดที่สร้างและวัดแล้ว รวมถึงตัวที่อยู่ฝั่ง engine และไม่ได้อยู่ใน best config: **[แคตตาล็อก](docs/INDEX.md#ภาษาไทย)**
 
@@ -312,22 +315,22 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
 
 ### tool route: โจทย์เหตุผลยาก ๆ
 
-| ชุดทดสอบ (Qwen3.5-4B บน A100, สุ่มที่ T 0.6, ตรวจด้วยกฎคู่กับ API reader) | ตอบถูก ไม่เปิด / เปิด | token เปิด / ไม่เปิด |
+| ชุดทดสอบ (Qwen3.8-Flash-Next, Gyro-M, engine ของ Strata บน A100, สุ่มที่ T 0.6, ตรวจด้วยกฎคู่กับ API reader) | ตอบถูก ไม่เปิด / เปิด | token เปิด / ไม่เปิด |
 |---|---|---|
 | **SuperGPQA ข้อคำนวณ** (29 ข้อ) | 11 / 10 | **0.71 (ลด 29%)** |
 | **GPQA** (13 ข้อ) | 12 / 11 | **0.73 (ลด 27%)** |
 | **MATH ข้อยาว** (22 ข้อ) | 21 / 21 | **0.81 (ลด 19%)** (167,743 เหลือ 135,772) |
 
-การเปิด Python sandbox ให้โมเดลเรียกใช้ (พร้อมบรรทัด prompt) ช่วยลด token ลงประมาณ **30%** โดยตอบถูกเท่าเดิม (ต่างกันไม่เกิน 1 คำตอบต่อชุด) [^th-tool]
+tool route (ให้โมเดลเรียก `run_python` ได้ พร้อมบรรทัด prompt) ช่วยลด token ลงประมาณ **30%** โดยตอบถูกเท่าเดิม (ต่างกันไม่เกิน 1 คำตอบต่อชุด) [^th-tool]
 
 ### best config
 
 | ส่วนประกอบ (Qwen3.5-4B, bf16, vLLM 0.33, Colab A100 80 GB, T 0.6, top-p 0.95, top-k 20, context 262,144 token) | Flags (ดูคำสั่งรันในหัวข้อ [Best config](#best-config)) | หน้าที่ในงานคิดเหตุผลยาว ๆ (เปิด `thinking`) |
 |---|---|---|
 | **ตัวเขียนค่า (General Style)** | `--inline-calc --mathbackend --inline-plain --inline-style general --no-digit-join --guard-progress` | เติมค่าที่คำนวณตรงเป๊ะหลัง `=` ป้องกันตัวเลขไหลติดกัน และเปิดทางให้การไล่หารด้วยจำนวนเฉพาะทำงานต่อได้ |
-| **A: loop close** | `--loop-close` | ปิด `</think>` เมื่อคิดวน เพื่อให้โมเดลสรุปคำตอบจากสิ่งที่คิดมาแล้ว |
+| **A: loop close** | `--loop-close` | ใส่ `</think>` เมื่อคิดวน เพื่อให้โมเดลสรุปคำตอบจากสิ่งที่คิดมาแล้ว |
 | **B: answer close** | `--answer-close` | ตัด loop ที่ลามเข้าส่วนคำตอบให้เหลือรอบเดียว แล้วส่งเข้า `\boxed{` |
-| **V7: early cycle** | `--early-cycle` | ปิด `<think>` ทันทีเมื่อเจอ cycle สั้นที่ซ้ำตรงตัวตอนจบบรรทัด |
+| **V7: early cycle** | `--early-cycle` | ใส่ `</think>` ทันทีเมื่อเจอ cycle สั้นที่ซ้ำตรงตัวตอนจบบรรทัด |
 | **shape-cap** | `--shape-cap 1024` | มองตัวเลขติดกันทั้งก้อนเป็น token เดียว แล้วปิดเมื่อวนซ้ำครบ 1,024 รอบ |
 | **cover-cap** | `--cover-cap 32768` [^th-cover] | ปิดเมื่อ 97% ของ 32,768 token ล่าสุดซ้ำท่อน 12 token ที่เคยเห็นใน 2,048 token ก่อนหน้า |
 
@@ -337,8 +340,8 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
 |---|---|---|---|---|
 | โมเดลปกติ | 17 / 34 | 7 / 14 | 24 / 48 | 21 |
 | ใส่ค่าอย่างเดียว | 17 / 34 | 8 / 14 | 25 / 48 | 23 |
-| **best config** | **27 / 34** | **10 / 14** | **37 / 48 (+13)** | **1 (-20)** |
-| **3 ข้อที่ยากที่สุดเมื่อเพิ่ม `shape-cap`** | — | — | **8 / 12** | **0** (ไม่มีรอบไหนวิ่งจนเต็ม context) [^th-pairing] |
+| **best config** [^th-r7] | **27 / 34** | **10 / 14** | **37 / 48 (+13)** | **1 (-20)** |
+| **3 ข้อที่ยากที่สุดเมื่อเพิ่ม `shape-cap`** | — | — | **8 / 12** | **1** รอบวิ่งจนเต็ม context [^th-shape8] [^th-pairing] |
 
 ### token
 
@@ -346,7 +349,7 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
 |---|---|---|---|
 | **มัธยฐาน token ของคำตอบที่ถูกบน MATH ระดับ 5** | 15,260 | **9,090** | คำตอบที่ถูก **สั้นลง 40%** |
 | **การตั้งหารยาวที่วนไม่จบ** (`shape-cap`) | เกิน 200,000 (วิ่งจนเต็ม context) | **55,000** | ปิดการหารยาวที่วนซ้ำได้ตั้งแต่เนิ่น ๆ |
-| **loop ที่เคยวิ่งเกิน 150k token** (`cover-cap`) | 150,000 – 262,144 | **40,000 – 114,000** | หยุดได้ครบทุกตัวก่อนชนเพดาน context |
+| **loop ที่เคยวิ่งเกิน 150k token** (`cover-cap`, replay) | 150,000 – 262,144 | **40,000 – 114,000** | ใน replay หยุดได้ 12 จาก 13 ก่อนชนเพดาน context [^th-cover] |
 | **คำตอบที่เคยจบแบบไม่มีคำตอบ** | ไม่มีคำตอบ 21 รอบ | **ไม่มีคำตอบ 1 รอบ** | **20 คำตอบที่เคยไม่มีคำตอบ ตอนนี้ตอบออกมาได้** [^th-tokens] |
 
 ### โจทย์คณิตทั่วไป
@@ -423,7 +426,7 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
 | **มีขอบเขตชัด** | ทุก operation ประกาศขอบเขตตัวเอง (`@op(name, kind, bound=...)`) | ถ้าเกินขอบเขตหรืออยู่นอกโดเมนจะโยน `NotCovered` หรือ `BadInput` แล้วไม่ใส่ค่า (ไม่เดา) |
 | **ตรวจกับ library อิสระ** | ทุก module มี `sim_*.py` สุ่มค่าไปเทียบกับ `SymPy`, `mpmath` หรือ `NetworkX` (ซึ่ง backend ไม่ได้ import) | **387 / 387 operation · 31,064 กรณี · ไม่ตรงกัน 0 กรณี** |
 | **ความเร็วบน CPU** | **0.18 ms ต่อ `=`** | ค่าที่ให้ตรงกับที่โมเดลเขียนต่อ **3,896 จุด** บน 6 การทดลองที่ไม่ได้ใช้ตอนสร้าง (ส่วนที่ไม่ตรงหลายจุดคือโมเดลคิดพลาดแต่ซอฟต์แวร์คิดถูก) |
-| **คำนวณบน GPU (CUDA)** | เวลามัธยฐาน **0.066 – 0.093 ms ต่อครั้ง** | **ตรงทุก byte** ทั้งจำนวนเต็ม **1,271 / 1,271 กรณี** (หารปัดลง, `mod`, `gcd`, ยกกำลัง) และเศษส่วนกับทศนิยม **1,403 / 1,403 กรณี** (`0.1 + 0.2 -> 3/10`) |
+| **ตัวคำนวณ CUDA ของ Strata** (อยู่ใน engine แยกจาก MathBackend) | บวก ลบ คูณจำนวนเต็ม เวลามัธยฐาน **0.066 – 0.093 ms ต่อครั้ง** | **ตรงทุก byte** ทั้งจำนวนเต็ม **1,271 / 1,271 กรณี** (หารปัดลง, `mod`, `gcd`, ยกกำลัง) และเศษส่วนกับทศนิยม **1,403 / 1,403 กรณี** (`0.1 + 0.2 -> 3/10`) [^th-cuda] |
 
 ### ไม่กระทบการทำงานอื่น
 
@@ -431,7 +434,7 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
 |---|---|---|
 | **ใส่ค่าเฉพาะจุดที่ชัดเจน** | เฉพาะหลัง `=` ที่โมเดลเขียนเอง และเฉพาะเลขคณิตที่คำนวณได้ตรงเป๊ะ (ถ้ามีตัวแปร คำพูด จำนวนคละ `2\frac{1}{3}` รากที่ไม่ลงตัว หรือเลขใหญ่เกินขั้นหนึ่ง จะไม่ใส่) | ใน 120 ข้อ ใส่ค่าไป **19,546 จาก 19,636** จุด `=` ที่อ่านได้ โดยไม่แตะข้อความส่วนอื่นเลย |
 | **ไม่ใส่ถ้าไม่ใช่สิ่งที่โมเดลหมายถึง** | ไม่ใส่เมื่อเป็น: ตัวเลขเดี่ยว ๆ (`m=4,512=8*64`), ค่าซ้ำนิพจน์เดิมไม่มีอะไรใหม่, ตัวเลขที่เป็นส่วนหนึ่งของนิพจน์ที่ยังเขียนไม่จบ, หลักที่ต้องยืมในการลบแบบตั้งหลัก (`0-9 = 1`), การนับเหรียญ, operator ที่โจทย์นิยามเป็นอย่างอื่น (`a * b = a - b`), congruence ที่ไม่บอก modulus, หรือการใส่ค่าครั้งที่ 3 ติดกันของนิพจน์เดียวกัน | ป้องกันการตีความสมการผิดบริบท |
-| **เกณฑ์ตัวปิด loop สูงกว่าคำตอบที่ถูกทุกตัว** | `shape-cap`: คำตอบที่ถูกได้สูงสุด **805 รอบ** (เกณฑ์อยู่ที่ **1,024**) · `cover-cap`: คำตอบที่ถูกได้สูงสุด **0.92** (เกณฑ์อยู่ที่ **0.97**) | ทุกตัวผ่าน replay ของ trace จาก A100 ทั้งหมดก่อนรันจริง: ไม่แตะคำตอบที่ถูก และไม่มี request ที่ vLLM ปฏิเสธ |
+| **เกณฑ์ตัวปิด loop สูงกว่าคำตอบที่ถูกทุกตัว** | `shape-cap`: คำตอบที่ถูกได้สูงสุด **805 รอบ** (เกณฑ์อยู่ที่ **1,024**) · `cover-cap`: คำตอบที่ถูกได้สูงสุด **0.92** (เกณฑ์อยู่ที่ **0.97**) | ทุกตัวผ่าน replay ของ trace จาก A100 ก่อนรันจริง: ไม่แตะคำตอบที่ถูก หรือถ้าแตะก็อ่านแล้วเข้าใจทุกครั้ง และไม่มี request ที่ vLLM ปฏิเสธ [^th-lost] |
 | **โมเดลเป็นคนตัดสินใจ** | ค่าที่ใส่เป็นแค่ตัวเลขบนหน้ากระดาษ ไม่ใช่คำสั่ง ส่วนการปิด loop แค่ยื่น `</think>` หรือประโยคบังคับตอบให้ | โมเดลเป็นคนเขียนคำตอบสุดท้ายเองเสมอ |
 
 ### ไม่ต้อง fine-tune
@@ -439,7 +442,7 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
 | ด้าน | การทำงาน |
 |---|---|
 | **ไม่แก้น้ำหนักโมเดล** | ทำงานกับข้อความตอน inference โดยอ่านสิ่งที่โมเดลเขียนแล้วต่อ token ลงไป ใช้ checkpoint ปกติและค่าการสุ่มตาม model card |
-| **เปลี่ยนโมเดลได้ทันที** | ดึงชุดตัวเลข token `=` และ token จบบรรทัดมาจาก tokenizer โดยตรง กลไกเดียวกันจึงนำไปใช้กับ tokenizer ของโมเดลอื่นได้เลย |
+| **ใช้กับ tokenizer อื่นได้** | ดึงชุดตัวเลข token `=` และ token จบบรรทัดมาจาก tokenizer โดยตรง กลไกเดียวกันจึงรันกับ tokenizer ของโมเดลอื่นได้ ส่วนเกณฑ์ของตัวปิด loop ตั้งจาก trace ของ Qwen3.5-4B และต้องตรวจใหม่กับทุกโมเดล |
 
 ### ตรวจความแม่นยำ
 
@@ -484,6 +487,9 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
 [^th-tool]: หมายเหตุ: ข้อละ 1 คำตอบแบบสุ่ม ฝั่งไม่เปิดรันบน A100 บัญชีหนึ่ง ฝั่งเปิดรันอีกบัญชีหนึ่ง HLE (10 ข้อ) ได้ 4 / 4 ที่ 1.05 เท่า การเรียก tool เกือบทั้งหมดเกิดหลังการคิดจบแล้ว token ที่ลดได้ส่วนใหญ่จึงมาจากบรรทัด prompt ของ tool route มากกว่าจากการเรียก tool
 [^th-detect]: หมายเหตุ: ตัวตรวจจับเหล่านี้แค่อ่าน ยังไม่ได้ลงมือทำอะไร การใส่ค่ายังรอ `=` และการ parse ที่ตรงเป๊ะ probe ต้องใช้ hidden state ซึ่ง engine มี แต่ `llama-server` กับ vLLM ไม่เปิดให้อ่าน
 [^th-cover]: หมายเหตุ: `cover-cap` วัดจากการ replay trace ที่เก็บจาก A100 ส่วนรอบที่รันบน A100 เองคือรอบถัดไป (#19)
+[^th-r7]: หมายเหตุ: วัดด้วยการใส่ค่ากับตัวปิด A, B และ V7 (รอบเดียว) จากนั้น shape cap รันกับ 3 ข้อที่ยากที่สุด ส่วน cover cap ตอนนี้มีแค่ผล replay รอบที่เปิดครบทุกส่วนคือรอบถัดไป (#19)
+[^th-shape8]: หมายเหตุ: ในการหารยาวข้อหนึ่ง ทุกครั้งที่ผลหารได้หลัก 0 รอบนั้นจะสั้นลง cycle แบบตรงตัวจึงไม่เกิด และ shape cap นับไม่ถึงเกณฑ์ cover cap สร้างมาเพื่อเคสนี้และหยุดได้ใน replay
+[^th-cuda]: หมายเหตุ: เวลาวัดจากตัวคำนวณบวก ลบ คูณจำนวนเต็ม (งานละ 4 ครั้ง) อีกสองตัวตรวจแค่ความถูกต้อง ไม่ได้จับเวลา ข้อความของโมเดลเรียกถึงได้ 18 จาก 387 ฟังก์ชันของ MathBackend ที่เหลือเรียกได้จากโค้ด
 [^th-pairing]: หมายเหตุ: best config กับฝั่งใส่ค่าอย่างเดียวรันในรอบเดียวกัน ข้อเดียวกัน seed เดียวกัน ส่วนโมเดลปกติมาจากอีกรอบ เนื่องจาก vLLM ให้คำตอบซ้ำเดิมข้ามรอบไม่ได้ (#21) ต่างกัน 1–2 คำตอบจึงอยู่ในช่วงที่ผลแต่ละรอบแกว่งได้
 [^th-tokens]: หมายเหตุ: token รวมทุกคำตอบ โมเดลปกติ 631k ใส่ค่าอย่างเดียว 754k best config 936k เพราะมีคำตอบที่คิดจนจบมากขึ้น และคำตอบที่วิ่งจนเต็ม context คำตอบเดียวกินไป 210k–262k ส่วนเลขคณิต มัธยฐานของคำตอบที่ถูกอยู่ที่ 8,371 token (best config) เทียบกับ 6,472 token เพราะมีอีก 10 คำตอบที่ตอนนี้คิดจนจบได้ ในเครื่องมือทดสอบ best config ได้ 25.7 token/s ต่อคำตอบ ส่วนโมเดลปกติได้ 37.9 เพราะ `tir4b` ต้องจบ request ทุกครั้งที่เจอ `=` แล้วเริ่ม request ใหม่หลังใส่ค่า ใน engine ของ Strata การใส่ค่าเกิดอยู่ใน decode loop (`include/strata/core/igc_inline.hpp`) และยังไม่ได้จับเวลา
 [^th-ordinary]: หมายเหตุ: ประเภทอื่นในการเทียบชุดเดียวกัน คูณหารต่อกัน 1.01 นิพจน์ผสมยาว 1.13 (โมเดลตรวจค่าที่ได้รับซ้ำ) MATH-500 ระดับ 5 0.98 รวมทั้ง 170 คู่ 0.97 (ใช้ token น้อยลง 93 คู่) คะแนนในรอบนั้น แบบใส่ค่าอย่างเดียวไม่มีตัวปิด loop ได้ 197 จาก 240 ส่วนโมเดลปกติได้ 209 ทุกข้อที่ผิดในทั้งสองฝั่งเกิดจากการวน ซึ่งเป็นสิ่งที่ตัวปิด loop มีไว้แก้ และตอนเปิด thinking ยังไม่มีกลไกไหนที่เพิ่มความแม่นยำบนชุดกว้างได้ด้วยตัวเอง สิ่งที่ขยับคือ token

@@ -13,7 +13,8 @@ The rules agents miss most, all in full in `AGENTS.md`:
 3. **The General Style first, no tuning to the test.** A put is true under every reading of the `=`; rules come from mathematics or
    notation, never from a set's frequencies; development sets find bugs, the frozen set measures. The plain value for every model.
 4. **Qwen3.5-4B first,** until the system is settled, then other models.
-5. **Full context, sampled.** Never `--max-tokens`; T 0.6 with two or more seeds; vLLM runs are not paired across runs (#21).
+5. **Full context, sampled.** Never `--max-tokens`; T 0.6 with two or more seeds; vLLM runs are not paired across runs (#21), and the engine's
+   repeat (49/49) was measured greedy only.
 6. **Test with the smallest run that answers the question:** first pass, then only the misses the feature can reach, then the
    trade-off on a sample of right answers.
 7. **Every written-answer test also goes through the API reader** (`tools/igc/answer_check.py`), on this PC only; report the rule's,

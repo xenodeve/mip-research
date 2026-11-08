@@ -84,7 +84,8 @@ The mechanisms most worth carrying over, with what each needs. Every one has its
 ## Notes
 
 [^port]: หมายเหตุ: the closers' thresholds were set from vLLM traces of Qwen3.5-4B; no engine run with them exists yet. vLLM runs do
-    not repeat token for token across runs (mip-research#21), the A100 Strata engine does (Strata-xeno#283).
+    not repeat token for token across runs (mip-research#21); the A100 Strata engine repeated 49/49 greedy (Strata-xeno#283),
+    and whether it repeats a sampled run with the same seed is not measured yet.
 [^dm160]: หมายเหตุ: thinking off, 4,096-token cap; the hand-off rules were set while reading these 160 rows, so 156 is a development
     result. Records: [`results/arithmetic-mode`](../results/arithmetic-mode/).
 [^loop48]: หมายเหตุ: the plain arm (24 / 48) is round 1's control, a different run from the closer arms; the inline-only arm of the
@@ -158,4 +159,5 @@ MIP รันอยู่สองที่ ใช้กฎชุดเดีย
 - **ตัวปิด loop ของ engine**
 
 [^th-port]: หมายเหตุ: เกณฑ์ของตัวปิดตั้งจาก trace ของ Qwen3.5-4B บน vLLM ยังไม่เคยรันบน engine และ vLLM ไม่ให้ผลซ้ำแบบ token ต่อ token
-    ข้ามรอบ (mip-research#21) ส่วน engine ของ Strata บน A100 ให้ผลซ้ำได้ (Strata-xeno#283)
+    ข้ามรอบ (mip-research#21) ส่วน engine ของ Strata บน A100 ให้ผลซ้ำ 49/49 ตอนรันแบบ greedy (Strata-xeno#283) แต่ยังไม่ได้วัดว่ารันแบบ sampled
+    ด้วย seed เดิมแล้วซ้ำไหม

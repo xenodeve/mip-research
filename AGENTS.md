@@ -76,7 +76,8 @@ A100 can only be used for a limited time." The A100 runs on Colab compute units,
 - **Sampled, not greedy** (2026-11-03): T 0.6 with the model card's top-p / top-k, two or more seeds per comparison, and compare an
   arm with a sampled control on the same rows and seeds. At T 0 the model never leaves its first premise.
 - **Pairing.** tir4b on vLLM does not repeat an answer across runs (#21): cross-run comparisons are totals, and a control's own
-  change is the noise floor. Strata's engine on the A100 repeats itself (Strata-xeno#283), so a rule A/B there is paired.
+  change is the noise floor. Strata's engine on the A100 gave identical text on 49 of 49 questions **greedy** (Strata-xeno#283);
+  whether it repeats a **sampled** run with the same seed is not measured yet, so an A/B there is paired only once that is shown.
 - **Test with the smallest run that answers the question** (2026-11-02):
   - do not pick a suite the model nearly aces;
   - run a first pass, then repeat only the misses the feature can reach (`tools/igc/select_rows.py`), with a fresh baseline on the
