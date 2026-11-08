@@ -347,7 +347,10 @@ files; operands still come from a fixture or the learned input heads.
     (`= 2939885984? Let me compute carefully.` looped to the limit) and a source note fixed 5-digit multiplication (Strata-xeno#276,
     "Calculation inside reasoning"); removing the note on 49 questions added 26.6 % tokens in total (sign-flip p 0.0385, one of four
     comparisons) with the median question unchanged, one run per arm, not paired (Strata-xeno#276, "No-note and effort-medium arms").
-    This is the kind of difference a model profile is meant to hold.
+    That arm used the engine's early inline delivery (`A op B =` only, before the General Style) and is too weak to carry over: one
+    run per arm, 26 questions up and 23 down, three questions hold 30,089 of the net 44,982 tokens. With the General Style the 4B
+    doubts a put less than its own values (4.1 % against 15.2 %, [compute](compute.md#audit-of-every-value-put)), so the plain value
+    is the rule for every model until a run with the General Style shows otherwise.
 [^joinsheld]: `joins_held` in the records counts every time the guard was set, not a digit held; it is not a coverage number.
 [^echo41]: Withdrawn: the earlier rule counted repeats over the whole answer and closed or nudged the thinking at the 3rd; on today's code it
     would have acted in 41 of 48 stored rows, so the "inlineclose 41/48" figure and the "0 regressions on 96 traces" claim describe code that
