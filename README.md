@@ -18,11 +18,13 @@ top-k 20, the full 262,144-token context).
   (387 operations, no floating point) and refuses rather than guesses.
 - **Ends runaway thinking.** Loops that ran 200k-262k tokens to the end of the context are stopped at 40k-114k; right answers on
   MATH level 5 are **40 % shorter**.
+- **Fewer tokens where the calculation is fixed.** On answers right both with and without MIP: polynomial evaluation **-33 %**,
+  surds -29 %, unit conversion and sequences -11 %; over all ordinary math the saving is small (-3 %) ([Ordinary math](#ordinary-math-answers-right-in-both-arms)).
 - **Stays out of the way.** It acts only after an `=` the model wrote, only on exact arithmetic, and every loop threshold sits above
   all right answers: the newest closer touched **0 of 1,078** right answers in replay.
 - **Failures are counted, not hidden:** 2 of 48 right answers were lost to a close that came too early ([Failures](#failures)).
 
-Contents: [Best config](#best-config) · [Results](#results) · [Tokens and time](#tokens-and-time) · [Detection points](#detection-points) ·
+Contents: [Best config](#best-config) · [Results](#results) · [Tokens and time](#tokens-and-time) · [Ordinary math](#ordinary-math-answers-right-in-both-arms) · [Detection points](#detection-points) ·
 [How a value is put](#how-a-value-is-put) · [Loops it prevents](#loops-it-prevents) · [MathBackend](#mathbackend) ·
 [Staying out of the way](#staying-out-of-the-way) · [No fine-tuning](#no-fine-tuning) · [Failures](#failures) ·
 [Not measured yet](#not-measured-yet) · [Repo](#repo) · [ภาษาไทย](#ภาษาไทย)
@@ -82,6 +84,29 @@ the plain model looped and was cut.
   one batch). That is the harness: `tir4b` ends a vLLM request at every `=` and starts the next after the put, about 20,000 extra
   requests an arm. In Strata's engine the put happens inside the decode loop (`include/strata/core/igc_inline.hpp`); its time there
   is not measured yet.
+
+## Ordinary math: answers right in both arms
+
+120 ordinary questions (DeepMind arithmetic and MATH-500 level 5), 2 answers each, inline values against the plain model in one
+round with the same seeds. Only the 170 answer pairs right in both arms are counted, so the tokens compare the same right answer
+written with and without software's values. The closers do not act on these answers.
+
+| Kind of question | Pairs | Tokens with MIP / without |
+|---|---|---|
+| Polynomial evaluation | 17 | **0.67** |
+| Surds | 3 | 0.71 |
+| Unit conversion | 18 | 0.89 |
+| Sequences | 12 | 0.89 |
+| Big divisions | 8 | 0.96 |
+| Division with remainder | 18 | 0.97 |
+| Multiply-divide chains | 18 | 1.01 |
+| Long mixed expressions | 17 | 1.13 |
+| MATH-500 level 5 | 59 | 0.98 |
+| **All** | **170** | **0.97** (median per pair 0.96; fewer tokens in 93 of 170) |
+
+Where the work is a fixed calculation the model would otherwise grind by hand, the right answer is up to a third shorter. Over
+all ordinary math the saving is small, and on long mixed expressions the answer is longer: the model still checks a value it was
+given. Time in this harness is not comparable (the harness pauses at every `=`, [Tokens and time](#tokens-and-time)).
 
 ## Detection points
 
@@ -225,6 +250,7 @@ repo นี้เก็บกลไก เครื่องมือทดล�
 - **ไม่ต้อง fine-tune ไม่ต้องใช้ model ตัวที่สอง:** ใช้ checkpoint ปกติกับค่าการสุ่มของมันเอง MIP แค่อ่านข้อความแล้วต่อ token ลงไป
 - **ไม่เคยใส่เลขผิด:** ใส่ค่า 39,046 ครั้ง **ผิด 0 ครั้ง** ตรวจซ้ำทุกค่าด้วยตัวคำนวณอิสระ เพราะคำนวณแบบตรงเป๊ะ (387 operation ไม่มี floating point) และถ้าไม่แน่ใจจะไม่ใส่ ไม่เดา
 - **หยุดการคิดที่วนไม่จบ:** loop ที่เคยวิ่งไป 200k-262k token จนเต็ม context ถูกหยุดได้ที่ 40k-114k และคำตอบที่ถูกบน MATH ระดับ 5 **สั้นลง 40%**
+- **ใช้ token น้อยลงในโจทย์ที่คำนวณตายตัว:** นับเฉพาะข้อที่ตอบถูกทั้งตอนมีและไม่มี MIP แทนค่าในพหุนามลด **33%** จัดรูปรากลด 29% แปลงหน่วยกับลำดับลด 11% แต่ถ้ารวมโจทย์คณิตทั่วไปทั้งหมด ลดได้แค่ 3%
 - **ไม่ไปยุ่งกับงานอื่น:** ใส่ค่าเฉพาะหลัง `=` ที่ model เขียนเอง และเฉพาะเลขคณิตที่คำนวณได้ตรงเป๊ะ ส่วนเกณฑ์ของตัวปิด loop ตั้งไว้สูงกว่าคำตอบที่ถูกทุกตัว ตัวปิด loop ตัวล่าสุดแตะคำตอบที่ถูก **0 จาก 1,078** ใน replay
 - **นับความผิดพลาดไว้ครบ ไม่ซ่อน:** มีคำตอบที่ถูกเสียไป 2 จาก 48 เพราะปิดการคิดเร็วเกินไป (ดูหัวข้อความผิดพลาด)
 
@@ -274,6 +300,29 @@ repo นี้เก็บกลไก เครื่องมือทดล�
 - **เวลา:** ในเครื่องมือทดสอบนี้ best config ได้ 25.7 token/s ต่อคำตอบ ส่วน model เปล่าได้ 37.9 (vLLM รันหลายคำตอบพร้อมกันใน batch)
   - สาเหตุมาจากเครื่องมือทดสอบ: `tir4b` ต้องจบ request ทุกครั้งที่เจอ `=` แล้วเริ่ม request ใหม่หลังใส่ค่า แขนหนึ่งมี request เพิ่มประมาณ 20,000 ครั้ง
   - ใน engine ของ Strata การใส่ค่าเกิดอยู่ใน decode loop เลย (`include/strata/core/igc_inline.hpp`) แต่ยังไม่ได้วัดเวลาตรงนั้น
+
+### โจทย์คณิตทั่วไป: ข้อที่ตอบถูกทั้งสองฝั่ง
+
+ใช้โจทย์คณิตทั่วไป 120 ข้อ (เลขคณิต DeepMind และ MATH-500 ระดับ 5) ข้อละ 2 คำตอบ เทียบแบบใส่ค่ากับ model เปล่าในรอบเดียวกัน seed เดียวกัน
+นับเฉพาะ 170 คู่ที่ตอบถูกทั้งสองฝั่ง จึงเป็นการเทียบคำตอบที่ถูกคำตอบเดียวกัน ระหว่างตอนที่มีค่าจาก software กับตอนที่ไม่มี และตัวปิด loop ไม่ได้ทำงานกับคำตอบชุดนี้
+
+| ประเภทโจทย์ | คู่ | token มี MIP / ไม่มี |
+|---|---|---|
+| แทนค่าในพหุนาม | 17 | **0.67** |
+| จัดรูปราก | 3 | 0.71 |
+| แปลงหน่วย | 18 | 0.89 |
+| ลำดับ | 12 | 0.89 |
+| หารเลขใหญ่ | 8 | 0.96 |
+| หารมีเศษ | 18 | 0.97 |
+| คูณหารต่อกัน | 18 | 1.01 |
+| นิพจน์ผสมยาว | 17 | 1.13 |
+| MATH-500 ระดับ 5 | 59 | 0.98 |
+| **รวม** | **170** | **0.97** (มัธยฐานต่อคู่ 0.96 ใช้ token น้อยลง 93 จาก 170 คู่) |
+
+- **ลดได้ชัดในโจทย์ที่คำนวณตายตัว:** ถ้าไม่มี MIP model ต้องคิดเลขพวกนี้ด้วยมือเอง พอมีค่าให้ คำตอบที่ถูกสั้นลงได้ถึงหนึ่งในสาม
+- **ภาพรวมลดได้น้อย:** ถ้ารวมโจทย์คณิตทั่วไปทั้งหมด ลดลงไม่มาก
+- **นิพจน์ผสมยาวกลับยาวขึ้น:** model ยังไปตรวจค่าที่ได้รับซ้ำอีกรอบ
+- **เวลาในชุดนี้เทียบกันไม่ได้:** เครื่องมือทดสอบหยุดทุกครั้งที่เจอ `=`
 
 ### จุดที่ตรวจจับ
 
