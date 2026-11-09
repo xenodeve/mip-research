@@ -63,6 +63,28 @@ the wrong expression and software confirmed every step of it (dm_mul_div_longer-
 `--question-value` (the whole question computed by software) could show the mismatch. Try on development rows, measure on the
 next frozen set; if rules change, the A100 runs on that new set, not on `frozen9`.
 
+**Paused 2026-11-09 (the developer needed the GPUs). Pick up here, in this order.** All on **4B NVFP4 W4A8 · llama.cpp · PC layer**.
+1. **Finish round 9: the 4 moved rows of half A (queue `a2`, 8 pairs).** Control has 2 of 8 answers kept, General 0 of 8; the
+   answers in flight when it stopped start again from the beginning with the same seed. Run on one card, both arms on it:
+   `RESUME=1 sh C:/Users/xenod/mip-work/a100/pc_round9.sh 4 <gpu> <port> C:/Users/xenod/mip-work/gguf/qwen35-4b-nvfp4-axion.gguf frozen9a-move-rows.jsonl a2 -ctk q8_0 -ctv q8_0`
+   (gpu 1 = RTX 5060 Ti, 0 = RTX 4070 SUPER). **It must run round 9's code:** `pc_round9.sh` refuses uncommitted `tools/serve`, and
+   the answer-close cue changed after round 9 began (`0e14ca1`), so check out round 9's commit (`c093b2f`, in `pc/r9a.commit`) into a
+   worktree for the resume, or the a2 answers measure a different system. (Half B started on `255ec4e`, half A's resumes and a2 on
+   `f64cded`/`c093b2f`; the only code between them is `mathexpr.wrong_relations`, reached only by `--check-hand`, which no round 9
+   arm runs, so the halves ran the same behaviour.) Halves A and B are done (232 of 240 pairs: rule 204 vs
+   157, API reader 208 vs 157).
+2. **Read round 9 in full:** merge `r9a` + `r9a2`; send the half-A answers that got HTTP 503 from the API reader back through it;
+   per-environment report with the three questions for every touch (value right, needed, helped); write the verdict (A100 or review)
+   to `docs/benchmarks.md` and a bilingual comment on mip-research#19. Then `frozen9` becomes development rows.
+3. **Answer close, live paired run** of the new cue (`0e14ca1`) against the old on development rows (frozen9's close rows first),
+   rule and API reader. The probe (`docs/antiloop.md`, "Cue probe") showed the minus kept 41 -> 100 of 112; the accuracy change was
+   noise-level (p 0.21 / 0.055). Then re-run `scripts/a100/gate9.sh` (its stamp is stale) and draw `frozen10` before any A100 round.
+4. **Answer close on unfinished work:** `stdmath-fbf10ed4#1` boxed a cross-product step (58) because the close came while the work
+   was still going. Measure first, on the 50 stored closes, how many came before the answer's work was done; only then design (a
+   confirmed value and a nudge instead of the cue is one idea, not a plan).
+5. `answer_check` stops on records without `finish`/`tokens` (probe records); make it tolerate them, with a test.
+6. Never send probes to a round's llama-server: `-kvu` shares one KV pool, and a probe crashed half A on 2026-11-09.
+
 **Phase 2, A100 (needs compute units; check the balance, say it, stop the VM after the round).**
 1. Round 9 first, once the PC layer passed: it is the active goal, and anything else here would displace it. Rows: `frozen9-rows.jsonl`
    (`scripts/a100/frozen_rows.py`); round 1's rows hold the 24 loop rows the closers were tuned on.
