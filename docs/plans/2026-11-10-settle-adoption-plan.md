@@ -34,10 +34,21 @@ tokens (a probe cap, not a run). Scored by the rule and the API reader.
 | voice | `settle_probe2.py` | way 1 |
 | voice_nowait | `settle_probe2.py` | ways 1 + 2 |
 | brake | `settle_probe2.py` | way 3 (the 47 closes in the thinking; an answer close has no thinking left) |
+| settle_close | `settle_probe2.py` | the v1 settle line, then today's close at once (for C, D, and an A whose value is the answer) |
+| settle_relapse_close | `settle_probe2.py` | the v1 settle line, then today's close only if the loop comes back: the decide-layer design itself |
 
 Per arm: relapse / end / cap, right by rule and by the API reader, tokens to the end. Per way, against plain and against close on the
 same keys: how many left the loop, how many of those ended right, and the touches that turned a key close got right into a wrong one.
 For brake also: where it closed against where today's close came (earlier, so on unfinished work, or later).
+
+## Combined, by loop type (developer, 2026-11-10)
+
+Loops are of several kinds, so the ways are meant to work together, one pairing per kind, not one way for all. The first sample
+of probe 1 (38 of 49 keys, rule only) said the same: the settle line alone ended 6 and was right 6, today's close ended 26 and was
+right 24 (close-only right 18, settle-only right 0); the settle line cut relapses 25 -> 14 against plain but sent 18 answers to the
+16k cap. So the settle line is a step before a close, not a replacement. The two combined arms test the pairing; the result is read
+per class and gives each class its pairing (for example: A confirm then close, or brake when the value is a sub-step; B quote then
+close on relapse; C and D the exact value then close; E close; F brake).
 
 ## What decides
 
