@@ -79,7 +79,7 @@ next frozen set; if rules change, the A100 runs on that new set, not on `frozen9
 3. **Answer close, live paired run** of the new cue (`0e14ca1`) against the old on development rows (frozen9's close rows first),
    rule and API reader. The probe (`docs/antiloop.md`, "Cue probe") showed the minus kept 41 -> 100 of 112; the accuracy change was
    noise-level (p 0.21 / 0.055). Then re-run `scripts/a100/gate9.sh` (its stamp is stale) and draw `frozen10` before any A100 round.
-4. **Answer close on unfinished work:** `stdmath-fbf10ed4#1` boxed a cross-product step (58) because the close came while the work
+4. **Done 2026-11-10** by the read of round 9's 69 closed answers ([decide layer](2026-11-10-decide-layer-design.md)): all 3 closes that hurt came when the answer looped again after a thinking close, 2 of them on a true intermediate step. The original item: **Answer close on unfinished work:** `stdmath-fbf10ed4#1` boxed a cross-product step (58) because the close came while the work
    was still going. Measure first, on the 50 stored closes, how many came before the answer's work was done; only then design (a
    confirmed value and a nudge instead of the cue is one idea, not a plan).
 5. `answer_check` stops on records without `finish`/`tokens` (probe records); make it tolerate them, with a test.

@@ -37,7 +37,7 @@ model is writing.
 | Layer | What it does | Catalog |
 |---|---|---|
 | Collect (MIP's core) | the `=` stop and expression reader, the question reader, the repeat check, and, inside an engine only, the probes and the router | [Detection](docs/detect.md) |
-| Decide (MIP's core) | which connected software acts now, or none: by the situation, and silent when unsure. **Not one layer yet:** each component has its own trigger | (the gap) |
+| Decide (MIP's core) | which connected software acts now, or none: by the situation, and silent when unsure. **Not one layer yet:** each component has its own trigger | the gap; [plan](docs/plans/2026-11-10-decide-layer-design.md) |
 | Connected software | **MIP MathBackend** computes exact values; **MIP Sandbox** runs the coding side's blocks; **MIP Antiloop** ends loops | [Compute](docs/compute.md) · [Sandbox](docs/sandbox.md) · [Anti-loop](docs/antiloop.md) |
 | Put back | the General Style put after `=`, a block's printed output, the close of a loop | [Inject](docs/inject.md) |
 
@@ -342,7 +342,7 @@ engine ที่รับ MIP ไปใช้จึงกลายเป็น a
 | ชั้น | ทำอะไร | แคตตาล็อก |
 |---|---|---|
 | รวบรวมข้อมูล (แกนของ MIP) | จุดหยุดที่ `=` กับตัวอ่านนิพจน์ ตัวอ่านโจทย์ ตัวตรวจการวนซ้ำ และ probe กับ router ซึ่งใช้ได้เฉพาะใน engine | [Detection](docs/detect.md) |
-| ตัดสินใจ (แกนของ MIP) | เลือกว่าซอฟต์แวร์ตัวไหนควรทำงานตอนนี้ หรือไม่ทำเลย ตามสถานการณ์ และเงียบไว้เมื่อไม่แน่ใจ **ยังไม่ได้รวมเป็นชั้นเดียว** ตอนนี้แต่ละส่วนมีเงื่อนไขเริ่มทำงานของตัวเอง | (ส่วนที่ยังขาด) |
+| ตัดสินใจ (แกนของ MIP) | เลือกว่าซอฟต์แวร์ตัวไหนควรทำงานตอนนี้ หรือไม่ทำเลย ตามสถานการณ์ และเงียบไว้เมื่อไม่แน่ใจ **ยังไม่ได้รวมเป็นชั้นเดียว** ตอนนี้แต่ละส่วนมีเงื่อนไขเริ่มทำงานของตัวเอง | ส่วนที่ยังขาด [แผน](docs/plans/2026-11-10-decide-layer-design.md) |
 | ซอฟต์แวร์ที่ต่อเข้ามา | **MIP MathBackend** คำนวณค่าที่แม่นยำ **MIP Sandbox** รัน block ฝั่ง coding **MIP Antiloop** หยุดการวน | [Compute](docs/compute.md) · [Sandbox](docs/sandbox.md) · [Anti-loop](docs/antiloop.md) |
 | ใส่ผลกลับ | ค่าหลัง `=` แบบ General Style ผลที่ block พิมพ์ออกมา การปิด loop | [Inject](docs/inject.md) |
 
