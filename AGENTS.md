@@ -37,6 +37,12 @@ bare `#N` written before 2026-11-08 means Strata-xeno #N; read it through the ma
   coming; the hidden-state probes see a calculation before its first token. Full effect needs them combined, not one picked as
   best. **Not yet used:** the reading of the drafter (MTP draft) as a signal (the engine only drops drafts after a put), and the
   MoE router live (offline only: 83 % at k = 2 on Qwen3.6); the router is the next step, with the move to Qwen3.6-35B-A3B.
+- **A detector is judged inside its own condition** (developer, 2026-11-10). Silence on a case that is not its condition is not a
+  miss (the question reader is for questions that state a computation). Each detector reports coverage inside its condition,
+  precision from a stratified read sample, and fires outside it (0 for a detector that puts text); the set is judged by the union.
+- **Every built mechanism has a status in the arm being run:** on; off with the measured reason; or queued with its slot
+  ([detection coverage plan](docs/plans/2026-11-10-detection-coverage-plan.md), section 4). Define a round's arm against that
+  table. The question reader was off in round 9 with no reason recorded, which is what this rule prevents.
 - **What the developer most wants to see:** the output steering what the model does afterwards, like a guideline that is always
   there. A guideline is only as good as what was detected, so detection coverage comes first.
 

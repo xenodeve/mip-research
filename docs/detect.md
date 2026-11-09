@@ -12,7 +12,8 @@ what the question states, the loop checks see the shape of a repeat but not what
 next few tokens before they are verified; the MoE router and the residual probes show a calculation coming before its first token.
 Full effect comes from combining them (the latent signals arm, an exact parse acts: [`UnifiedDetector`](#unifieddetector-fusion)),
 not from picking one as best. **Not yet used live:** the drafter's draft as a reading (the engine only drops drafts after a put),
-and the MoE router (offline: 83 % at k = 2 on Qwen3.6). The router is the next step, with the move to **Qwen3.6-35B-A3B**; the
+and the MoE router (offline: 83 % at k = 2 on Qwen3.6). Each detector is judged inside its own condition, and every one has a
+status in the arm being run: [detection coverage plan](plans/2026-11-10-detection-coverage-plan.md). The router is the next step, with the move to **Qwen3.6-35B-A3B**; the
 4B is dense and has none.
 
 | Mechanism | What it does (one line) | Runs on | In best config? | Best measured result | Status |
