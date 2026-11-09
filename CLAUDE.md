@@ -27,7 +27,8 @@ The rules agents miss most, all in full in `AGENTS.md`:
    the reader's and the corrected score.
 8. **Caught / should have caught,** with the denominator; check every case before stating a cause. **Every touch a mechanism made:
    was the value it put in right or wrong** (checked again independently), split by answers that finished right and wrong; whether
-   the touch was needed comes after that, separately.
+   the touch was needed comes after that, separately, and what it did to the final answer last (a live paired run): which
+   answers a mechanism touched says nothing of whether the software worked.
 9. **Present the latest state only;** negative or unconfirmed data goes in a footnote, never as a result.
 10. **Time spent is the cost:** parallel tracks, no idle machine, background only, one engine at a time on the developer's PC.
 11. **The tracker holds the knowledge:** bilingual issue posts at major progress, `gh --repo` always explicit.

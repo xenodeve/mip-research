@@ -148,7 +148,9 @@ How it runs (scripts in `scripts/pc/`, data in `WORK`, outside the repository):
   inline value, a correction, a loop value, a close's value), report whether the value it put in is right or wrong, checked again
   independently (the expression evaluated anew, exactly; a congruence by its remainder; a decimal to the places it gives), split by
   answers that finished right and wrong: `31 touches on right answers, 31 values right, 0 wrong`. Then, apart from that, whether
-  the touch was needed (the model was wrong there) or not. "It touched 40 right answers" alone reads as harm when every value may
+  the touch was needed (the model was wrong there) or not, and last what the touch did to the final answer, which only a live
+  paired run shows (a replay stops at the touch). Three questions, never merged: did the software work (value right), was it
+  needed, did it help. "It touched 40 right answers" alone reads as harm when every value may
   be right; a wrong value is the one finding that stops a mechanism. A check script that disagrees is read before it is believed
   (2026-11-09: `-0.332 \times 10` for -3.3223 was right; the script dropped the factor 10). `scripts/pc/hand_values.py` does it
   for `--check-hand` on a replay.
