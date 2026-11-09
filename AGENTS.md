@@ -12,8 +12,8 @@ bare `#N` written before 2026-11-08 means Strata-xeno #N; read it through the ma
 
 - **The end goal: a module any inference engine plugs in** (developer, 2026-11-09). The name echoes MCP: there the model calls
   tools outside the engine; here the engine hands MIP the tokens and MIP puts results into the stream, so the model calls
-  nothing. Each engine's developers write the calls into the module. Scope in order: mathematics, then coding, then other
-  software that acts on decoding. **Now is research:** no protocol spec and no module refactor until the methods stop
+  nothing. Each engine's developers write the calls into the module. Scope in order: mathematics, then coding (the sandbox: the
+  model writes a block in its reasoning, MIP runs it in place, no tool call), then other software that acts on decoding. **Now is research:** no protocol spec and no module refactor until the methods stop
   changing, and every result says it came from `tir4b`, the reference outside the engine (README, "What MIP is").
 - **Software computes, the model reasons** (developer, 2026-11-06). Every calculation software can do in the model's place is
   covered, or software is extended until it can: decimals, pi, roots, mod residues, column digits, quotient and remainder. The

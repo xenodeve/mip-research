@@ -4,9 +4,9 @@ Code that runs inside the model's reasoning. The model (or the engine, on its be
 thinks; software runs it and the printed output comes back into the thinking as forced tokens, so the model reads a computed
 result instead of working it by hand. This page covers the bounded interpreter in the engine, the real-Python kernel and its
 isolation box, the rules that open, test and close around a block, the model's own `run_python` tool route, the MCP bridge,
-and the 4B harness port. Unlike the inline values and the closers, everything here runs code the model writes (a block, a
-`run_python` call, an `mcp.` call), so it is not free of model calls the way the inline path is
-([What MIP is](../README.md#what-mip-is-and-where-it-stands)). None of it is in the [best config](../README.md#best-config); each section says where it lives and
+and the 4B harness port. The sandbox is MIP's coding side ([What MIP is](../README.md#what-mip-is-and-where-it-stands)):
+a block is part of the model's reasoning and the engine runs it in place, with no tool call. The `run_python` tool route is
+the exception, a real tool call kept as a comparison. None of it is in the [best config](../README.md#best-config); each section says where it lives and
 what it would take to use it.
 
 | Mechanism | What it does (one line) | Runs on | In best config? | Best measured result | Status |

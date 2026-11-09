@@ -36,10 +36,13 @@ The name echoes MCP on purpose: the two put software beside a model from opposit
   module yet. Every round's numbers come from the reference harness `tools/igc/tir4b.py`, which runs **outside** the engine: it
   drives llama-server or vLLM through their API and stops and resumes the request at each put. The engine code in Strata-xeno
   (`include/strata/core/igc_*.hpp`) is the first trial inside an engine and is still tied to that engine.
-- **Not every part is free of model calls.** The inline values and the loop closers need nothing from the model. The sandbox runs
-  a block the model writes in its reasoning, and the [tool route](#tool-route-hard-reasoning-sets) (`run_python`) and the MIP
-  Adapter (`mcp.` from a block, [sandbox](docs/sandbox.md#mip-adapter-mcp-tools-from-a-block)) are calls the model makes; they
-  are measured here as comparisons and options, not as the protocol.
+- **Two sides, one rule: the model makes no tool call.** On the mathematics side MIP reads the `=` and puts the exact value, and
+  the loop closers end loops. On the coding side is the [sandbox](docs/sandbox.md): the model writes a short program as part of
+  its reasoning (or the engine opens the block for it), MIP runs it in an isolation box and puts the printed output back into the
+  thinking. Writing code is the model's reasoning, not a call: there is no tool call and no turn round trip. The MIP Adapter
+  (`mcp.` from a block, [sandbox](docs/sandbox.md#mip-adapter-mcp-tools-from-a-block)) reaches MCP servers from inside such a
+  block. Only the [tool route](#tool-route-hard-reasoning-sets) (`run_python`) is a real tool call; it is measured as a
+  comparison, not as MIP.
 
 ## Arithmetic mode: 95 % fewer tokens
 
@@ -320,10 +323,12 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 930 tests; 79 ski
   มาจากตัวต้นแบบ `tools/igc/tir4b.py` ซึ่งทำงาน**นอก** engine โดยคุม llama-server หรือ vLLM ผ่าน API แล้วหยุดและต่อ request
   ทุกครั้งที่ใส่ค่า ส่วนโค้ดใน engine ของ Strata-xeno (`include/strata/core/igc_*.hpp`) เป็นการทดลองฝังใน engine ครั้งแรก และยัง
   ผูกกับ engine ตัวนั้นอยู่
-- **ยังไม่ใช่ทุกส่วนที่โมเดลไม่ต้องเรียกอะไร** การใส่ค่ากับตัวปิด loop ไม่ต้องให้โมเดลทำอะไรเลย แต่ sandbox รันโค้ดที่โมเดลเขียน
-  ไว้ในส่วนคิด ส่วน [tool route](#tool-route-โจทย์เหตุผลยาก-ๆ) (`run_python`) กับ MIP Adapter (เรียก `mcp.` จาก block
-  [sandbox](docs/sandbox.md#mip-adapter-mcp-tools-from-a-block)) เป็นการเรียกของโมเดลเอง ส่วนเหล่านี้วัดไว้เป็นตัวเทียบและตัวเลือก
-  ไม่ได้เป็นตัว protocol
+- **มีสองฝั่ง แต่ใช้หลักเดียวกัน คือโมเดลไม่ต้องเรียก tool** ฝั่งคณิตศาสตร์ MIP อ่าน `=` แล้วใส่ค่าที่แม่นยำ และตัวปิด loop
+  ช่วยหยุดการวน ฝั่ง coding คือ [sandbox](docs/sandbox.md) โมเดลเขียนโปรแกรมสั้น ๆ เป็นส่วนหนึ่งของการคิด (หรือ engine เปิด block
+  ให้) แล้ว MIP รันโปรแกรมนั้นในกล่องที่แยกไว้ และใส่ผลที่พิมพ์ออกมากลับเข้าไปในส่วนคิด การเขียนโค้ดเป็นการคิดของโมเดล ไม่ใช่การเรียก
+  tool จึงไม่มี tool call และไม่ต้องจบ turn แล้วรอผล MIP Adapter (เรียก `mcp.` จาก block
+  [sandbox](docs/sandbox.md#mip-adapter-mcp-tools-from-a-block)) ใช้ต่อไปยัง MCP server จากใน block แบบนี้ มีแค่
+  [tool route](#tool-route-โจทย์เหตุผลยาก-ๆ) (`run_python`) ที่เป็น tool call จริง ซึ่งวัดไว้เป็นตัวเทียบ ไม่ได้นับเป็น MIP
 
 ### โหมดเลขคณิต: token ลดลง 95%
 
