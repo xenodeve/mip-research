@@ -25,7 +25,9 @@ The rules agents miss most, all in full in `AGENTS.md`:
    trade-off on a sample of right answers.
 7. **Every written-answer test also goes through the API reader** (`tools/igc/answer_check.py`), on this PC only; report the rule's,
    the reader's and the corrected score.
-8. **Caught / should have caught,** with the denominator; check every case before stating a cause.
+8. **Caught / should have caught,** with the denominator; check every case before stating a cause. **Every touch a mechanism made:
+   was the value it put in right or wrong** (checked again independently), split by answers that finished right and wrong; whether
+   the touch was needed comes after that, separately.
 9. **Present the latest state only;** negative or unconfirmed data goes in a footnote, never as a result.
 10. **Time spent is the cost:** parallel tracks, no idle machine, background only, one engine at a time on the developer's PC.
 11. **The tracker holds the knowledge:** bilingual issue posts at major progress, `gh --repo` always explicit.

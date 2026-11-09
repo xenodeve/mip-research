@@ -144,6 +144,14 @@ How it runs (scripts in `scripts/pc/`, data in `WORK`, outside the repository):
 - **Caught / should have caught,** with the denominator, never "it fired N times" (2026-11-04, 2026-11-05). Say where the
   denominator comes from, name what nothing can count, and never call a small denominator a weak mechanism. `tools/igc/coverage.py`
   counts it from a run's `ids.jsonl` (`--ids`).
+- **Every touch: was what software put in right or wrong** (developer, 2026-11-09). For every place a mechanism touched an answer (an
+  inline value, a correction, a loop value, a close's value), report whether the value it put in is right or wrong, checked again
+  independently (the expression evaluated anew, exactly; a congruence by its remainder; a decimal to the places it gives), split by
+  answers that finished right and wrong: `31 touches on right answers, 31 values right, 0 wrong`. Then, apart from that, whether
+  the touch was needed (the model was wrong there) or not. "It touched 40 right answers" alone reads as harm when every value may
+  be right; a wrong value is the one finding that stops a mechanism. A check script that disagrees is read before it is believed
+  (2026-11-09: `-0.332 \times 10` for -3.3223 was right; the script dropped the factor 10). `scripts/pc/hand_values.py` does it
+  for `--check-hand` on a replay.
 - **Check every case before stating a cause** (2026-11-01). Open every case in a claim and say what was read and what was not. A
   tool's flag list is a lead, not a classification.
 - **The deep read, unasked** (2026-11-02): every result with its per-row split (median, the few rows that drag a total), which
