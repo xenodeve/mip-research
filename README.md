@@ -28,6 +28,18 @@ The name echoes MCP on purpose: the two put software beside a model from opposit
 | Who starts it | the model, by writing a tool call | the engine, which hands MIP the tokens as they are written; the model calls nothing |
 | How a result arrives | a tool result added to the context, then the model goes on | written into the token stream while the model writes: a value after `=`, the close of a loop |
 
+**How it is built.** MIP sits between the engine and the software connected to it. Its core collects everything that software
+needs to act accurately: the tokens as they are written, the question, the state of the answer (where a calculation is, whether
+it is looping), and, inside an engine, the hidden state and the MoE router. The connected software acts on it, and MIP puts the
+result back into the stream. An engine that takes MIP becomes an adaptive inference engine: its decoding responds to what the
+model is writing.
+
+| Layer | What it does | Catalog |
+|---|---|---|
+| Collect (MIP's core) | the `=` stop and expression reader, the question reader, the repeat check, and, inside an engine only, the probes and the router | [Detection](docs/detect.md) |
+| Connected software | **MIP MathBackend** computes exact values; **MIP Sandbox** runs the coding side's blocks; the loop closers end loops | [Compute](docs/compute.md) · [Sandbox](docs/sandbox.md) · [Anti-loop](docs/antiloop.md) |
+| Put back | the General Style put after `=`, a block's printed output, the close of a loop | [Inject](docs/inject.md) |
+
 - **The end goal: a module any inference engine can plug in** (llama.cpp, vLLM, Strata-xeno and others). Each engine's own
   developers write the calls into it. The protocol is the contract between the engine and the module: what the engine hands
   over, what MIP may answer (nothing, text to put, a close), how fast it must answer, and the state it keeps per request. Scope,
@@ -314,6 +326,17 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 930 tests; 79 ski
 | ซอฟต์แวร์อยู่ที่ไหน | นอก engine อยู่หลัง tool server | ใน inference engine อยู่ข้าง decode loop |
 | ใครเริ่ม | โมเดล ด้วยการเขียน tool call | engine ส่งโทเค็นให้ MIP ระหว่างที่โมเดลเขียน โมเดลไม่ต้องเรียกอะไรเลย |
 | ผลเข้ามายังไง | ผลของ tool ถูกเพิ่มเข้า context แล้วโมเดลค่อยเขียนต่อ | ถูกเขียนลงในสายโทเค็นระหว่างที่โมเดลกำลังเขียน เช่น ค่าหลัง `=` หรือการปิด loop |
+
+**โครงสร้าง** MIP อยู่ตรงกลางระหว่าง engine กับซอฟต์แวร์ที่ต่อเข้ามา ส่วนแกนของ MIP รวบรวมข้อมูลทั้งหมดที่ซอฟต์แวร์เหล่านั้นต้องใช้
+เพื่อทำงานได้แม่นยำ ได้แก่ โทเค็นที่โมเดลกำลังเขียน ตัวโจทย์ สถานะของคำตอบ (การคำนวณอยู่ตรงไหน กำลังวนอยู่หรือเปล่า) และถ้าอยู่ใน
+engine ก็รวมถึง hidden state กับ router ของ MoE ด้วย ซอฟต์แวร์ที่ต่อเข้ามาทำงานจากข้อมูลนี้ แล้ว MIP ใส่ผลกลับเข้าไปในสายโทเค็น
+engine ที่รับ MIP ไปใช้จึงกลายเป็น adaptive inference engine คือ decoding ปรับตามสิ่งที่โมเดลกำลังเขียน
+
+| ชั้น | ทำอะไร | แคตตาล็อก |
+|---|---|---|
+| รวบรวมข้อมูล (แกนของ MIP) | จุดหยุดที่ `=` กับตัวอ่านนิพจน์ ตัวอ่านโจทย์ ตัวตรวจการวนซ้ำ และ probe กับ router ซึ่งใช้ได้เฉพาะใน engine | [Detection](docs/detect.md) |
+| ซอฟต์แวร์ที่ต่อเข้ามา | **MIP MathBackend** คำนวณค่าที่แม่นยำ **MIP Sandbox** รัน block ฝั่ง coding ตัวปิด loop หยุดการวน | [Compute](docs/compute.md) · [Sandbox](docs/sandbox.md) · [Anti-loop](docs/antiloop.md) |
+| ใส่ผลกลับ | ค่าหลัง `=` แบบ General Style ผลที่ block พิมพ์ออกมา การปิด loop | [Inject](docs/inject.md) |
 
 - **เป้าหมายปลายทางคือ module ที่ inference engine ไหนก็เสียบใช้ได้** (llama.cpp, vLLM, Strata-xeno และตัวอื่น) dev ของแต่ละ
   engine เขียนโค้ดเรียกใช้เอง protocol คือข้อตกลงระหว่าง engine กับ module ว่า engine ส่งอะไรให้ MIP ได้บ้าง MIP ตอบอะไรกลับได้
