@@ -37,8 +37,11 @@ model is writing.
 | Layer | What it does | Catalog |
 |---|---|---|
 | Collect (MIP's core) | the `=` stop and expression reader, the question reader, the repeat check, and, inside an engine only, the probes and the router | [Detection](docs/detect.md) |
-| Connected software | **MIP MathBackend** computes exact values; **MIP Sandbox** runs the coding side's blocks; the loop closers end loops | [Compute](docs/compute.md) · [Sandbox](docs/sandbox.md) · [Anti-loop](docs/antiloop.md) |
+| Decide (MIP's core) | which connected software acts now, or none: by the situation, and silent when unsure. **Not one layer yet:** each component has its own trigger | (the gap) |
+| Connected software | **MIP MathBackend** computes exact values; **MIP Sandbox** runs the coding side's blocks; **MIP Antiloop** ends loops | [Compute](docs/compute.md) · [Sandbox](docs/sandbox.md) · [Anti-loop](docs/antiloop.md) |
 | Put back | the General Style put after `=`, a block's printed output, the close of a loop | [Inject](docs/inject.md) |
+
+**The aim:** an engine that intervenes by the situation, with judgment: the right component at the right moment, and nothing when nothing helps. It is measured per touch by three questions: was the value right, was the touch needed, did it help. Round 9's misses show the gap: a close that came while the work was unfinished (`stdmath-fbf10ed4#1`).
 
 - **The end goal: a module any inference engine can plug in** (llama.cpp, vLLM, Strata-xeno and others). Each engine's own
   developers write the calls into it. The protocol is the contract between the engine and the module: what the engine hands
@@ -335,8 +338,11 @@ engine ที่รับ MIP ไปใช้จึงกลายเป็น a
 | ชั้น | ทำอะไร | แคตตาล็อก |
 |---|---|---|
 | รวบรวมข้อมูล (แกนของ MIP) | จุดหยุดที่ `=` กับตัวอ่านนิพจน์ ตัวอ่านโจทย์ ตัวตรวจการวนซ้ำ และ probe กับ router ซึ่งใช้ได้เฉพาะใน engine | [Detection](docs/detect.md) |
-| ซอฟต์แวร์ที่ต่อเข้ามา | **MIP MathBackend** คำนวณค่าที่แม่นยำ **MIP Sandbox** รัน block ฝั่ง coding ตัวปิด loop หยุดการวน | [Compute](docs/compute.md) · [Sandbox](docs/sandbox.md) · [Anti-loop](docs/antiloop.md) |
+| ตัดสินใจ (แกนของ MIP) | เลือกว่าซอฟต์แวร์ตัวไหนควรทำงานตอนนี้ หรือไม่ทำเลย ตามสถานการณ์ และเงียบไว้เมื่อไม่แน่ใจ **ยังไม่ได้รวมเป็นชั้นเดียว** ตอนนี้แต่ละส่วนมีเงื่อนไขเริ่มทำงานของตัวเอง | (ส่วนที่ยังขาด) |
+| ซอฟต์แวร์ที่ต่อเข้ามา | **MIP MathBackend** คำนวณค่าที่แม่นยำ **MIP Sandbox** รัน block ฝั่ง coding **MIP Antiloop** หยุดการวน | [Compute](docs/compute.md) · [Sandbox](docs/sandbox.md) · [Anti-loop](docs/antiloop.md) |
 | ใส่ผลกลับ | ค่าหลัง `=` แบบ General Style ผลที่ block พิมพ์ออกมา การปิด loop | [Inject](docs/inject.md) |
+
+**เป้าหมาย** คือ engine ที่แทรกแซงตามสถานการณ์อย่างชาญฉลาด เลือกส่วนที่ถูกในจังหวะที่ถูก และไม่ทำอะไรเลยเมื่อไม่มีอะไรช่วยได้ วัดทุกครั้งที่แตะด้วยสามคำถาม คือ ค่าที่ใส่ถูกไหม จำเป็นไหม และช่วยไหม ข้อที่พลาดในรอบ 9 ชี้ช่องว่างนี้ เช่น การปิดคำตอบตอนงานยังไม่เสร็จ (`stdmath-fbf10ed4#1`)
 
 - **เป้าหมายปลายทางคือ module ที่ inference engine ไหนก็เสียบใช้ได้** (llama.cpp, vLLM, Strata-xeno และตัวอื่น) dev ของแต่ละ
   engine เขียนโค้ดเรียกใช้เอง protocol คือข้อตกลงระหว่าง engine กับ module ว่า engine ส่งอะไรให้ MIP ได้บ้าง MIP ตอบอะไรกลับได้

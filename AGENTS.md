@@ -10,7 +10,9 @@ bare `#N` written before 2026-11-08 means Strata-xeno #N; read it through the ma
 
 ## The aim
 
-- **The end goal: a module any inference engine plugs in** (developer, 2026-11-09). The name echoes MCP: there the model calls
+- **The end goal: a module any inference engine plugs in** (developer, 2026-11-09). Its components are MIP Antiloop, MIP MathBackend and
+  MIP Sandbox; the engine that takes them should intervene by the situation, with judgment: the right component at the
+  right moment, nothing when nothing helps. The name echoes MCP: there the model calls
   tools outside the engine; here the engine hands MIP the tokens and MIP puts results into the stream, so the model calls
   nothing. Each engine's developers write the calls into the module. Scope in order: mathematics, then coding (the sandbox: the
   model writes a block in its reasoning, MIP runs it in place, no tool call), then other software that acts on decoding. **Now is research:** no protocol spec and no module refactor until the methods stop
