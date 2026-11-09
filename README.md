@@ -54,10 +54,14 @@ model is writing.
 - **Two sides, one rule: the model makes no tool call.** On the mathematics side MIP reads the `=` and puts the exact value, and
   the loop closers end loops. On the coding side is the [sandbox](docs/sandbox.md): the model writes a short program as part of
   its reasoning (or the engine opens the block for it), MIP runs it in an isolation box and puts the printed output back into the
-  thinking. Writing code is the model's reasoning, not a call: there is no tool call and no turn round trip. The MIP Adapter
-  (`mcp.` from a block, [sandbox](docs/sandbox.md#mip-adapter-mcp-tools-from-a-block)) reaches MCP servers from inside such a
-  block. Only the [tool route](#tool-route-hard-reasoning-sets) (`run_python`) is a real tool call; it is measured as a
-  comparison, not as MIP.
+  thinking. Writing code is the model's reasoning, not a call: there is no tool call and no turn round trip. Only the
+  [tool route](#tool-route-hard-reasoning-sets) (`run_python`) is a real tool call; it is measured as a comparison, not as MIP.
+- **Two ways in.** **Native MIP:** the internal tools (MIP Antiloop, MIP MathBackend, MIP Sandbox) act inside the engine and put
+  their result into the stream at once, while the model generates. **MIP Adapter:** external tools (MCP servers) that MIP calls
+  itself, with no call decoded by the model; MIP's core picks the tool and its arguments from what it collected, and the result
+  enters the stream as a Native put does. *Built so far:* the Adapter reaches MCP servers only from a block the model writes
+  (`mcp.<server>.<tool>(...)`, [sandbox](docs/sandbox.md#mip-adapter-mcp-tools-from-a-block)), so the model still decodes the call; a call with no decode needs the decide
+  layer above.
 
 ## Arithmetic mode: 95 % fewer tokens
 
@@ -355,9 +359,13 @@ engine ที่รับ MIP ไปใช้จึงกลายเป็น a
 - **มีสองฝั่ง แต่ใช้หลักเดียวกัน คือโมเดลไม่ต้องเรียก tool** ฝั่งคณิตศาสตร์ MIP อ่าน `=` แล้วใส่ค่าที่แม่นยำ และตัวปิด loop
   ช่วยหยุดการวน ฝั่ง coding คือ [sandbox](docs/sandbox.md) โมเดลเขียนโปรแกรมสั้น ๆ เป็นส่วนหนึ่งของการคิด (หรือ engine เปิด block
   ให้) แล้ว MIP รันโปรแกรมนั้นในกล่องที่แยกไว้ และใส่ผลที่พิมพ์ออกมากลับเข้าไปในส่วนคิด การเขียนโค้ดเป็นการคิดของโมเดล ไม่ใช่การเรียก
-  tool จึงไม่มี tool call และไม่ต้องจบ turn แล้วรอผล MIP Adapter (เรียก `mcp.` จาก block
-  [sandbox](docs/sandbox.md#mip-adapter-mcp-tools-from-a-block)) ใช้ต่อไปยัง MCP server จากใน block แบบนี้ มีแค่
+  tool จึงไม่มี tool call และไม่ต้องจบ turn แล้วรอผล มีแค่
   [tool route](#tool-route-โจทย์เหตุผลยาก-ๆ) (`run_python`) ที่เป็น tool call จริง ซึ่งวัดไว้เป็นตัวเทียบ ไม่ได้นับเป็น MIP
+- **ทางเข้ามีสองทาง** **Native MIP** คือเครื่องมือภายใน (MIP Antiloop, MIP MathBackend, MIP Sandbox) ทำงานอยู่ใน engine และใส่ผล
+  เข้าไปในสายโทเค็นทันทีระหว่างที่โมเดลกำลัง generate ส่วน **MIP Adapter** คือเครื่องมือภายนอก (MCP server) ที่ MIP เรียกเอง โดยโมเดล
+  ไม่ต้อง decode คำสั่งเรียก แกนของ MIP เลือก tool และ argument จากข้อมูลที่รวบรวมไว้ แล้วผลก็เข้าสายโทเค็นแบบเดียวกับ Native
+  *ที่สร้างแล้วตอนนี้* Adapter ยังเรียก MCP server ได้เฉพาะจาก block ที่โมเดลเขียน (`mcp.<server>.<tool>(...)`
+  [sandbox](docs/sandbox.md#mip-adapter-mcp-tools-from-a-block)) โมเดลจึงยังต้อง decode คำสั่งเรียกอยู่ การเรียกโดยไม่ต้อง decode ต้องรอชั้นตัดสินใจที่อยู่ในตารางด้านบน
 
 ### โหมดเลขคณิต: token ลดลง 95%
 

@@ -181,6 +181,11 @@ check runs server-side: the request offered the tool, the chat's deny rules, `an
 budgets of 8 calls per block, 32 per turn, 120 s of tool time per block. This is Roadmap M1 + M2 in text-feedback mode, the MCP
 bridge of Roadmap Phase C (Strata-xeno#289).
 
+**The aim (developer, 2026-11-09): the Adapter calls the tool with no decode.** MIP's core picks the tool and its arguments from
+what it collected and puts the result into the stream, as Native MIP does with its internal tools; the model writes no call.
+What is built is the step before it: the call is decoded from a block the model writes. The missing part is the decide layer
+([What MIP is](../README.md#what-mip-is-and-where-it-stands)).
+
 - Files: Strata-xeno xeno/mip-sandbox: serve/mip/mcp_adapter.py, serve/mip/core.py, serve/sandbox/kernel_main.py, include/strata/core/igc_sandbox_bridge.hpp; design docs/plans/2026-11-02-mip-adapter-design.md.
 - Measured: `serve/test_mip_adapter.py` 80 tests OK; 37 guards turned off one at a time, each caught; on the A100 the merged kernel imported numpy 2.1.3, sympy 1.14.0, mpmath, networkx (Strata-xeno#289). [^adapter]
 - To use: a prompt line that tells the model `mcp` exists, an isolation box (or a VM), and an `agentStatus` step for the web app.
