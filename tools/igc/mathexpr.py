@@ -426,7 +426,9 @@ def _value_after(segment):
         if rest[:1].isalpha() or rest[:1] and rest[0] in '_\\' and not rest.startswith(('\\ne', '\\le', '\\ge', '\\quad', '\\text', '\\implies', '\\Rightarrow',
                                                                             '\\approx', '\\equiv', '\\pmod', '\\to', '\\rightarrow', '\\\\')) \
                 or _ROUGH.match(rest) or _GOES_ON.match(rest) \
-                or re.match(r'\s*(?::(?!=)|(?:million|billion|thousand|trillion|percent)\b|x\s*10\s*\^)', rest, re.I):
+                or re.match(r'\s*(?::(?!=)|(?:million|billion|thousand|trillion|percent)\b|x\s*10\s*\^)', rest, re.I) \
+                or re.match(r' [A-Za-z](?![A-Za-z])', rest):
+            # `112 = 4 R x`: a number times a lone letter is a term of an equation in unknowns, not a value (2026-11-09)
             # 4.8k; 20.1852...; `6^2 + (\frac{s-r}{2})^2` or `2(r^2 + s^2)`: algebra goes on; `3/10 : 7/10` a ratio; `4.34 million`;
             # `2.4 x 10^3` is scientific, not 2.4. Not past a `$`: `47 + 316 + 4742 = 4105$ million` counts in millions (dm-base)
             return None
@@ -484,9 +486,19 @@ def _estimate(before, after):
 
     def digits(x):
         return len(x.replace(',', '').replace('.', '').strip('0'))
+    def rounded(fx, fy, n):
+        """fy is fx rounded or cut to n significant digits (3339 -> 3000, 2548 -> 2500 or 3000, 0.0457 -> 0.05)."""
+        if fx == 0 or n < 1:
+            return False
+        import math
+        place = Fraction(10) ** (math.floor(math.log10(abs(float(fx)))) - n + 1)
+        down = (abs(fx) // place) * place
+        return abs(fy) in (down, down + place) and (fx < 0) == (fy < 0)
     for x, y in zip(a, b):
         fx, fy = Fraction(x.replace(',', '')), Fraction(y.replace(',', ''))
-        if fx == 0 or abs(fx - fy) > abs(fx) / 10 or digits(y) > digits(x):
+        if fx == 0 or digits(y) > digits(x):
+            return False
+        if abs(fx - fy) > abs(fx) / 10 and not rounded(fx, fy, digits(y)):
             return False
     return True
 
@@ -648,6 +660,11 @@ def _arrow_sum(base, text, value):
     return Fraction(1, 2) <= value / base[1] <= 2
 
 
+# a relation the model asks (`...$? No.`; not `Why did I think ... = 90360$?`, a wrong value asked about), marks false or wrong, or offers as an example (`like $...$`, `e.g.`, `or similar`):
+# none of these states the relation as true, so a wrong side there is no slip to correct (developer, 2026-11-09, round 9's replay: 15 of
+# the 40 corrections on right answers were relations the model had itself rejected)
+_ASKED = re.compile(r'\?\s*\$?\s*(?:No|Not|Wrong|Incorrect)\b|\(\s*(?:False|false|wrong|not true)\s*\)|\bwhich is (?:false|wrong)\b'
+                    r'|\bor similar\b|\blike\s+\$|\be\.g\.')
 _CONDITION = re.compile(r'\b(?:false|not true|impossible|contradiction|need|needs|want|for this to|suppose|assume|if|whether|maybe|perhaps)\b',
                         re.I)
 _COUNT_NOUN = re.compile(r'\s*\$?\s*(?:coins?|notes?|bills?|stamps?|pieces?|items?)\b', re.I)
@@ -720,6 +737,8 @@ def wrong_relations(line, moduli=(), custom_ops=()):
     statements on one line (`$x = 3$, $y = 5$`). A relation is checked only when one side computes something."""
     if re.search(r'borrow|carry', line, re.I):
         return []
+    if _ASKED.search(line):
+        return []   # `= 5/12 \times 12/25$? No.`, `$3+4= 7 = 5$ (False)`, `like $1000 \equiv 1 \pmod 7$`: asked, rejected or an example, not stated
     division = re.search(r'(\d+)\s*(?:÷|/|\\div)\s*(\d+)\s*=\s*\d+\s*(?:\*|×|\\times|\\cdot)\s*(\d+)', line)
     if division and division.group(2) == division.group(3):
         return []   # `115542 ÷ 21609 = 5*21609 = 108045, remainder 7497`: a long division's notes, the product beside the quotient (#306)

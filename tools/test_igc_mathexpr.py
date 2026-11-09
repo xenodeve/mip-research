@@ -99,6 +99,27 @@ class WrongRelations(unittest.TestCase):
                      '$|N - 2025| = |2304 - 2025| = 279$', '$180^\\circ - 30^\\circ = 150^\\circ$', '1 -> -6 (No)'):
             self.assertEqual(wrong_relations(line), [], line)
 
+    def test_a_relation_the_model_questions_or_rejects_is_no_claim(self):
+        # a relation asked (`...$? No.`), marked false, or offered as an example is not stated as true: no correction (developer, 2026-11-09;
+        # the notation, not a set's frequency). A stated wrong value on a line with no question is still caught.
+        for line in ('    $A/B = (1/5) / (12/25) = 5/12 \\times 12/25$? No.',
+                     '        So, $-\\frac{1}{3} - \\frac{23}{21} = -10/7 - 23/21$? No.',
+                     '        *   (h,?) -> 0.1 + 1/30 + 1/30 = 1/6 + 2/30 = 7/30? No.',
+                     'This happens if $3+4= 7 = 5$ (False), or $3+5= 8=4$ (False).',
+                     "    *   Modular arithmetic properties (like $1000 \\equiv 1 \\pmod 7$ or similar) could be used."):
+            self.assertEqual(wrong_relations(line), [], line)
+        self.assertTrue(wrong_relations('    $T_2 = \\frac{-3}{10} \\times \\frac{2}{9} = -1/15 \\times 2 = -2/15$.'))
+
+    def test_a_number_times_a_variable_is_no_value(self):
+        # `112 = 4 R x`: an equation in an unknown, not a claim that 112 is 4
+        self.assertEqual(wrong_relations('        *   Difference: $121 - 9 = 112 = 4 R x$.'), [])
+
+    def test_an_estimate_on_numbers_rounded_to_fewer_digits(self):
+        # each number rounded to its own fewer significant digits is an estimate (3339 -> 3000, 2548 -> 2500), whatever the per cent;
+        # a number of another size is not (41815 -> 4000000 is a slip of two places, still corrected)
+        self.assertEqual(wrong_relations('$3339 \\times 2548 \\approx 3000 \\times 2500 = 7500000$. That is $7.5 \\times 10^6$.'), [])
+        self.assertTrue(wrong_relations('    *   $41815 \\div 5934 \\approx 4000000 / 6000 \\approx 700$.'))
+
     def test_false_corrections_of_dm_check_pass(self):
         # each "corrected" a right hand value in the first --check-hand run (dm mul_big 7808, div_big 2289, div_big 6890, mul_div 230, add_or_sub 8989)
         for line in ('$600 \\times 8 = 4.8k$', '$37 / 1.8329827 \\times 10^7 = 20.1852... \\times 10^{-7}$',
