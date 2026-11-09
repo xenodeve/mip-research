@@ -25,6 +25,13 @@ bare `#N` written before 2026-11-08 means Strata-xeno #N; read it through the ma
 - **Order of models** (2026-11-08): Qwen3.5-4B first, until the whole system is settled and no assumption changes, then other
   models. A small model has the most headroom, so it shows fastest whether the software works. On a large model expect tokens and
   time, not accuracy (2026-11-01).
+- **Loops are of several kinds; each kind gets its own handling** (developer, 2026-11-10). Never one closer applied to every loop
+  in the hope it helps all of them. What the model repeats decides the action: a true equation re-checked, a doubt about how the
+  question reads, a form choice for a value already found, a factor search, a token run, a contradiction in a hard problem
+  ([decide layer](docs/plans/2026-11-10-decide-layer-design.md)). The settle lines and the closes are paired per kind, not
+  substituted for each other: on round 9's loops a settle line alone ended 6 of 38 and today's close alone 26 of 38
+  ([settle adoption](docs/plans/2026-11-10-settle-adoption-plan.md)). A new loop rule says which kind it handles, and is measured
+  per kind.
 - **What the developer most wants to see:** the output steering what the model does afterwards, like a guideline that is always
   there. A guideline is only as good as what was detected, so detection coverage comes first.
 

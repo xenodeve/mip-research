@@ -10,6 +10,10 @@ said no spec or module refactor while the methods still change ([README](../../R
 pending), General arm (`--loop-close --answer-close --early-cycle`, shape cap 1024, cover cap 32768, inline values General Style,
 `--loop-value` off) against the control arm on the same rows and seeds. Right = right by the rule or by the API reader.
 
+**The principle (developer, 2026-11-10): loops are of several kinds, and each kind is handled by its own pairing**, never one
+closer for all in the hope it helps every loop. This plan reads the kind; [settle adoption](2026-11-10-settle-adoption-plan.md)
+measures which pairing works for which kind.
+
 ## 1. What was measured
 
 Every General answer that had a close: **69 answers** (94 closes: 66 loop closes in the thinking, 28 answer closes). Each was read

@@ -8,6 +8,16 @@ its row names another [build](INDEX.md#model-builds)) and the Strata engine's ow
 were taken from stored traces so that no stored answer that finished right crosses them; the engine's own checks have their scans
 quoted beside each rule.
 
+**Loops are of several kinds, and each kind is handled by its own pairing** (developer, 2026-11-10). The detectors on this page
+tell *that* the text loops and by which shape; they do not tell *what* the model is repeating. Round 9's 69 closed answers
+(**4B NVFP4 W4A8 · llama.cpp · PC layer**) were six kinds: a true equation re-checked (21), a doubt about how the question reads
+(23), a form choice for a value already found (11), a factor search (5), a token run (3), a contradiction in a hard problem (6).
+One closer for all of them hurt where the kind called for something else: all 3 closes that lost a right answer came when the
+answer looped again after the thinking close, 2 of them on a true intermediate step. The decide layer reads the kind and pairs a
+settle line with a close (or a close where the model is ready) per kind: [decide layer](plans/2026-11-10-decide-layer-design.md),
+[settle adoption](plans/2026-11-10-settle-adoption-plan.md). A settle line is not a replacement for a close: alone it ended 6 of
+38 sampled loops against 26 for today's close.
+
 ## Summary
 
 | Mechanism | What it does (one line) | Runs on | In best config? | Best measured result | Status |

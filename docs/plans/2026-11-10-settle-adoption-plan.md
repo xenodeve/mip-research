@@ -43,7 +43,8 @@ For brake also: where it closed against where today's close came (earlier, so on
 
 ## Combined, by loop type (developer, 2026-11-10)
 
-Loops are of several kinds, so the ways are meant to work together, one pairing per kind, not one way for all. The first sample
+**Loops are of several kinds; each kind gets its own handling, never one closer for all in the hope it helps every loop.**
+So the ways are meant to work together, one pairing per kind, not one way for all. The first sample
 of probe 1 (38 of 49 keys, rule only) said the same: the settle line alone ended 6 and was right 6, today's close ended 26 and was
 right 24 (close-only right 18, settle-only right 0); the settle line cut relapses 25 -> 14 against plain but sent 18 answers to the
 16k cap. So the settle line is a step before a close, not a replacement. The two combined arms test the pairing; the result is read

@@ -204,6 +204,10 @@ Hidden-state signals let MIP prepare a value before `=` arrives instead of waiti
 
 ## Loops it prevents
 
+Loops are of several kinds, and each kind needs its own handling, not one closer for all ([decide layer](docs/plans/2026-11-10-decide-layer-design.md)).
+The table lists the detectors by the shape of the loop; what the model is repeating (a true equation, a doubt about the question,
+a form choice, a factor search, a token run, a contradiction) decides what is put before a close, and whether to close at all.
+
 | Loop | Example | Caught by |
 |---|---|---|
 | **An exact cycle** | The same re-check paragraph again and again | **Repeat check** (20 rounds, 8 past 512 tokens); **V7** sooner (6 rounds, 3 past 512, spanning 500+ tokens) |
@@ -496,6 +500,11 @@ tool route (ให้โมเดลเรียก `run_python` ได้ พ�
 | `7^5 =` (ระหว่างทำ mod 11) | เศษเหลือ | ใส่เฉพาะเมื่อ `=` ตัวล่าสุดที่โมเดลเขียนเองบนบรรทัดนั้นหมายถึงเศษเหลือ |
 
 ### loop ที่ป้องกันได้
+
+การวนมีหลายประเภท และแต่ละประเภทต้องจัดการด้วยวิธีของตัวเอง ไม่ใช้ตัวปิด loop ตัวเดียวกับทุกแบบแล้วหวังว่าจะช่วยได้ทั้งหมด
+([ชั้นตัดสินใจ](docs/plans/2026-11-10-decide-layer-design.md)) ตารางนี้แยกตัวตรวจตามรูปแบบของการวน ส่วนสิ่งที่โมเดลกำลังวนอยู่
+(ตรวจสมการที่ถูกซ้ำ สงสัยว่าโจทย์เขียนว่าอะไร ลังเลเรื่องรูปแบบคำตอบ ลองหารหาตัวประกอบ พิมพ์คำเดิมซ้ำ หรือติดข้อขัดแย้ง)
+เป็นตัวกำหนดว่าจะใส่อะไรก่อนปิด และควรปิดหรือไม่
 
 | รูปแบบ Loop | ตัวอย่าง | ตัวจับและเกณฑ์การปิด |
 |---|---|---|
