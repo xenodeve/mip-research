@@ -1,6 +1,6 @@
 """tools/igc/tir4b.py and tir4b_train.py without a GPU: a scripted model drives the forced-block state machine through each path the
 engine's rules take, and the training labels mask what the kernel printed. python tools/test_igc_tir4b.py"""
-import sys, types, unittest
+import os, sys, types, unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from tools.igc import tir4b
@@ -285,16 +285,30 @@ class InlineCalc(unittest.TestCase):
         r.take(TOK.encode('\n\nso ' + 'ab' * 600))
         self.assertIsNone(r.finish)
         self.assertEqual(kinds(r), ['answer close'])
-        self.assertTrue(r.text().endswith('The final answer is $\\boxed{'))
+        self.assertTrue(r.text().endswith('The final answer is $\\boxed'))
         self.assertLess(r.text().count('ab'), 10)   # the cycle cut back to one round before the cue
         most, stops = r.request()
         self.assertLessEqual(most, tir4b.ANSWER_CLOSE_TOKENS)
         self.assertIn(198, stops)
-        r.take(TOK.encode('-3/7}$'))
+        r.take(TOK.encode('{-3/7}$'))
         r.take(TOK.encode('\n'))
         self.assertEqual(r.finish, 'stop')
         from tools.igc.select_rows import right
         self.assertTrue(right(dict(id='a', suite='arith', answer='-3/7'), r.text()))
+
+    def test_answer_close_cue_ends_where_the_model_own_text_has_a_token_end(self):
+        """Qwen writes `{-` as one token, so a cue that ended with `{` left only the unseen `{` + `-` for a negative value: 22 of 28
+        gold-negative closes lost the minus (A100 bf16 and PC NVFP4 alike; 9977 boxed -70468 five times, then wrote `70468` after the
+        cue). The cue's tokens must be a prefix of the tokens of the cue followed by any value, so the model chooses `{` or `{-` itself."""
+        self.assertFalse(tir4b.ANSWER_CLOSE.endswith('{'))
+        path = os.environ.get('IGC_QWEN_TOKENIZER')
+        if not path:
+            self.skipTest('IGC_QWEN_TOKENIZER (a Qwen tokenizer folder) not set')
+        from transformers import AutoTokenizer
+        tok = AutoTokenizer.from_pretrained(path)
+        cue = tok.encode(tir4b.ANSWER_CLOSE, add_special_tokens=False)
+        for value in ('{-70468}$.', '{70468}$.', '{-\\frac{3}{4}}$', '{\\frac{3}{4}}$', '{(-1, 2)}$', '{x}$'):
+            self.assertEqual(tok.encode(tir4b.ANSWER_CLOSE + value, add_special_tokens=False)[:len(cue)], cue, value)
 
     def test_answer_close_also_takes_a_loop_of_equations(self):
         """loop-lc surd-2201: `Let's check $19+1$. $19+1 = 20$.` looped in the answer; each request ended at `=`, so the loop was read on
@@ -309,7 +323,7 @@ class InlineCalc(unittest.TestCase):
         r.take(TOK.encode('x</think>'))
         r.take(TOK.encode('\n\nso ' + 'ab' * 600))
         puts = kinds(r).count('inline value')
-        r.take(TOK.encode('6 \\times 7 ='))
+        r.take(TOK.encode('{6 \\times 7 ='))
         r.take(TOK.encode(' 42}$\n'))
         self.assertEqual((kinds(r).count('inline value'), r.finish), (puts, 'stop'))
         self.assertTrue(r.text().endswith('The final answer is $\\boxed{6 \\times 7 = 42}$\n'))

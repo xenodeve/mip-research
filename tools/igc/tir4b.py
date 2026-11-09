@@ -29,7 +29,9 @@ LOOP_CLOSE = '\n</think>\n\n'   # {198, kThinkClose, 271}
 # --answer-close: a loop in the answer, after the thinking is closed, ends with the model's one final value instead of `stuck`. loop-lc (#307)
 # closed 15 thinking loops, 12 then answered right; 3 carried the same doubt into the answer and looped there (an endless decimal
 # `-5511170.918918...`, a recount of `19+1`), where nothing was left to close
-ANSWER_CLOSE = '\n\nThe final answer is $\\boxed{'
+# The cue ends before `{`: Qwen writes `{-` as one token, and after a cue ending in `{` 22 of 28 gold-negative values lost the minus
+# (A100 bf16 and PC NVFP4 alike; dm_div_big-9977 boxed -70468 five times, then wrote 70468 after the cue). Round 9 (2026-11-09)
+ANSWER_CLOSE = '\n\nThe final answer is $\\boxed'
 ANSWER_CLOSE_TOKENS = 64   # the value after the cue; a value still going past this is no value
 LOOP_VALUE = 'Computed exactly: ${expr} = {value}$'   # --loop-value: the question's computation, put before a loop is closed
 CHUNK = 1024   # thinking tokens between two loop checks; the engine checks every 16, so a close can come up to this much later
