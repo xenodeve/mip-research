@@ -16,7 +16,7 @@ quoted beside each rule.
 | Counting check + `--guard-progress` | Digit-masked cycle of 64 rounds; with the guard, rounds that are at least 7/8 new go on | tir4b (vLLM/llama-server) | yes | Guard changes exactly the 3 rows that were still working; every other stop kept | in best config |
 | Line-back check | One line of 12+ tokens seen 16 times | tir4b; also Strata engine | yes | 23 A100 stops, 12 widest read: none cut early | in best config |
 | A: loop close (`--loop-close`) | Puts `</think>` on a thinking loop so the model answers | tir4b (vLLM) | yes | A100: 25 -> 37 of 48 (+13 / -1) on loop rows | in best config |
-| B: answer close (`--answer-close`) | Answer loop cut to one round, then `The final answer is $\boxed{` and one value | tir4b (vLLM) | yes | A100: cut answers 3 -> 1; replay 0 acts on 370 right | in best config |
+| B: answer close (`--answer-close`) | Answer loop cut to one round, then `The final answer is $\boxed` and one value | tir4b (vLLM) | yes | A100: cut answers 3 -> 1; replay 0 acts on 370 right | in best config |
 | V7: early cycle (`--early-cycle`) | Exact cycle of 6 rounds (3 past 512) spanning 500+ tokens, at every line end | tir4b (vLLM) | yes | Replay: 0 of 915 right touched, 212 of 243 loops sooner, 624k tokens | in best config |
 | Shape cap (`--shape-cap 1024`) | Exact cycle with each digit run read as one token, 1,024 rounds | tir4b (vLLM) | yes | A100: closed the long division at 55k model tokens | in best config |
 | Cover cap (`--cover-cap 32768`) | 97 % of the last 32,768 tokens repeat a 12-gram of the 2,048 before | tir4b (vLLM) | yes | Replay: 0 of 1,078 right touched, 12 of 13 runs past 150k stopped | in best config |
@@ -106,13 +106,19 @@ Shape cap and cover cap are not in these 48: shape cap ran on 3 rows (round 8), 
 ## B: answer close (`--answer-close`)
 
 - **What it does:** a loop in the answer after the thinking is closed (tir4b.py:1215 `close_answer`): an exact cycle is cut back to
-  one round (`loop_start`), then `\n\nThe final answer is $\boxed{` is put and the model writes one value, at most
-  `ANSWER_CLOSE_TOKENS` = 64 tokens, to a line end. Nothing else acts after the cue.
+  one round (`loop_start`), then `\n\nThe final answer is $\boxed` is put and the model writes one value, at most
+  `ANSWER_CLOSE_TOKENS` = 64 tokens, to a line end. Nothing else acts after the cue. The cue ends before `{` (2026-11-09):
+  Qwen writes `{-` as one token, and after a cue ending in `{` 22 of 28 gold-negative values lost their minus.
 - **Why:** loop-lc closed 15 thinking loops; 12 answered right; the 3 others carried the same doubt into the answer and looped there.
 - **Replay gate** (7 arms, 538 answers, current code): acts on 5 of 120 cut answers, 0 of 370 right, 0 of 15 finished wrong;
   `vllm_refused` 0 in every arm (mip-research#19, "`--answer-close`").
 - **A100:** `loop-lcac` 37 of 48, cut answers 3 -> 1 against loop-lc. It turns `stuck` into a finished answer, not into a right one.
   [^bright]
+- **Cue probe** (2026-11-09; the 50 stored closes, prefix text from 40 **4B bf16 · vLLM · A100** and 10 **4B NVFP4 W4A8 · llama.cpp ·
+  PC layer** answers, the value written by **4B NVFP4 W4A8 · llama.cpp**, 4 seeds each, same seed for both cues): minus written on
+  gold-negative values **41 -> 100 of 112**; right by the rule 59 -> 64 of 200 (15 new-only, 10 old-only, p = 0.21), by the API
+  reader 84 -> 94 (21 vs 11, p = 0.055). The minus is the mechanism; the accuracy change is within one probe's noise, and the
+  close still cannot finish unfinished work (`stdmath-fbf10ed4#1` boxed a cross-product step). [^cue]
 
 ## V7: early cycle (`--early-cycle`)
 
@@ -329,3 +335,4 @@ Strata-xeno xeno/mip-sandbox: include/strata/core/igc_inline.hpp:107-195. Each p
     plain 17 right (684,271 tokens) against 14 (block at 512, close on a print), 15 (read 256 tokens, then close), 13 (block at 2,048);
     14 long HumanEval tasks on this PC: no gain, 36 of 37 forced blocks printed nothing. Developer's direction: a close that cuts
     reasoning short is out for coding; the math result must clear the same bar on a paired machine (mip-research#3).
+[^cue]: หมายเหตุ: a probe, not a run: the text before the cue is fixed, so it measures only the value written after it. `answer_check` wrote its verdicts and then stopped on records without `finish`/`tokens` (the probe's records lack them). Scripts: `C:/Users/xenod/mip-work/a100/cue_probe.py`, `probe_cue.sh`.
