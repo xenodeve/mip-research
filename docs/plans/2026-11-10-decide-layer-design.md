@@ -113,6 +113,44 @@ as the inline forms were, before it goes into a round.
 4. **Validation on rows frozen9 did not supply** (frozen10), before any A100 round. The six classes were read off frozen9, the test
    set; each action above is justified by the notation, and a rule whose only support is how often a class appeared here is left out.
 
+## 4a. Simulation of v1 (2026-11-10, no model, no GPU)
+
+The classifier and settle lines are `tools/igc/loop_class.py` (tests `tools/test_loop_class.py`, written from each class's definition
+with made-up loops, before the run); the run is `python -m tools.igc.decide_sim <pc> results/decide-layer-r9/labels.json --rows ...`,
+output `results/decide-layer-r9/sim-v1.json`. Rules were written once and measured once; nothing below was tuned to the labels.
+
+**Classifier against the 69 hand labels: 55 of 69 agree.**
+
+| hand \ classifier | A | B | C | D | E | F | of |
+|---|---|---|---|---|---|---|---|
+| A | 16 | 1 | 0 | 0 | 0 | 4 | 21 |
+| B | 2 | 18 | 1 | 0 | 0 | 2 | 23 |
+| C | 0 | 0 | 11 | 0 | 0 | 0 | 11 |
+| D | 0 | 0 | 0 | 3 | 1 | 1 | 5 |
+| E | 0 | 0 | 0 | 0 | 3 | 0 | 3 |
+| F | 0 | 2 | 0 | 0 | 0 | 4 | 6 |
+
+- **No disagreement puts a false line.** Every settle line is exact by construction: an A line is a relation MathBackend computes as
+  true, a B line quotes the question, a C or D line carries the question's exact value. Where a C or D line carries a value it is
+  gold in **10 of 10** (labelled) and **4 of 4** (control).
+- **The misses fall back to today's close (silence):** 4 A rows the software cannot evaluate (`x^2 - x + 1 = 0` algebra,
+  `f(1, 3) = 0`, a `27 / 3 = 9 rem 0` trace), 2 B rows on a letter string with no term shared with the question
+  (`dm_swr_p_sequence-9951#0/#1`), and `dm_div_big-1395#0` (a search over years, not a division). `dm_mixed_longer-9951#0` (a trial
+  division that ran into zeros) is read as E, close as today.
+- **Harmless confusions:** 2 F rows read as B (a geometry doubt; the line quotes the question), 2 B rows read as A (a true
+  `2 / (-10) = -0.2` in a reading-doubt loop).
+- **Settle line available:** 49 of 69 labelled loops (A 18, B 21, C 7 of 12, D 3); the other 20 close as today. On control's 73
+  stuck loops (an arm with no closes): A 6, B 21, C 11, D 1, E 8, F 26; a settle line on 31 of 73.
+- **The rows that matter:** of the 9 both-wrong `dm_div_big` answers with the value in hand, 5 get the exact value (C or D), 3 a
+  confirm (A), 1 none. Of the 3 hurt answers, `stdmath-fbf10ed4#1` and `dm_mul_div_longer-9991#1` get a confirm (A), and
+  `dm_mixed_longer-9951#0` closes as today (E).
+
+**What the simulation cannot say:** whether the model reads a settle line and stops looping. The C lines on `dm_div_big` repeat
+the question's own fraction (`(-73388)/(36903) = -73388/36903`): the model's doubt there was decimal against fraction, the very case
+where `--loop-value` was right and not adopted. Next, before a full round: a **settle probe** like the cue probe (`antiloop.md`,
+"Cue probe"): the 69 stored prefixes, each continued with today's close and with the settle line, same seeds, on its own
+llama-server (never a round's), rule + API reader. That needs the GPU.
+
 ## 5. Deferred, with the reason
 
 - **MIP Adapter with no decode** (MIP picks an external tool and its arguments itself): needs this layer to work on the internal

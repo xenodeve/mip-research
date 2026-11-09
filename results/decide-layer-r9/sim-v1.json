@@ -1,0 +1,1426 @@
+{
+ "labelled": [
+  {
+   "key": "dm_mixed_longer-926#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "A",
+   "detail": "-1/3 - 23/21 = -10/7",
+   "settle": "Checked exactly: $-1/3 - 23/21 = -10/7$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mixed_longer-926#1",
+   "half": "a",
+   "kind": "answer close",
+   "label": "A",
+   "cls": "B",
+   "detail": "$-1/3 = -0.3333...$",
+   "settle": "The question writes, exactly: (1/(-3) + 69/(-63))/((-42)/(-294)) + ((-61580)/(-33869))/((-4)/(-286))",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mixed_longer-5053#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "A",
+   "detail": "198/90 = 2.2",
+   "settle": "Checked exactly: $198/90 = 2.2$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mixed_longer-5053#1",
+   "half": "a",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "A",
+   "detail": "0.8 + 2.2 = 3",
+   "settle": "Checked exactly: $0.8 + 2.2 = 3$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mul_div_longer-5070#1",
+   "half": "a",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "A",
+   "detail": "2928 / 28 = 732/7",
+   "settle": "Checked exactly: $2928 / 28 = 732/7$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-928#1",
+   "half": "a",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "A",
+   "detail": "3 \\times 7 = 21",
+   "settle": "Checked exactly: $3 \\times 7 = 21$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-1505#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "C",
+   "cls": "C",
+   "detail": "I'll provide the fraction.",
+   "settle": "Computed exactly: $(3)/(-2372493604) = -3/2372493604$.",
+   "value_is_gold": true
+  },
+  {
+   "key": "dm_div_big-1505#1",
+   "half": "a",
+   "kind": "loop close",
+   "label": "C",
+   "cls": "C",
+   "detail": "I'll provide the fraction.",
+   "settle": "Computed exactly: $(3)/(-2372493604) = -3/2372493604$.",
+   "value_is_gold": true
+  },
+  {
+   "key": "dm_div_big-3491#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "C",
+   "cls": "C",
+   "detail": "Okay, I'll write the final answer.",
+   "settle": "Computed exactly: $(212863709)/(-5) = -42572741.8$.",
+   "value_is_gold": true
+  },
+  {
+   "key": "dm_div_big-5070#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "D",
+   "cls": "D",
+   "detail": "1237763",
+   "settle": "Computed exactly: $(-11294)/(-2475526) = 5647/1237763$; $\\gcd(5647, 1237763) = 1$, so it is in lowest terms.",
+   "value_is_gold": true
+  },
+  {
+   "key": "dm_div_big-5070#1",
+   "half": "a",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "A",
+   "detail": "11294 / 2475526 = 5647/1237763",
+   "settle": "Checked exactly: $11294 / 2475526 = 5647/1237763$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-9977#0",
+   "half": "a",
+   "kind": "answer close",
+   "label": "C",
+   "cls": "C",
+   "detail": "\\boxed{-70468}",
+   "settle": "Computed exactly: $(-4181571120)/(59340) = -70468$.",
+   "value_is_gold": true
+  },
+  {
+   "key": "dm_simplify_surd-926#1",
+   "half": "a",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "`1*(sqrt(7) - (4 + -1*sqrt(7)) - -5*(sqrt(7) + -1))`",
+   "settle": "The question writes, exactly: Simplify sqrt(56)/((sqrt(288) - (1*sqrt(288) + sqrt(288))) + sqrt(8))*5 + (1*(sqrt(7) - (4 + -1*sqrt(7)) - -5*(sqrt(7) + -1)))**2.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-1501#1",
+   "half": "a",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "Is it possible that it is $-3 \\cdot \\sqrt{3} \\cdot -2$?",
+   "settle": "The question writes, exactly: Simplify ((-3*sqrt(3)*-2 - sqrt(9)/(sqrt(75) + sqrt(3))) + (sqrt(33)*1*-5)/(sqrt(33)/sqrt(48)))*4.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-3480#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "Wait, what if the `-2` is `-2`?",
+   "settle": "The question writes, exactly: Simplify (6*(-3*(3 + (sqrt(108) + sqrt(108) + -2*sqrt(108) + sqrt(108))*-5 + 4) + 5))**2.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-3480#1",
+   "half": "a",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "Wait, `+ 4` is followed by `)`.",
+   "settle": "The question writes, exactly: Simplify (6*(-3*(3 + (sqrt(108) + sqrt(108) + -2*sqrt(108) + sqrt(108))*-5 + 4) + 5))**2.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-5053#1",
+   "half": "a",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "Wait, what if the first term is $-1 * ( \\sqrt{432} + \\sqrt{432} + -2 )$.",
+   "settle": "The question writes, exactly: Simplify -1*(1*sqrt(432) + sqrt(432) + -2) + (sqrt(21)/(1*sqrt(7)) - (sqrt(12)/sqrt(4) + -4))**2.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-9937#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "Wait, what if the `6` is `1`?",
+   "settle": "The question writes, exactly: Simplify (-1 + ((sqrt(1573) + -1 + 3)**2 + 0 - (-1 + 6*(sqrt(1573) - (sqrt(1573) + 1 + sqrt(1573) + sqrt(1573))))**2))*4.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_remainder-926#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "A",
+   "detail": "1+0 = 1",
+   "settle": "Checked exactly: $1+0 = 1$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_remainder-5053#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "A",
+   "detail": "86889 - 86306 = 583",
+   "settle": "Checked exactly: $86889 - 86306 = 583$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_swr_p_sequence-3480#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "Wait, is \"lcgpgvp\" actually \"l c g p g v p\"?",
+   "settle": "The question writes, exactly: Two letters picked without replacement from vgcgplcggpgvp. Give prob of sequence vv.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_swr_p_sequence-3480#1",
+   "half": "a",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "Wait, I see `vgcgp l cggp gvp`.",
+   "settle": "The question writes, exactly: Two letters picked without replacement from vgcgplcggpgvp. Give prob of sequence vv.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_swr_p_sequence-5053#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "Wait, I see `p p` at 11, 12.",
+   "settle": "The question writes, exactly: Three letters picked without replacement from iteyipiqiqppeyteee. Give prob of sequence qyy.",
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-9b21d63d#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "C",
+   "cls": "C",
+   "detail": "So I will stick with $-24/25$.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-370853d3#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "F",
+   "cls": "B",
+   "detail": "Wait, is it possible that the semicircles are tangent to the *radii* and the *arc*?",
+   "settle": "The question writes, exactly: In the circle with center $Q$, radii $AQ$ and $BQ$ form a right angle. The two smaller regions are tangent semicircles, as shown. The radius of the circle with center $Q$ is 14 inches. What is the radius of the smaller semicircle? Express your answer as a common fraction.",
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-370853d3#1",
+   "half": "a",
+   "kind": "loop close",
+   "label": "F",
+   "cls": "B",
+   "detail": "So they must not be tangent to the radii.",
+   "settle": "The question writes, exactly: In the circle with center $Q$, radii $AQ$ and $BQ$ form a right angle. The two smaller regions are tangent semicircles, as shown. The radius of the circle with center $Q$ is 14 inches. What is the radius of the smaller semicircle? Express your answer as a common fraction.",
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-245aadb1#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "F",
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-6fe51888#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "E",
+   "cls": "E",
+   "detail": "I'll write the response.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-97b18f58#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "F",
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-97b18f58#1",
+   "half": "a",
+   "kind": "answer close",
+   "label": "F",
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-eaaaaeb1#1",
+   "half": "a",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-0b7036eb#0",
+   "half": "a",
+   "kind": "loop close",
+   "label": "F",
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mixed_longer-5920#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "A",
+   "detail": "695/3 \\times 3/5 = 139",
+   "settle": "Checked exactly: $695/3 \\times 3/5 = 139$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mixed_longer-9951#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "D",
+   "cls": "E",
+   "detail": "00000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mul_div_longer-1395#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "A",
+   "detail": "2 / (-10) = -0.2",
+   "settle": "Checked exactly: $2 / (-10) = -0.2$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mul_div_longer-1395#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "A",
+   "detail": "2 / -10 = -0.2",
+   "settle": "Checked exactly: $2 / -10 = -0.2$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mul_div_longer-5942#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "A",
+   "detail": "-6 / -112 = 3/56",
+   "settle": "Checked exactly: $-6 / -112 = 3/56$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mul_div_longer-5942#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "A",
+   "detail": "67.2 / 16800 = 0.004",
+   "settle": "Checked exactly: $67.2 / 16800 = 0.004$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mul_div_longer-9991#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "A",
+   "detail": "-0.125 \\times 3 = -0.375",
+   "settle": "Checked exactly: $-0.125 \\times 3 = -0.375$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-1395#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "D",
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-1395#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "C",
+   "cls": "C",
+   "detail": "I'll provide the decimal.",
+   "settle": "Computed exactly: $(-73388)/(36903) = -73388/36903$.",
+   "value_is_gold": true
+  },
+  {
+   "key": "dm_div_big-2783#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "D",
+   "cls": "D",
+   "detail": "1110617",
+   "settle": "Computed exactly: $(-171)/(2221234) = -171/2221234$; $\\gcd(171, 2221234) = 1$, so it is in lowest terms.",
+   "value_is_gold": true
+  },
+  {
+   "key": "dm_div_big-2783#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "C",
+   "cls": "C",
+   "detail": "I'll provide the fraction.",
+   "settle": "Computed exactly: $(-171)/(2221234) = -171/2221234$.",
+   "value_is_gold": true
+  },
+  {
+   "key": "dm_div_big-4138#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "C",
+   "cls": "C",
+   "detail": "Okay, I will output the decimal.",
+   "settle": "Computed exactly: $(-139241497)/(13) = -139241497/13$.",
+   "value_is_gold": true
+  },
+  {
+   "key": "dm_div_big-4138#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "D",
+   "cls": "D",
+   "detail": "139241497",
+   "settle": "Computed exactly: $(-139241497)/(13) = -139241497/13$; $\\gcd(139241497, 13) = 1$, so it is in lowest terms.",
+   "value_is_gold": true
+  },
+  {
+   "key": "dm_div_big-5942#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-5942#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "\"26225789988\"",
+   "settle": "The question writes, exactly: What is -26225789988 divided by -3?",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-9991#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "A",
+   "detail": "10473105 / 19 = 551216 + 1/19",
+   "settle": "Checked exactly: $10473105 / 19 = 551216 + 1/19$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-9991#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "A",
+   "detail": "62838630 / 114 = 10473105/19",
+   "settle": "Checked exactly: $62838630 / 114 = 10473105/19$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-1391#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "Wait, what if `-4` is `-4`?",
+   "settle": "The question writes, exactly: Simplify -1 + (-4 + (sqrt(112) - 5*sqrt(112)*-1) + -4*(-1*sqrt(112) - sqrt(112)))**2 + 2.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-1391#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "C",
+   "detail": "I'll provide the answer.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-2773#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "Wait, what if it is `sqrt(204) * -2`?",
+   "settle": "The question writes, exactly: Simplify (2 + (-6*(sqrt(204) + (sqrt(204)*-2 - sqrt(204))))/(sqrt(12) - sqrt(96)/(sqrt(8)*2)) + 3 + 1*((sqrt(153)/sqrt(3))/sqrt(3) - sqrt(17)))**2.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-2773#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "E",
+   "cls": "E",
+   "detail": "Wait.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-5920#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "If it was `5 * sqrt(1377) * -2`?",
+   "settle": "The question writes, exactly: Simplify (-1*(-5 + (sqrt(1377) - ((sqrt(1377) - (sqrt(1377) + 0)) + sqrt(1377))) + -4) - (4 + 1 + 5*sqrt(1377)*-2))**2.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-5920#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "Is it possible that `5*sqrt(1377)*-2` is `5 * sqrt(1377) * -2`?",
+   "settle": "The question writes, exactly: Simplify (-1*(-5 + (sqrt(1377) - ((sqrt(1377) - (sqrt(1377) + 0)) + sqrt(1377))) + -4) - (4 + 1 + 5*sqrt(1377)*-2))**2.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-9951#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "Wait, is there a `)` after `sqrt(66)`?",
+   "settle": "The question writes, exactly: Simplify 3 + (-1*2*sqrt(42) - (sqrt(1050) + 1*sqrt(1050)))/((-2*1*sqrt(66) + sqrt(66))/sqrt(11)).",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-9951#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "So $-2\\sqrt{42} - 10\\sqrt{42} = -12\\sqrt{42}$.",
+   "settle": "The question writes, exactly: Simplify 3 + (-1*2*sqrt(42) - (sqrt(1050) + 1*sqrt(1050)))/((-2*1*sqrt(66) + sqrt(66))/sqrt(11)).",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_conversion-1391#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "\"Three quarters\" is 3/4.",
+   "settle": "The question writes, exactly: What is three quarters of a day in seconds?",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_conversion-1391#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "B",
+   "detail": "Is there any chance \"three quarters\" means 3/4 of a day = 18 hours.",
+   "settle": "The question writes, exactly: What is three quarters of a day in seconds?",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_swr_p_sequence-4125#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "C",
+   "cls": "C",
+   "detail": "I'll write 0.1.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_swr_p_sequence-4125#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "C",
+   "cls": "C",
+   "detail": "I'll output 1/10.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_swr_p_sequence-9951#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_swr_p_sequence-9951#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "B",
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-5dd40b1a#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "C",
+   "cls": "C",
+   "detail": "Wait, I'll check if the answer is 120.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-ed48028c#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-ed48028c#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-5e2eb2d9#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "E",
+   "cls": "E",
+   "detail": "000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,000,",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-5a258a23#0",
+   "half": "b",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "A",
+   "detail": "0.6666 - 0.1666 = 0.5",
+   "settle": "Checked exactly: $0.6666 - 0.1666 = 0.5$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-fbf10ed4#1",
+   "half": "b",
+   "kind": "loop close",
+   "label": "A",
+   "cls": "A",
+   "detail": "72 - 14 = 58",
+   "settle": "Checked exactly: $72 - 14 = 58$ holds.",
+   "value_is_gold": null
+  }
+ ],
+ "control": [
+  {
+   "key": "dm_mixed_longer-3480#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "E",
+   "detail": "$",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mixed_longer-5053#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Wait, `(-393)` is `-393`.",
+   "settle": "The question writes, exactly: What is ((((-3)/10)/(-1))/((-393)/1048) - (-45)/((-4050)/198))/((-3)/(-191))?",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mixed_longer-5053#1",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Wait, `(-3)` is `(-3)`.",
+   "settle": "The question writes, exactly: What is ((((-3)/10)/(-1))/((-393)/1048) - (-45)/((-4050)/198))/((-3)/(-191))?",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-1505#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "C",
+   "detail": "Wait, I'll check if the user wants the answer in decimal.",
+   "settle": "Computed exactly: $(3)/(-2372493604) = -3/2372493604$.",
+   "value_is_gold": true
+  },
+  {
+   "key": "dm_div_big-1505#1",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "E",
+   "detail": "Wait, I'll provide the fraction.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-5070#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "E",
+   "detail": "00000000000000000000000000000000000000000000000000000000000000000000000000000000",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-5070#1",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "E",
+   "detail": "Wait, I'll provide",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-926#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Wait, what if the term is `sqrt(7) - (4 - \\sqrt{7})`?",
+   "settle": "The question writes, exactly: Simplify sqrt(56)/((sqrt(288) - (1*sqrt(288) + sqrt(288))) + sqrt(8))*5 + (1*(sqrt(7) - (4 + -1*sqrt(7)) - -5*(sqrt(7) + -1)))**2.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-3480#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Could `-2` be `-2`?",
+   "settle": "The question writes, exactly: Simplify (6*(-3*(3 + (sqrt(108) + sqrt(108) + -2*sqrt(108) + sqrt(108))*-5 + 4) + 5))**2.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-3480#1",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "If the string is `sqrt(108) + sqrt(108) - 2*sqrt(108) - sqrt(108)`.",
+   "settle": "The question writes, exactly: Simplify (6*(-3*(3 + (sqrt(108) + sqrt(108) + -2*sqrt(108) + sqrt(108))*-5 + 4) + 5))**2.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-5053#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Is it possible that `sqrt(432)` is `sqrt(432)`?",
+   "settle": "The question writes, exactly: Simplify -1*(1*sqrt(432) + sqrt(432) + -2) + (sqrt(21)/(1*sqrt(7)) - (sqrt(12)/sqrt(4) + -4))**2.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-9937#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Wait, I see `sqrt(1573) - (sqrt(1573) + 1 + sqrt(1573) + sqrt(1573))`",
+   "settle": "The question writes, exactly: Simplify (-1 + ((sqrt(1573) + -1 + 3)**2 + 0 - (-1 + 6*(sqrt(1573) - (sqrt(1573) + 1 + sqrt(1573) + sqrt(1573))))**2))*4.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-9937#1",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Maybe it is `sqrt(1573) + -1 + 3`?",
+   "settle": "The question writes, exactly: Simplify (-1 + ((sqrt(1573) + -1 + 3)**2 + 0 - (-1 + 6*(sqrt(1573) - (sqrt(1573) + 1 + sqrt(1573) + sqrt(1573))))**2))*4.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_remainder-5053#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "A",
+   "detail": "78460 + 7846 = 86306",
+   "settle": "Checked exactly: $78460 + 7846 = 86306$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_conversion-926#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "C",
+   "detail": "I will write the response.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_swr_p_sequence-3480#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Wait, I think the string is `vgcgp` followed by `lcggpgvp`.",
+   "settle": "The question writes, exactly: Two letters picked without replacement from vgcgplcggpgvp. Give prob of sequence vv.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_swr_p_sequence-3480#1",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Wait, I see spaces in the string `vgc g p l c g g p g v p`.",
+   "settle": "The question writes, exactly: Two letters picked without replacement from vgcgplcggpgvp. Give prob of sequence vv.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_swr_p_sequence-5053#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Wait, looking at `iteyipiqiqppeyteee`.",
+   "settle": "The question writes, exactly: Three letters picked without replacement from iteyipiqiqppeyteee. Give prob of sequence qyy.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_swr_p_sequence-5053#1",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "E",
+   "detail": "Wait, looking at",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-9f7f1563#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-9f7f1563#1",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-9b21d63d#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-9b21d63d#1",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "E",
+   "detail": "If the diagram shows it as obtuse, then $\\cos \\angle",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-d1e39ceb#1",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-370853d3#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "If $S_2$ is tangent to $AQ$ and $BQ$, it is centered on the bisector.",
+   "settle": "The question writes, exactly: In the circle with center $Q$, radii $AQ$ and $BQ$ form a right angle. The two smaller regions are tangent semicircles, as shown. The radius of the circle with center $Q$ is 14 inches. What is the radius of the smaller semicircle? Express your answer as a common fraction.",
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-370853d3#1",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Wait, if one is tangent to $QA$ and $QB$, it is symmetric.",
+   "settle": "The question writes, exactly: In the circle with center $Q$, radii $AQ$ and $BQ$ form a right angle. The two smaller regions are tangent semicircles, as shown. The radius of the circle with center $Q$ is 14 inches. What is the radius of the smaller semicircle? Express your answer as a common fraction.",
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-f4934771#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "E",
+   "detail": "I will",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-02480d2c#1",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "C",
+   "detail": "I will write the response.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-a153bf64#1",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "C",
+   "detail": "The answer is 11.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-97b18f58#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-97b18f58#1",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-0b7036eb#0",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-0b7036eb#1",
+   "half": "a",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mixed_longer-1391#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "A",
+   "detail": "4 \\times 22.875 = 91.5",
+   "settle": "Checked exactly: $4 \\times 22.875 = 91.5$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mixed_longer-4125#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mixed_longer-9951#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "A",
+   "detail": "4696/15 = 313 + 1/15",
+   "settle": "Checked exactly: $4696/15 = 313 + 1/15$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mul_div_longer-1395#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mul_div_longer-1395#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Wait, what if $B$ is $-1 \\times (-2) / -10$?",
+   "settle": "The question writes, exactly: Evaluate ((-30)/80*447/1788*((-64)/12)/(-2)*-92)/(-1*(-2)/(-10)).",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mul_div_longer-5942#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_mul_div_longer-5942#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "A",
+   "detail": "24 / -112 = -3/14",
+   "settle": "Checked exactly: $24 / -112 = -3/14$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-1395#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "D",
+   "detail": "2621",
+   "settle": "Computed exactly: $(-73388)/(36903) = -73388/36903$; $\\gcd(73388, 36903) = 1$, so it is in lowest terms.",
+   "value_is_gold": true
+  },
+  {
+   "key": "dm_div_big-1395#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-2783#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-2783#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "C",
+   "detail": "I'll provide the decimal.",
+   "settle": "Computed exactly: $(-171)/(2221234) = -171/2221234$.",
+   "value_is_gold": true
+  },
+  {
+   "key": "dm_div_big-4138#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-4138#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-5942#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-5942#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_big-9991#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "C",
+   "detail": "If the user typed it on purpose, the answer is $-551216.0526...$",
+   "settle": "Computed exactly: $(62838630)/(-114) = -10473105/19$.",
+   "value_is_gold": true
+  },
+  {
+   "key": "dm_div_big-9991#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-1391#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-1391#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Wait, what if the term is $-5\\sqrt{112} \\cdot (-1)$?",
+   "settle": "The question writes, exactly: Simplify -1 + (-4 + (sqrt(112) - 5*sqrt(112)*-1) + -4*(-1*sqrt(112) - sqrt(112)))**2 + 2.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-2773#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "A",
+   "detail": "1 - 2 = -1",
+   "settle": "Checked exactly: $1 - 2 = -1$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-5920#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "C",
+   "detail": "I'll write $137716 + 80\\sqrt{1377}$.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_simplify_surd-5920#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Maybe it is `5 * sqrt(1377) * -2`?",
+   "settle": "The question writes, exactly: Simplify (-1*(-5 + (sqrt(1377) - ((sqrt(1377) - (sqrt(1377) + 0)) + sqrt(1377))) + -4) - (4 + 1 + 5*sqrt(1377)*-2))**2.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_remainder-1391#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "A",
+   "detail": "851007 - 848484 = 2523",
+   "settle": "Checked exactly: $851007 - 848484 = 2523$ holds.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_remainder-1391#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_div_remainder-2773#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "So $71451 = 299 \\times 239 - 10$.",
+   "settle": "The question writes, exactly: Calculate the remainder when 71451 is divided by 299.",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_conversion-1391#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Wait, what if the user meant \"three quarters of a day\" as in \"3/4 of a day\" is $18$ hours?",
+   "settle": "The question writes, exactly: What is three quarters of a day in seconds?",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_conversion-1391#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "E",
+   "detail": "I'll check if I should mention the final answer.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_conversion-9951#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Wait, could it be $12/5$ *of* a week means $12/5$ *of* a week?",
+   "settle": "The question writes, exactly: What is 12/5 of a week in minutes?",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_swr_p_sequence-5920#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "C",
+   "detail": "The answer is 1/12.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_swr_p_sequence-9951#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "\"deedeeddeeee\"",
+   "settle": "The question writes, exactly: Four letters picked without replacement from deedeeddeeee. What is prob of sequence eede?",
+   "value_is_gold": null
+  },
+  {
+   "key": "dm_swr_p_sequence-9951#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-5dd40b1a#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "C",
+   "detail": "Actually, I'll output $120^\\circ$.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-a74e5ed1#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "C",
+   "detail": "The answer is 4.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-ed48028c#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-516461d8#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-516461d8#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "B",
+   "detail": "Wait, is it possible that the distances are $3, 7, 8, 9, 11$ and the 6th is $x$.",
+   "settle": "The question writes, exactly: The distances from a point $P$ to five of the vertices of a regular octahedron are 3, 7, 8, 9, and 11.  Find the distance from $P$ to the sixth vertex.",
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-1cc4b122#0",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-1cc4b122#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-5e2eb2d9#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "C",
+   "detail": "The answer is 9.",
+   "settle": null,
+   "value_is_gold": null
+  },
+  {
+   "key": "stdmath-ff2cf3ad#1",
+   "half": "b",
+   "kind": "stuck",
+   "label": null,
+   "cls": "F",
+   "detail": "",
+   "settle": null,
+   "value_is_gold": null
+  }
+ ]
+}
