@@ -141,6 +141,11 @@ How it runs (scripts in `scripts/pc/`, data in `WORK`, outside the repository):
 
 ## How a result is read and reported
 
+- **Every result names its build and its engine** (developer, 2026-11-09). Qwen3.5-4B runs as bf16 on vLLM (A100), bf16 GGUF on
+  llama.cpp (5060 Ti), NVFP4 W4A8 on llama.cpp (the PC layer) and Q8_0 on Strata-xeno; Flash-Next runs on Strata-xeno. Every result
+  row, report and issue comment carries one label from `docs/INDEX.md` "Model builds" (weights · engine · machine), e.g. **4B NVFP4
+  W4A8 · llama.cpp · PC layer**. Builds and engines are never pooled into one number; a run that mixes them (one build's text continued
+  by another, traces from two engines) says so where its number is. "Qwen3.5-4B" alone is not a label.
 - **Caught / should have caught,** with the denominator, never "it fired N times" (2026-11-04, 2026-11-05). Say where the
   denominator comes from, name what nothing can count, and never call a small denominator a weak mechanism. `tools/igc/coverage.py`
   counts it from a run's `ids.jsonl` (`--ids`).

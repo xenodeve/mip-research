@@ -43,7 +43,7 @@ it is spelled in, the notes, the closers) is in the inject and antiloop pages.
   and 96.0 % (mip-research#19). What H3 still does not read, 1,052 of the 31,996: unbalanced tails (mostly named points and matrix rows)
   342, roots 95, `...` decimals 89, huge powers refused by design 87, fractions 70, spaced factors 52, fractional powers 52, pi in
   degrees 52 (mip-research#19).
-- On the round-1 A100 arms (Qwen3.5-4B, 120 fresh questions), software computed **19,546 of 19,636** `=` (mip-research#19).
+- On the round-1 A100 arms (**4B bf16 · vLLM · A100**, 120 fresh questions), software computed **19,546 of 19,636** `=` (mip-research#19).
 - Where it lives: [`../tools/igc/mathexpr.py`](../tools/igc/mathexpr.py), `inline_found` / `_inline_general` in
   [`../tools/igc/tir4b.py`](../tools/igc/tir4b.py):302-347.
 
@@ -174,7 +174,7 @@ written after it reaches the cache.
 - **Script.** [`../tools/igc/probe/detect_cov2.py`](../tools/igc/probe/detect_cov2.py); modes: 3-fold by trace, `--train-traces` to fit
   on control traces and read an arm, `--check` (the state at t predicts token t+1: 93.5 % on the 4B, 91.1 % on Qwen3.6), and
   `--ood-split` (`livebench-` against `contest-` suites). See [`../tools/igc/probe/README.md`](../tools/igc/probe/README.md).
-- **Measured** on an A100: 46 control traces written by Qwen3.5-4B (no MIP in them, up to 30,000 tokens each, 1.16 M tokens), read by
+- **Measured** on an A100: 46 control traces written by **4B bf16 · vLLM · A100**, read with **4B bf16 · HF transformers** (no MIP in them, up to 30,000 tokens each, 1.16 M tokens), read by
   the 4B and by Qwen3.6-35B-A3B; 3 folds by trace; threshold set so 1 % of positions alarm; caught = an alarm in the k tokens before the
   onset (Strata-xeno#298):
 
@@ -268,7 +268,7 @@ firings is never reported alone; the denominator is always shown.
     `quartic_double_tangent`, `triangle_wave_intersections`, `polar_triangle_chain`) were taken out of the inline path.
 [^qread]: หมายเหตุ: on LiveBench the reader finds a stated computation in 0 of 568 questions (math AMPS_Hard 0/150, math_comp 0/146,
     olympiad 0/72; reasoning zebra_puzzle 0/100, spatial 0/50 ...) (Strata-xeno#298). It applies where the question is a calculation.
-    The DeepMind numbers are from Qwen3.5-4B on llama.cpp, not the Strata engine.
+    The DeepMind numbers are from **4B bf16 GGUF · llama.cpp · 5060 Ti**, not the Strata engine.
 [^half]: หมายเหตุ: `scales_next` comes from mip-research#4: `half of 68 + 10 =` was read as `68 + 10` and 78 delivered in a reply
     (gold 54); with MIP on, 2 of 4 runs did not recover. After the fix (exe `50118d973e127e78`) six rounds of that question were all right
     and none wrote 78. `--igc-no-reply` is built and has not been run.

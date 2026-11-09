@@ -128,7 +128,8 @@ Bind is the startup content check of the model and tokenizer files (reading the 
 
 ## Residual-stream read and write probes
 
-These are offline probes on Qwen3.5-4B and Qwen3.6-35B-A3B (bf16), outside the Strata learned path.
+These are offline probes on Qwen3.5-4B and Qwen3.6-35B-A3B (bf16, HF transformers, **4B bf16 · HF transformers**), outside the Strata learned path;
+everything else on this page runs in **Strata-xeno** on Flash-Next.
 
 - **Read** (`probe/num_rw.py`, 4B, 597 three-digit products): a linear read of the model's own answer digits from the hidden state at `=`, held out. At layer 28: digit 1 0.99, digit 2 0.89, digit 3 0.15. At layer 24: 0.93 / 0.24 / 0.08. Chance is about 0.1. At `=` the model holds only its first digits. It forms each later digit at the position that writes it, so no single position holds the whole value (Strata-xeno#298, comment "Residual-stream read/write of a number, first try").
 - **Write** ([../tools/igc/probe/steer_lb.py](../tools/igc/probe/steer_lb.py), commit `f674ad38`): at the position that predicts digit j, add `alpha * (mean state of target digit - mean state of the digit the model held)` after block L. Class means come from thinking traces where the model wrote software's value. [^rw]

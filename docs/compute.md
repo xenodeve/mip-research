@@ -2,7 +2,7 @@
 
 What produces the exact value MIP puts after a `=`. There are two separate compute paths, and they share no code:
 
-- **The best config (tir4b on vLLM, Qwen3.5-4B) computes on the CPU, in Python:** `mathexpr` reads the expression, `exactexpr` and the
+- **The best config (tir4b, Qwen3.5-4B, on vLLM or llama.cpp alike) computes on the CPU, in Python:** `mathexpr` reads the expression, `exactexpr` and the
   `mathbackend` registry compute it, all with the standard library's `int`, `Fraction` and `Decimal`. Nothing in this path runs on a GPU.
 - **Strata's engine (`xeno/mip-sandbox`, Qwen3.8 Flash-Next / Gyro-M) computes on the GPU, with three typed CUDA executors** (integer
   `+ - ×`; integer power and, at the ABI only, floor division, mod and gcd; rational and decimal `+ - × ÷`). The engine has no MathBackend: of
@@ -65,7 +65,8 @@ sign (`4(117)`), `\binom`, `!!`, base-b numerals, repeating decimals. A value is
 an angle, a root of a root, a cube root that does not come out, or a value past `mathexpr.LIMIT` is refused. A function the text defined
 (`f(2)` after `f(y) = ...`) is not read. [^fdef]
 
-**Measured** (mip-research#17, stored traces, Qwen3.5-4B, compared with what the model wrote next):
+**Measured** (mip-research#17, stored Qwen3.5-4B traces, all bf16 but pooled across two engines: **4B bf16 · vLLM · A100** arms and
+**4B bf16 GGUF · llama.cpp · 5060 Ti** arms (pc4, pc5); compared with what the model wrote next):
 
 | Traces | `=` | Values, mathexpr alone | Values, with the bridge | New values: agree / no value after / differ |
 |---|---|---|---|---|

@@ -2,7 +2,8 @@
 
 A small reasoning model at full context can run the same text until the context ends and write no answer. This category is every
 check that decides "the text is looping" and every action taken then: close the thinking, close the answer, cut back and nudge, or
-stop. It covers the `tir4b` harness (vLLM / `llama-server`, Qwen3.5-4B) and the Strata engine's own checks on Strata-xeno branch
+stop. It covers the `tir4b` harness (Qwen3.5-4B on vLLM or llama.cpp's `llama-server`; every result below is **4B bf16 · vLLM · A100** unless
+its row names another [build](INDEX.md#model-builds)) and the Strata engine's own checks on Strata-xeno branch
 `xeno/mip-sandbox` (run on this PC). The thresholds of the tir4b loop checks (line-back, counting guard, V7, shape cap, cover cap)
 were taken from stored traces so that no stored answer that finished right crosses them; the engine's own checks have their scans
 quoted beside each rule.

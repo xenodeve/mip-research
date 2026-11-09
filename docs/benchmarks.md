@@ -1,8 +1,9 @@
 # Benchmarks and method
 
 Every set MIP was measured on, every solid result with its exact setup, and the tools that ran, scored and paired those runs.
-Two models carry the results: **Qwen3.5-4B** (bf16 on vLLM on a Colab A100, or on llama-server on this PC's RTX 5060 Ti, through
-`tir4b`) and **Qwen3.8-Flash-Next** (the Gyro-M Swift 1.5 IQ2_XS pack on Strata's own engine, on this PC's D2x placement or on one
+Two models carry the results: **Qwen3.5-4B** in three builds that are never pooled ([model builds](INDEX.md#model-builds): **4B bf16 · vLLM · A100** on
+vLLM, **4B bf16 GGUF · llama.cpp · 5060 Ti** on llama-server, and **4B NVFP4 W4A8 · llama.cpp · PC layer** on llama-server on the RTX 5060 Ti + RTX 4070 SUPER,
+all through `tir4b`) and **Qwen3.8-Flash-Next** (the Gyro-M Swift 1.5 IQ2_XS pack on Strata's own engine, on this PC's D2x placement or on one
 Colab A100). A result is only comparable with another one from the same model, machine, sampling and round; the method section says why.
 
 ## Summary
@@ -27,7 +28,7 @@ Colab A100). A result is only comparable with another one from the same model, m
 | Qwen3.5-4B engine port | The 4B on Strata as `qwen35dense` (qwen4exp shape, Q8_0) | Strata engine (xeno/mip-sandbox, not in main) | no | No MIP run; decode 82.4-82.5 tok/s on the 5060 Ti | built, not measured yet |
 
 **Where each tool outside the best config lives, and what it takes to use it**
-- `tir4b --server`: [`tir4b.py`](../tools/igc/tir4b.py); a llama-server on 127.0.0.1 with the Qwen3.5-4B bf16 GGUF, the other flags unchanged.
+- `tir4b --server`: [`tir4b.py`](../tools/igc/tir4b.py); a llama-server on 127.0.0.1 with a 4B GGUF (bf16 for pc4-pc9; NVFP4 W4A8 for the PC layer, `scripts/pc/pc_round9.sh`), the other flags unchanged.
 - `external_bench`, `natural_problems`, Colab parity: [`external_bench.py`](../tools/igc/external_bench.py) driving `strata.exe` from Strata-xeno xeno/mip-sandbox (not in main); needs the Gyro-M pack, the MIP bundle and `--igc-result-bridge --igc-inline-exec`.
 - `standard_rows`, `standard_score`, `livebench`, `contest_math`, `lcb_score`: in `tools/igc/`; need the fetched data directory, and `lcb_score` only on a throwaway VM.
 - `select_rows`, `arm_plan`, `arm_pair`: in `tools/igc/`; need a base arm's `records.json` and engine log, and row reuse only on a machine that repeats itself.
@@ -37,7 +38,7 @@ Colab A100). A result is only comparable with another one from the same model, m
 
 Only the latest state of each line of work. Arms are compared within one round on one machine; where that is not the case the row says so.
 
-### Qwen3.5-4B, tir4b on vLLM 0.33, Colab A100 80 GB (bf16, T 0.6, top-p 0.95, top-k 20, 262,144-token context)
+### 4B bf16 · vLLM · A100: Qwen3.5-4B, tir4b on vLLM 0.33, Colab A100 80 GB (bf16, T 0.6, top-p 0.95, top-k 20, 262,144-token context)
 
 | Set | n | Arms | Result | Source |
 |---|---|---|---|---|
@@ -51,20 +52,32 @@ Only the latest state of each line of work. Arms are compared within one round o
 | Held-out reasoning: AIME 2025 30, HMMT Feb 2025 30, MATH long 22 | 82, sample 0 | Base vs Base + MIP + Sandbox (forced block at 512) | 58 vs 56 right; 0.931x tokens; model opened a block itself 2 times in 82 rows | mip-research#12, "Base vs Base + MIP + Sandbox" |
 | 36 reasoning rows (24 Base misses + 12 Base right), seed 2 | 10 paired rows | `--inline-calc` vs control | 2 vs 5 right; dropped | mip-research#12, "Round 1 verdict" |
 
-### Qwen3.5-4B, tir4b on vLLM 0.33, Colab A100 40 GB, 20,000-token cap
+### 4B bf16 · vLLM · A100: Qwen3.5-4B, tir4b on vLLM 0.33, Colab A100 40 GB, 20,000-token cap
 
 | Set | n | Arms | Result | Source |
 |---|---|---|---|---|
 | `lb1-rows`: 32 LiveBench math + 16 AIME/SMC (`livebench.py`, `contest_math.py`) | 48, T 0.6, seed 2 | ctrl / ctrlb (repeat) / inline / logit8 / inline + `--suppress-recheck 60` | right 21 / 25 / 21 / 19 / 19; re-check word within 300 chars after a value 38.5 / 34.5 / 47.2 / 37.6 / 16.1 %; inline - ctrlb +12.7 points [+7.6, +17.0] [^cap20k] | Strata-xeno#298, "ctrlb ... is in" and "inline + hold-down" |
 
-### Qwen3.5-4B, tir4b on llama-server, this PC's RTX 5060 Ti (bf16 GGUF, 16 slots)
+### 4B bf16 GGUF · llama.cpp · 5060 Ti: Qwen3.5-4B, tir4b on llama-server, this PC's RTX 5060 Ti (bf16 GGUF, 16 slots)
 
 | Set | n | Arms | Result | Source |
 |---|---|---|---|---|
 | DeepMind arithmetic (Qwenputer's 160 rows: add_or_sub_big, div_big, mul_big, mul_div_multiple_longer, 40 each, seed 0) | 160, greedy, no thinking, 4,096 cap, system "Do every arithmetic step exactly." | base / arithmetic mode (pc9: `--whole-hint --whole-plain --hand-off --question-value` with the fraction close) / ablation: whole step only, no hand-off or question value | right 118 / **156** / 138; tokens vs base 1.00 / **0.05** / 0.11 [^dm160] | Strata-xeno#298, "pc9: 156/160"; mip-research#12, "PC run: whole-plain vs base" |
 | Same 160, question reader offline | 160 | `question_read.py` | 160/160 equal to gold's exact value | Strata-xeno#298, "Catch point 1" |
 
-### Qwen3.8-Flash-Next (Gyro-M), Strata engine, this PC (D2x: RTX 5060 Ti + RTX 4070 SUPER + CPU pool), thinking on
+
+### 4B NVFP4 W4A8 · llama.cpp · PC layer (RTX 5060 Ti + RTX 4070 SUPER)
+
+**4B NVFP4 W4A8 · llama.cpp · PC layer** only: AxionML/Qwen3.5-4B-NVFP4 as GGUF, llama.cpp `1deefcca3` built for sm_89 so both cards multiply
+with q8_1 activations (greedy tokens identical on both cards, 3 questions x 400 tokens), `-c 262144 -np 4 -kvu -fa on`, KV q8_0,
+T 0.6, seed 1, 2 samples. Each card runs both arms on its own half of the rows, so a pair is always one card. Runner
+`scripts/pc/pc_round9.sh`; the API reader follows each arm. Not comparable with the A100 tables above: NVFP4 loops more.
+
+| Set | n | Arms | Result | Source |
+|---|---|---|---|---|
+| frozen9 (8 DeepMind modules x 10 + MATH-500 level 5 x 40, seed 2, excluding the 204 ids seen before), round 9 | 232 of 240 pairs (8 pairs still running on the 4070) | General Style + closers (`--inline-calc --mathbackend --inline-plain --inline-style general --no-digit-join --guard-progress --loop-close --answer-close --early-cycle --shape-cap 1024 --cover-cap 32768`) vs control | rule **204 vs 157**, API reader **208 vs 157**; General alone right 54, control alone 7 (sign test p = 2e-10); half A (5060 Ti) 97 vs 78 of 112, half B (4070) 107 vs 79 of 120; when control was cut by the loop check, General right 51 of 68; tokens 3.24 M vs 3.22 M [^r9b] | mip-research#19, round 9 on the PC layer |
+
+### Flash-Next IQ2_XS · Strata-xeno · this PC: Qwen3.8-Flash-Next (Gyro-M), Strata engine, this PC (D2x: RTX 5060 Ti + RTX 4070 SUPER + CPU pool), thinking on
 
 The decoding of each run is as its source states; the 49-question rotation's source does not state it.
 
@@ -82,7 +95,7 @@ The decoding of each run is as its source states; the 49-question rotation's sou
 | HumanEval 0-39 | 38 scoreable | plain vs `--igc-sandbox` | 38/38 both [^humaneval] | mip-research#3, "First coding runs with thinking" |
 | HumanEvalFix | 40 | plain vs forced block, call and close | 40/40 both; dropped as a test | mip-research#3, "The forced call, first run" |
 
-### Qwen3.8-Flash-Next (Gyro-M), Strata engine, Colab A100 80 GB (one card, every expert in VRAM)
+### Flash-Next IQ2_XS · Strata-xeno · A100: Qwen3.8-Flash-Next (Gyro-M), Strata engine, Colab A100 80 GB (one card, every expert in VRAM)
 
 | Set | n | Arms | Result | Source |
 |---|---|---|---|---|
@@ -102,9 +115,9 @@ The decoding of each run is as its source states; the 49-question rotation's sou
 | Set | n | What | Result | Source |
 |---|---|---|---|---|
 | H3, the frozen fresh set (Qwen3-235B-A22B OpenThoughts4 math 303, Gemini thinking s1K-1.1 ~1,000, DeepSeek-R1 s1K-1.1 non-math 123, DeepSeek-R1 OpenThoughts science 100) | 1,526 traces | General Style replayed, code 1d573ae3, measured once | `=` caught 94.4 % (30,194 / 31,996); false puts 0 of 41,176; model's next value = the put 31,621 / 32,812 | mip-research#19, "H3, the frozen fresh set" |
-| Stored A100 traces, 16 arms | 1,078 right answers | `--cover-cap 32768` replay gate | 0 acts on right answers; 12 of 13 answers past 150k stopped at 40k-114k; `vllm_refused` 0 | mip-research#19, "`--cover-cap`" |
-| Stored traces, 10 arms with no closer | 915 right, 243 cut | V7 early cycle replay | 0 fires on right answers; 212 / 243 loops caught earlier, 624k tokens earlier | mip-research#19, "Loop round" §6 |
-| 46 control traces of the 4B (1.16 M tokens), read by both models | 3,176 computation onsets | detectors, 2 tokens ahead, alarms at 1 % of positions | residual probe 89 % (4B) / 87 % (Qwen3.6-35B-A3B); Qwen3.6 MoE router 83 %; text alone 53 % | Strata-xeno#298, "Detection coverage, 46 traces" |
+| Stored A100 traces (4B bf16 · vLLM · A100), 16 arms | 1,078 right answers | `--cover-cap 32768` replay gate | 0 acts on right answers; 12 of 13 answers past 150k stopped at 40k-114k; `vllm_refused` 0 | mip-research#19, "`--cover-cap`" |
+| Stored traces (4B bf16 · vLLM · A100), 10 arms with no closer | 915 right, 243 cut | V7 early cycle replay | 0 fires on right answers; 212 / 243 loops caught earlier, 624k tokens earlier | mip-research#19, "Loop round" §6 |
+| 46 control traces of the 4B (4B bf16 · vLLM · A100, 1.16 M tokens), read by both models (4B bf16 · HF transformers, Qwen3.6-35B-A3B) | 3,176 computation onsets | detectors, 2 tokens ahead, alarms at 1 % of positions | residual probe 89 % (4B) / 87 % (Qwen3.6-35B-A3B); Qwen3.6 MoE router 83 %; text alone 53 % | Strata-xeno#298, "Detection coverage, 46 traces" |
 
 ## Sets
 
@@ -249,3 +262,4 @@ caught / should-catch.
 [^tokens]: Inside Strata's engine the put happens in the decode loop and costs no request (Strata-xeno xeno/mip-sandbox: include/strata/core/igc_inline.hpp); that path has not been timed with the best-config rules. Other results withdrawn and not used anywhere here: 43/48, 0/96 regressions, `inlineclose` 41/48, the sidecar results, the latent (learned) bundle results, the "one-token windows" result (Strata-xeno#276), and the 166 tok/s prompt figure on the A100 (Strata-xeno#283).
 [^port4b]: Long prompts drift: KL 0.103-0.125 at 2,048 positions on stage 3 (0.239-0.256 on stage 2), far past quantisation noise; being localised.
 [^perq]: Per-question differences between arms on this PC (each arm right alone on 8) are mostly path noise: an A/A of one exe parts before any rule fires (Strata-xeno#276, A/A comment). Only totals carry.
+[^r9b]: หมายเหตุ: the 7 control-only answers: 2 are the answer close's cue (`dm_div_big-9977#0` wrote 70468 for -70468 after a cue ending in `{`, since Qwen writes `{-` as one token; `stdmath-fbf10ed4#1` boxed 58, an unfinished cross-product step), 1 is the rule scorer (`stdmath-2aff3e30#0`, decimals equal to the fraction), 4 are the model's own setup. "51 of 68" is from the interim tally of 214 pairs.

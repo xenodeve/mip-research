@@ -198,7 +198,7 @@ without a learned-diagnostic bundle or with replicas.
 ## tir4b sandbox port (Qwen3.5-4B)
 
 [`tools/igc/tir4b.py`](../tools/igc/tir4b.py) rebuilds the engine's block rules in Python with the engine's own words and limits, for
-the 4B on vLLM (Colab) or llama-server (the developer's PC). `--force-after N` opens `Need a short Python program here.` and a fence
+the 4B on vLLM (Colab, **4B bf16 · vLLM**) or llama.cpp's llama-server (the developer's PC, **4B bf16 GGUF · llama.cpp**). `--force-after N` opens `Need a short Python program here.` and a fence
 at the next line end after N thinking tokens, once; `--execute` runs every block (forced or the model's own) in the kernel and returns
 an output block cut at 1,024 bytes; `--close-fit` closes the thinking after a run that printed; `--box` runs the kernel in the
 AppContainer on the PC; `--close-repeat N` closes on a repeated program; `--native-tool` offers `python` in Qwen3.5's own tool format;

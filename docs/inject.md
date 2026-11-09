@@ -70,7 +70,7 @@ the inline put cut the median tokens to the first right value from 1,068 to 985 
 
 **What it does.** Without `--inline-plain`, tir4b writes ` value (exact)`, the engine's form; with it, the value alone.
 
-**Measured** on Qwen3.5-4B (Strata-xeno#298, "Guideline arms at the same points": 42 points from 7 failing items, A100, 3 samples per arm and
+**Measured** on **4B bf16 · vLLM · A100** (Strata-xeno#298, "Guideline arms at the same points": 42 points from 7 failing items, A100, 3 samples per arm and
 point): against a value followed by a bare new line, the ` (exact)` mark raised the re-check word within 300 characters by +24 and +22 points
 (41 -> 65 %, 35 -> 57 %), and the sentence `This value is exact and final.` by +27 and +35 points. The model's first word after the mark was
 `wait` in 42 of 126 samples, against 12 of 126 without it. The best config therefore writes plain values. [^notemodel]
@@ -81,7 +81,7 @@ point): against a value followed by a bare new line, the ` (exact)` mark raised 
 logit -100; after a trailing `.` only a digit is held (`join_guard`, tir4b line 829, set at line 1017). It never changes a value; it stops
 the model running a number on (`-5` then the model's `75` read as `-575`; `8^{34} = ...` followed by zeros without end).
 
-**Measured** (mip-research#19, "Rerun of the wrong rows", A100, Qwen3.5-4B, 52 rows x 2 samples): a digit written straight after a put,
+**Measured** (mip-research#19, "Rerun of the wrong rows", **4B bf16 · vLLM · A100**, 52 rows x 2 samples): a digit written straight after a put,
 against puts whose value ends in a digit: General 92 of 21,398 -> **0 of 17,485**; Qwen profile 234 of 35,319 -> **0 of 15,282**. [^joinsheld]
 
 ## Echo guard
@@ -144,7 +144,7 @@ For questions where the whole question is a calculation, with thinking off. Thre
 | Question's computation | `--question-value` | [`../tools/igc/question_read.py`](../tools/igc/question_read.py) reads the computation from the question (symbols or words: `less than`, `take away`, `product of`); the whole value given is the question's, catching an operand the model copied wrong |
 | Hand-off | `--hand-off` | A line that only restates software's value (`= v`, or a 30+ place expansion) is cut and the model is led to `So the final answer is \boxed{`; when the model restates the value exactly, its answer is closed with that value; an exact fraction closes with the fraction |
 
-**Measured** (Strata-xeno#298, pc4-pc9): DeepMind arithmetic 160 rows, Qwen3.5-4B base, llama-server on the RTX 5060 Ti, greedy, thinking off:
+**Measured** (Strata-xeno#298, pc4-pc9): DeepMind arithmetic 160 rows, **4B bf16 GGUF · llama.cpp · 5060 Ti** (Qwen3.5-4B base, llama-server), greedy, thinking off:
 
 | Arm | right / 160 | tokens vs base |
 |---|---|---|
@@ -164,7 +164,7 @@ in pc9. [^arithtuned] [^arithscope]
 relation on the line (`=` chains, `\approx`, arrows, congruences); a hand value that differs from the exact one gets a correction line.
 Whole-number work written with `=` is exact; `\approx` keeps a slack for the places written.
 
-**Measured.** DeepMind 160 (Qwen3.5-4B, L4, thinking off): 116 right against base 121 at 0.99x tokens; it corrected 22 hand values on 17
+**Measured.** DeepMind 160 (**4B bf16 · vLLM · L4**, thinking off): 116 right against base 121 at 0.99x tokens; it corrected 22 hand values on 17
 rows, mostly right, but the model redid the work by hand after each correction (mip-research#12). On H3 its corrections fell from 432 to 303 after two rounds of misread fixes (mip-research#20). [^checkhand]
 
 **What it takes.** `--check-hand` on any tir4b arm. Not in the best config.
