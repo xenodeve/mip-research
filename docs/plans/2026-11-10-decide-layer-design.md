@@ -69,6 +69,10 @@ classifies the loop and picks the action: **settle first, close second.**
 
 ### Signals it reads (all from text MIP already has)
 
+v1 reads text only. The detectors are meant to work together (developer, 2026-11-10; [detection](../detect.md)): once the layer
+runs inside an engine, the drafter's draft (what the model is about to write: a re-check starting, a `</think>` close) and, on
+Qwen3.6-35B-A3B, the MoE router join these signals. Neither is used live yet.
+
 | Signal | How it is read | Class it serves |
 |---|---|---|
 | the loop's repeated unit | exists: `loop_start` / the exact cycle | all |

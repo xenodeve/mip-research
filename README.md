@@ -176,6 +176,10 @@ Hidden-state signals let MIP prepare a value before `=` arrives instead of waiti
 
 ## Detection points
 
+The detection points work together, each covering another's blind spot: text readers see what is written, the drafter's draft
+and the MoE router see what is coming. Not used live yet: the drafter's draft as a reading, and the MoE router, which comes with
+the move to Qwen3.6-35B-A3B ([detection](docs/detect.md)).
+
 | # | Where MIP reads | When | What it may do |
 |---|---|---|---|
 | **1** | **The token `=`** | Every request stops at `=` (in thinking and in answer) before the model's next token | Put the exact value |
@@ -472,6 +476,10 @@ tool route (ให้โมเดลเรียก `run_python` ได้ พ�
 สัญญาณจาก hidden state ทำให้ MIP เตรียมค่าไว้ก่อนถึง `=` ได้โดยไม่ต้องรอหลัง `=` [^th-detect]
 
 ### จุดที่ตรวจจับ
+
+จุดตรวจจับทุกจุดต้องใช้ร่วมกัน แต่ละจุดช่วยอุดจุดอ่อนของจุดอื่น ตัวอ่านข้อความเห็นได้แค่สิ่งที่เขียนแล้ว ส่วน draft ของ drafter กับ
+router ของ MoE เห็นสิ่งที่กำลังจะมา สิ่งที่ยังไม่ได้ใช้งานจริง คือการอ่าน draft จาก drafter และ router ของ MoE ซึ่งจะทำเมื่อย้ายไป
+Qwen3.6-35B-A3B ([detection](docs/detect.md))
 
 | # | จุดที่ MIP อ่านข้อความของโมเดล | จังหวะเวลา | สิ่งที่ MIP ทำ (โดยไม่แตะ prompt, ค่าการสุ่ม หรือน้ำหนักโมเดล) |
 |---|---|---|---|

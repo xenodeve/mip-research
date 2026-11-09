@@ -32,6 +32,11 @@ bare `#N` written before 2026-11-08 means Strata-xeno #N; read it through the ma
   substituted for each other: on round 9's loops a settle line alone ended 6 of 38 and today's close alone 26 of 38
   ([settle adoption](docs/plans/2026-11-10-settle-adoption-plan.md)). A new loop rule says which kind it handles, and is measured
   per kind.
+- **Detectors work together; each covers another's blind spot** (developer, 2026-11-10). The text readers (the `=` stop, the
+  question reader, the loop shapes) see only what is already written; the drafter's draft tokens and the MoE router see what is
+  coming; the hidden-state probes see a calculation before its first token. Full effect needs them combined, not one picked as
+  best. **Not yet used:** the reading of the drafter (MTP draft) as a signal (the engine only drops drafts after a put), and the
+  MoE router live (offline only: 83 % at k = 2 on Qwen3.6); the router is the next step, with the move to Qwen3.6-35B-A3B.
 - **What the developer most wants to see:** the output steering what the model does afterwards, like a guideline that is always
   there. A guideline is only as good as what was detected, so detection coverage comes first.
 

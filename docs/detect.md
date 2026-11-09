@@ -6,6 +6,15 @@ loop (including the MTP draft), the natural-language levels a parser cannot see,
 before it is written (residual-stream probes, the MoE router, a readiness classifier). What is done with a detected value (the form
 it is spelled in, the notes, the closers) is in the inject and antiloop pages.
 
+**The detectors are meant to be used together; each covers another's blind spot** (developer, 2026-11-10). The text readers see
+only what is written, and only once it is written: the `=` stop misses a value written with no `=`, the question reader sees only
+what the question states, the loop checks see the shape of a repeat but not what is repeated. The drafter's draft tokens show the
+next few tokens before they are verified; the MoE router and the residual probes show a calculation coming before its first token.
+Full effect comes from combining them (the latent signals arm, an exact parse acts: [`UnifiedDetector`](#unifieddetector-fusion)),
+not from picking one as best. **Not yet used live:** the drafter's draft as a reading (the engine only drops drafts after a put),
+and the MoE router (offline: 83 % at k = 2 on Qwen3.6). The router is the next step, with the move to **Qwen3.6-35B-A3B**; the
+4B is dense and has none.
+
 | Mechanism | What it does (one line) | Runs on | In best config? | Best measured result | Status |
 |---|---|---|---|---|---|
 | [`=` stop and expression reader](#the--stop-and-the-expression-reader) | Every request stops at a token that is `=`; `mathexpr` takes the longest exact expression that ends the line | tir4b (vLLM/llama-server) | yes | H3 fresh set: 94.4 % of plain-arithmetic `=` read (30,194 / 31,996) | in best config |
