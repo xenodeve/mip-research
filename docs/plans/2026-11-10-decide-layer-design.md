@@ -69,7 +69,7 @@ classifies the loop and picks the action: **settle first, close second.**
 |---|---|---|
 | the loop's repeated unit | exists: `loop_start` / the exact cycle | all |
 | the unit parses as an equation, and MathBackend says it is true | `mathexpr` + MathBackend, exact | A |
-| the unit quotes the question's input (a number, a sign, a bracket, a string, a phrase) | the quoted text is a verbatim substring of the question | B |
+| the unit is about the question's input (a number, a sign, a bracket, a string, a phrase) | **start from the question:** find the question's numbers, strings and bracketed terms that nearly match what the loop repeats. A verbatim-substring test misses the misreads: in all 3 B both-wrong rows the model quoted the input wrongly (`vgcgp l cggp gvp` for `vgcgp lcgpgvp`), so its quote is not in the question | B |
 | two forms of one value alternate (fraction / decimal, integer / exact) | both parse and are equal, or one is the other rounded | C |
 | one dividend over a run of divisors | the same left operand, divisors changing, `/` or `\text{rem}` | D |
 | the phase (thinking or answer), and whether a thinking close already happened in this answer | exists (`phase`, `events`) | the pattern in 2.2 |
@@ -80,7 +80,7 @@ classifies the loop and picks the action: **settle first, close second.**
 | Class | Action | Why it is true under every reading (not tuned to the set) |
 |---|---|---|
 | **B** (design first: largest, 0 hurt) | Put the question's text the model is doubting, verbatim: `The question writes: <quote>.` Close only if the loop resumes. | A verbatim quote of the input is exact; it decides nothing for the model. |
-| **A** | Put a confirm line on the looped equation (`Checked exactly: <equation>.`); **no close** while the looped value is not the question's own value (`question_read`) or the answer's final quantity; close only if the loop resumes. | A true equation is true; the confirm says only that. The hurt rows were closes on true **intermediate** steps. |
+| **A** | Put a confirm line on the looped equation (`Checked exactly: <equation>.`); **no close** while the looped value is not the question's own value (`question_read`) or the answer's final quantity; close only if the loop resumes. **On rows with no stated computation** (`question_read` reads none on MATH-style rows; 0 of 568 on LiveBench) the intermediate-step test has no signal yet, so there v1 is confirm, then close when the loop resumes: today's close one beat later. Both A-hurt rows are of this kind (`stdmath-fbf10ed4#1`, `dm_mul_div_longer-9991#1`: a sub-step, not the question's value); whether the beat matters is measured on the next round's closes. | A true equation is true; the confirm says only that. |
 | **C** | Put the exact value in its exact form (lowest-terms fraction, exact surd) once; then close as today. | The exact form is equal to every rounding of it; a rounded decimal is not equal to the value. |
 | **D** | Put the result of the search: `gcd(a, b) = g`, or the fraction in lowest terms. | A gcd is a gcd: MathBackend computes it in microseconds. |
 | **E** | Close, as today. | Nothing to settle. |
@@ -105,7 +105,7 @@ as the inline forms were, before it goes into a round.
 ## 4. The gate, in order
 
 1. **Classifier in replay:** on the stored round-9 traces, the classifier reproduces the 69 hand labels below (coverage per class,
-   with the denominator), and on the General answers with no close it touches **0** (it has no trigger there; the replay checks it).
+   with the denominator; for B the hard part is the 3 misread rows, which a substring test misses), and on the General answers with no close it touches **0** (it has no trigger there; the replay checks it).
 2. **Each put form** checked for agreement with the model's next value (in and out of sample).
 3. **PC layer paired run** (`4B NVFP4 W4A8 · llama.cpp · PC layer`) on **development rows** after round 9's verdict (frozen9 then
    becomes development rows), both arms in one round, rule + API reader, the three questions per touch. Whether settling beats
