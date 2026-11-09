@@ -2,7 +2,9 @@
 
 Everything built and measured in this research, by category, with every solid benchmark in one place. The
 [README](../README.md) tells the best config's story; this catalog lists **every** mechanism, including the many that are built and
-measured but not part of the best config, and says where each lives and what it takes to use it.
+measured but not part of the best config, and says where each lives and what it takes to use it. What MIP (Model Integrated
+Protocol) is, how it differs from MCP, and why every result so far comes from the reference outside the engine:
+[README](../README.md#what-mip-is-and-where-it-stands).
 
 Claims in the issues that were later withdrawn, corrected or never confirmed: [ERRATA](ERRATA.md). Check it before quoting an issue.
 
@@ -128,7 +130,8 @@ The mechanisms most worth carrying over, with what each needs. Every one has its
 
 แคตตาล็อกนี้รวมทุกอย่างที่สร้างและวัดผลในงานวิจัยนี้ แยกตามหมวด และรวม benchmark ที่ยืนยันได้ไว้ในที่เดียว
 [README](../README.md) เล่าเรื่องของ best config ส่วนแคตตาล็อกนี้ลิสต์**ทุก**กลไก รวมถึงตัวที่สร้างและวัดแล้วแต่ไม่ได้อยู่ใน best config
-พร้อมบอกว่าแต่ละตัวอยู่ที่ไหนและต้องทำอะไรถึงจะใช้ได้ หน้าหมวดย่อยเขียนเป็นภาษาอังกฤษ
+พร้อมบอกว่าแต่ละตัวอยู่ที่ไหนและต้องทำอะไรถึงจะใช้ได้ หน้าหมวดย่อยเขียนเป็นภาษาอังกฤษ MIP (Model Integrated Protocol) คืออะไร
+ต่างจาก MCP ตรงไหน และทำไมผลทุกรอบตอนนี้มาจากตัวต้นแบบที่อยู่นอก engine อ่านได้ที่ [README](../README.md#mip-คืออะไร-และตอนนี้อยู่ตรงไหน)
 
 ### หมวด
 

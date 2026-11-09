@@ -1,6 +1,6 @@
 # mip-research
 
-**MIP (Model Inline Processing): software computes, the model reasons.** While an LLM reasons, MIP intercepts arithmetic expressions at `=` ([Detection points](#detection-points)), injects exact computed values inline ([How a value is put](#how-a-value-is-put)) computed with zero floating point ([MathBackend](#mathbackend): 387 operations on CPU; Strata's engine has its own CUDA executors), and closes repetitive loops that trap smaller models ([Loops it prevents](#loops-it-prevents))—requiring **zero weight changes and no second model** ([No fine-tuning](#no-fine-tuning)). Across benchmarks, MIP cuts tokens by **95%** and boosts accuracy from **118 to 156/160** on single-step calculations ([Arithmetic mode](#arithmetic-mode-95--fewer-tokens)), speeds up 5-digit multiplication by **56% (-72% tokens)** inside [Strata-xeno](https://github.com/xenodeve/Strata-xeno)'s native decode loop on **Qwen3.8-Flash-Next** ([Flash-Next in Strata](#on-the-target-model-qwen38-flash-next-in-strata)), saves **~30% tokens** on hard reasoning sets with a tool route on Flash-Next ([Tool route](#tool-route-hard-reasoning-sets)), raises right answers on loop-prone questions from **24 to 37 of 48** while answers that end with no answer fall from **21 to 1** ([Best config](#best-config) · [Results](#results)), shortens MATH Level 5 solutions by **40%** ([Tokens](#tokens)) and routine CoT math by up to **33%** ([Ordinary math](#ordinary-math)), predicts upcoming calculations **2 tokens ahead** at **83%–89%** recall ([Seeing a calculation coming](#seeing-a-calculation-coming)), and puts **0 wrong values** in **41,176** frozen + **39,046** live insertions checked, while in replay its loop closers touch **0 of 1,078** right answers ([Staying out of the way](#staying-out-of-the-way) · [Accuracy audit](#accuracy-audit) · [Next](#next) · [Repo](#repo) · [ภาษาไทย](#ภาษาไทย)).
+**MIP (Model Integrated Protocol): software computes, the model reasons.** While an LLM reasons, MIP intercepts arithmetic expressions at `=` ([Detection points](#detection-points)), injects exact computed values inline ([How a value is put](#how-a-value-is-put)) computed with zero floating point ([MathBackend](#mathbackend): 387 operations on CPU; Strata's engine has its own CUDA executors), and closes repetitive loops that trap smaller models ([Loops it prevents](#loops-it-prevents))—requiring **zero weight changes and no second model** ([No fine-tuning](#no-fine-tuning)). Across benchmarks, MIP cuts tokens by **95%** and boosts accuracy from **118 to 156/160** on single-step calculations ([Arithmetic mode](#arithmetic-mode-95--fewer-tokens)), speeds up 5-digit multiplication by **56% (-72% tokens)** inside [Strata-xeno](https://github.com/xenodeve/Strata-xeno)'s native decode loop on **Qwen3.8-Flash-Next** ([Flash-Next in Strata](#on-the-target-model-qwen38-flash-next-in-strata)), saves **~30% tokens** on hard reasoning sets with a tool route on Flash-Next ([Tool route](#tool-route-hard-reasoning-sets)), raises right answers on loop-prone questions from **24 to 37 of 48** while answers that end with no answer fall from **21 to 1** ([Best config](#best-config) · [Results](#results)), shortens MATH Level 5 solutions by **40%** ([Tokens](#tokens)) and routine CoT math by up to **33%** ([Ordinary math](#ordinary-math)), predicts upcoming calculations **2 tokens ahead** at **83%–89%** recall ([Seeing a calculation coming](#seeing-a-calculation-coming)), and puts **0 wrong values** in **41,176** frozen + **39,046** live insertions checked, while in replay its loop closers touch **0 of 1,078** right answers ([Staying out of the way](#staying-out-of-the-way) · [Accuracy audit](#accuracy-audit) · [Next](#next) · [Repo](#repo) · [ภาษาไทย](#ภาษาไทย)).
 
 ## At a glance
 
@@ -17,6 +17,29 @@
 | **Non-intrusive guardrails** (1,526 frozen + A100 traces) | In replay: **0 / 1,078** (`cover-cap`) · **0 / 915** (`V7`) right answers touched [^lost] | Model doubts MIP values only **4.1%** of the time (vs. **15.2%** for its own) · Reads its tokens from the tokenizer | [Staying out of the way](#staying-out-of-the-way) · [No fine-tuning](#no-fine-tuning) · [Accuracy audit](#accuracy-audit) |
 
 Everything else that was built and measured, including the engine-side mechanisms not in the best config: **[the catalog](docs/INDEX.md)**.
+
+## What MIP is, and where it stands
+
+The name echoes MCP on purpose: the two put software beside a model from opposite sides.
+
+| | MCP (Model Context Protocol) | MIP (Model Integrated Protocol) |
+|---|---|---|
+| Where the software sits | outside the engine, behind a tool server | inside the inference engine, beside the decode loop |
+| Who starts it | the model, by writing a tool call | the engine, which hands MIP the tokens as they are written; the model calls nothing |
+| How a result arrives | a tool result added to the context, then the model goes on | written into the token stream while the model writes: a value after `=`, the close of a loop |
+
+- **The end goal: a module any inference engine can plug in** (llama.cpp, vLLM, Strata-xeno and others). Each engine's own
+  developers write the calls into it. The protocol is the contract between the engine and the module: what the engine hands
+  over, what MIP may answer (nothing, text to put, a close), how fast it must answer, and the state it keeps per request. Scope,
+  in order: mathematics first, then coding, then other kinds of software that act on decoding directly.
+- **Where it stands (2026-11-09): research.** The methods still change from round to round, so there is no protocol spec and no
+  module yet. Every round's numbers come from the reference harness `tools/igc/tir4b.py`, which runs **outside** the engine: it
+  drives llama-server or vLLM through their API and stops and resumes the request at each put. The engine code in Strata-xeno
+  (`include/strata/core/igc_*.hpp`) is the first trial inside an engine and is still tied to that engine.
+- **Not every part is free of model calls.** The inline values and the loop closers need nothing from the model. The sandbox runs
+  a block the model writes in its reasoning, and the [tool route](#tool-route-hard-reasoning-sets) (`run_python`) and the MIP
+  Adapter (`mcp.` from a block, [sandbox](docs/sandbox.md#mip-adapter-mcp-tools-from-a-block)) are calls the model makes; they
+  are measured here as comparisons and options, not as the protocol.
 
 ## Arithmetic mode: 95 % fewer tokens
 
@@ -214,14 +237,16 @@ Hidden-state signals let MIP prepare a value before `=` arrives instead of waiti
 
 | Item | Target |
 |---|---|
-| **Broad unified round (#19)** | Best config with every closer on a broad set against the plain model, both arms in one round |
-| **Target models & decode loop** | Thresholds on **Qwen3.8-Flash-Next** and **Qwen3.6-35B-A3B-NVFP4**, and inline put inside Strata's decode loop [^next] |
+| **Round 9 on the PC layer (#19)** | General Style against the plain model on **4B NVFP4 W4A8 · llama.cpp · PC layer**, both arms in one round: 204 vs 157 right by the rule (208 vs 157 by the API reader) on 232 of 240 pairs; 8 pairs left, then the verdict, A100 or review ([benchmarks](docs/benchmarks.md#4b-nvfp4-w4a8--llamacpp--pc-layer-rtx-5060-ti--rtx-4070-super)) |
+| **Answer close** | A live paired run of the new cue, which ends before `{` so a negative value keeps its minus |
+| **Target models & decode loop** | After the 4B is settled (AGENTS.md, order of models): thresholds on **Qwen3.8-Flash-Next** and **Qwen3.6-35B-A3B-NVFP4**, and inline put inside Strata's decode loop [^next] |
+| **Plug-in module** | The end goal ([What MIP is](#what-mip-is-and-where-it-stands)): the protocol is written once the methods stop changing |
 
 ## Repo
 
 | Path | What it holds |
 |---|---|
-| `tools/igc/tir4b.py` | Harness: runs the model in vLLM or `llama-server`, inline values, arithmetic mode, and every closer (`--execute/--box` requires Strata-xeno on `PYTHONPATH`) |
+| `tools/igc/tir4b.py` | Harness, the reference outside the engine: runs the model in vLLM or `llama-server`, inline values, arithmetic mode, and every closer (`--execute/--box` requires Strata-xeno on `PYTHONPATH`) |
 | `tools/igc/sim_replay.py` | Replays stored traces with a mechanism added: where it acts, on how many cut answers, whether on a right one, and what vLLM would refuse |
 | `tools/igc/mathbackend/`, `tools/igc/mathexpr.py` | Exact computation engine and expression reader |
 | `tools/igc/question_read.py` | Reads the computation stated in a question |
@@ -233,10 +258,10 @@ Hidden-state signals let MIP prepare a value before `=` arrives instead of waiti
 | [`docs/ERRATA.md`](docs/ERRATA.md) | Claims in the issues that were later withdrawn, corrected, unconfirmed or superseded, each with the current reading |
 | [`AGENTS.md`](AGENTS.md) | The research rules: simulate before the A100, the General Style without test tuning, full context, sampled runs, the API reader, how results are reported |
 | [`docs/archive/`](docs/archive/README.md) | The 130 MIP / IGC / Qwenputer / sandbox plans and reports written in Strata-xeno, frozen as the record |
-| [Strata-xeno](https://github.com/xenodeve/Strata-xeno) (`include/strata/core/igc_*.hpp`, `src/kernels/qwenputer.cu`) | Engine-side MIP implementation (`tools/test_igc_adapter_artifact.py` checks schema headers against `STRATA_ROOT`; pre-split issues mapped in #22) |
+| [Strata-xeno](https://github.com/xenodeve/Strata-xeno) (`include/strata/core/igc_*.hpp`, `src/kernels/qwenputer.cu`) | The first MIP trial inside an engine, still tied to Strata's engine, not yet the plug-in module (`tools/test_igc_adapter_artifact.py` checks schema headers against `STRATA_ROOT`; pre-split issues mapped in #22) |
 
 ```sh
-python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 skip without a GPU, a model or STRATA_ROOT
+python -m unittest discover -s tools -p "test_*.py" -t .     # 930 tests; 79 skip without a GPU, a model or STRATA_ROOT
 ```
 
 [^time-a]: Seconds per answer with 16 answers in flight, both arms on the same PC; not an ABBA timing.
@@ -259,7 +284,7 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
 
 ## ภาษาไทย
 
-**MIP (Model Inline Processing): ให้ซอฟต์แวร์คิดเลข ให้โมเดลคิดเหตุผล** ระหว่างที่โมเดลกำลังคิด MIP จะดักอ่านสมการหน้าเครื่องหมาย `=` ([จุดที่ตรวจจับ](#จุดที่ตรวจจับ)) แล้วคำนวณค่าที่แม่นยำเป๊ะแบบไร้ floating point ([MathBackend](#mathbackend-1): 387 ฟังก์ชันบน CPU ส่วน engine ของ Strata มีตัวคำนวณ CUDA ของตัวเอง) เพื่อเติมคำตอบต่อท้าย `=` ทันทีในระดับเสี้ยววินาที ([ใส่ค่ายังไง](#ใส่ค่ายังไง)) พร้อมตัดจบ loop ที่โมเดลขนาดเล็กชอบคิดวนจนตัน ([loop ที่ป้องกันได้](#loop-ที่ป้องกันได้)) โดย**ไม่ต้องแก้ weight ไม่ต้อง fine-tune และไม่ต้องใช้โมเดลตัวที่สอง** ([ไม่ต้อง fine-tune](#ไม่ต้อง-fine-tune)) ผลลัพธ์คือ: ลด token ลง **95%** (ตอบเร็วขึ้น **85%**) และเพิ่มความแม่นยำจาก **118 เป็น 156/160** ในงานคิดเลขก้อนเดียวจบ ([โหมดเลขคณิต](#โหมดเลขคณิต-token-ลดลง-95)), ลดเวลาคูณเลข 5 หลักลง **56% (token ลด 72%)** เมื่อรันใน decode loop ของ [Strata-xeno](https://github.com/xenodeve/Strata-xeno) บน **Qwen3.8-Flash-Next** ([บน model เป้าหมาย](#บน-model-เป้าหมาย-qwen38-flash-next-ใน-strata)), ประหยัด token ลง **~30%** บนโจทย์เหตุผลระดับยากด้วย tool route บน Flash-Next ([tool route](#tool-route-โจทย์เหตุผลยาก-ๆ)), เพิ่มคำตอบที่ถูกในโจทย์ที่ชอบติด loop จาก **24 เป็น 37 จาก 48 คำตอบ** และคำตอบที่จบแบบไม่มีคำตอบลดจาก **21 เหลือ 1** ([best config](#best-config-1) · [ผลการทดสอบ](#ผลการทดสอบ)), ย่อคำตอบที่ถูกบน MATH ระดับ 5 ให้**สั้นลง 40%** ([token](#token)) และโจทย์คณิตทั่วไปสั้นลงสูงสุด **33%** ([โจทย์คณิตทั่วไป](#โจทย์คณิตทั่วไป)), พยากรณ์จังหวะเริ่มคิดเลขล่วงหน้าได้ถึง **2 token** ด้วยความแม่นยำ **83%–89%** ([เห็นการคำนวณก่อนที่จะมาถึง](#เห็นการคำนวณก่อนที่จะมาถึง)) และ**เติมเลขผิด 0 ครั้ง** จากการเติมค่า **41,176 + 39,046 ครั้ง**ที่ตรวจ ส่วนตัวปิด loop ใน replay ไม่แตะคำตอบที่ถูกเลย (**0 จาก 1,078**) ([ไม่กระทบการทำงานอื่น](#ไม่กระทบการทำงานอื่น) · [ตรวจความแม่นยำ](#ตรวจความแม่นยำ) · [ขั้นต่อไป](#ขั้นต่อไป) · [repo](#repo-1))
+**MIP (Model Integrated Protocol): ให้ซอฟต์แวร์คิดเลข ให้โมเดลคิดเหตุผล** ระหว่างที่โมเดลกำลังคิด MIP จะดักอ่านสมการหน้าเครื่องหมาย `=` ([จุดที่ตรวจจับ](#จุดที่ตรวจจับ)) แล้วคำนวณค่าที่แม่นยำเป๊ะแบบไร้ floating point ([MathBackend](#mathbackend-1): 387 ฟังก์ชันบน CPU ส่วน engine ของ Strata มีตัวคำนวณ CUDA ของตัวเอง) เพื่อเติมคำตอบต่อท้าย `=` ทันทีในระดับเสี้ยววินาที ([ใส่ค่ายังไง](#ใส่ค่ายังไง)) พร้อมตัดจบ loop ที่โมเดลขนาดเล็กชอบคิดวนจนตัน ([loop ที่ป้องกันได้](#loop-ที่ป้องกันได้)) โดย**ไม่ต้องแก้ weight ไม่ต้อง fine-tune และไม่ต้องใช้โมเดลตัวที่สอง** ([ไม่ต้อง fine-tune](#ไม่ต้อง-fine-tune)) ผลลัพธ์คือ: ลด token ลง **95%** (ตอบเร็วขึ้น **85%**) และเพิ่มความแม่นยำจาก **118 เป็น 156/160** ในงานคิดเลขก้อนเดียวจบ ([โหมดเลขคณิต](#โหมดเลขคณิต-token-ลดลง-95)), ลดเวลาคูณเลข 5 หลักลง **56% (token ลด 72%)** เมื่อรันใน decode loop ของ [Strata-xeno](https://github.com/xenodeve/Strata-xeno) บน **Qwen3.8-Flash-Next** ([บน model เป้าหมาย](#บน-model-เป้าหมาย-qwen38-flash-next-ใน-strata)), ประหยัด token ลง **~30%** บนโจทย์เหตุผลระดับยากด้วย tool route บน Flash-Next ([tool route](#tool-route-โจทย์เหตุผลยาก-ๆ)), เพิ่มคำตอบที่ถูกในโจทย์ที่ชอบติด loop จาก **24 เป็น 37 จาก 48 คำตอบ** และคำตอบที่จบแบบไม่มีคำตอบลดจาก **21 เหลือ 1** ([best config](#best-config-1) · [ผลการทดสอบ](#ผลการทดสอบ)), ย่อคำตอบที่ถูกบน MATH ระดับ 5 ให้**สั้นลง 40%** ([token](#token)) และโจทย์คณิตทั่วไปสั้นลงสูงสุด **33%** ([โจทย์คณิตทั่วไป](#โจทย์คณิตทั่วไป)), พยากรณ์จังหวะเริ่มคิดเลขล่วงหน้าได้ถึง **2 token** ด้วยความแม่นยำ **83%–89%** ([เห็นการคำนวณก่อนที่จะมาถึง](#เห็นการคำนวณก่อนที่จะมาถึง)) และ**เติมเลขผิด 0 ครั้ง** จากการเติมค่า **41,176 + 39,046 ครั้ง**ที่ตรวจ ส่วนตัวปิด loop ใน replay ไม่แตะคำตอบที่ถูกเลย (**0 จาก 1,078**) ([ไม่กระทบการทำงานอื่น](#ไม่กระทบการทำงานอื่น) · [ตรวจความแม่นยำ](#ตรวจความแม่นยำ) · [ขั้นต่อไป](#ขั้นต่อไป) · [repo](#repo-1))
 
 ### สรุปสั้น ๆ
 
@@ -276,6 +301,29 @@ python -m unittest discover -s tools -p "test_*.py" -t .     # 923 tests; 78 ski
 | **ไม่กระทบงานอื่น & ไม่ต้อง Fine-tune** | ใน replay แตะคำตอบที่ถูก **0 / 1,078** (`cover-cap`) และ **0 / 915** (`V7`) [^th-lost] | โมเดลสงสัยค่าจากซอฟต์แวร์เพียง **4.1%** (เทียบกับคิดเอง **15.2%**) · อ่าน token ที่ใช้จาก tokenizer โดยตรง | [ไม่กระทบการทำงานอื่น](#ไม่กระทบการทำงานอื่น) · [ไม่ต้อง fine-tune](#ไม่ต้อง-fine-tune) · [ตรวจความแม่นยำ](#ตรวจความแม่นยำ) |
 
 กลไกอื่นทั้งหมดที่สร้างและวัดแล้ว รวมถึงตัวที่อยู่ฝั่ง engine และไม่ได้อยู่ใน best config: **[แคตตาล็อก](docs/INDEX.md#ภาษาไทย)**
+
+### MIP คืออะไร และตอนนี้อยู่ตรงไหน
+
+ชื่อนี้ตั้งให้ล้อกับ MCP โดยตั้งใจ ทั้งสองแบบเอาซอฟต์แวร์มาช่วยโมเดลเหมือนกัน แต่เข้ามาจากคนละฝั่ง
+
+| | MCP (Model Context Protocol) | MIP (Model Integrated Protocol) |
+|---|---|---|
+| ซอฟต์แวร์อยู่ที่ไหน | นอก engine อยู่หลัง tool server | ใน inference engine อยู่ข้าง decode loop |
+| ใครเริ่ม | โมเดล ด้วยการเขียน tool call | engine ส่งโทเค็นให้ MIP ระหว่างที่โมเดลเขียน โมเดลไม่ต้องเรียกอะไรเลย |
+| ผลเข้ามายังไง | ผลของ tool ถูกเพิ่มเข้า context แล้วโมเดลค่อยเขียนต่อ | ถูกเขียนลงในสายโทเค็นระหว่างที่โมเดลกำลังเขียน เช่น ค่าหลัง `=` หรือการปิด loop |
+
+- **เป้าหมายปลายทางคือ module ที่ inference engine ไหนก็เสียบใช้ได้** (llama.cpp, vLLM, Strata-xeno และตัวอื่น) dev ของแต่ละ
+  engine เขียนโค้ดเรียกใช้เอง protocol คือข้อตกลงระหว่าง engine กับ module ว่า engine ส่งอะไรให้ MIP ได้บ้าง MIP ตอบอะไรกลับได้
+  (ไม่ทำอะไร แทรกข้อความ หรือปิดคำตอบ) ต้องตอบภายในเวลาเท่าไร และเก็บ state แยกต่อ request อย่างไร ขอบเขตเริ่มจากคณิตศาสตร์
+  ต่อด้วย coding แล้วขยายไปยังซอฟต์แวร์ประเภทอื่นที่แทรกแซง decoding ได้โดยตรง
+- **ตอนนี้ (2026-11-09) ยังเป็นงานวิจัย** วิธีการยังเปลี่ยนทุกรอบ จึงยังไม่มีสเปก protocol และยังไม่ได้แยกเป็น module ตัวเลขทุกรอบ
+  มาจากตัวต้นแบบ `tools/igc/tir4b.py` ซึ่งทำงาน**นอก** engine โดยคุม llama-server หรือ vLLM ผ่าน API แล้วหยุดและต่อ request
+  ทุกครั้งที่ใส่ค่า ส่วนโค้ดใน engine ของ Strata-xeno (`include/strata/core/igc_*.hpp`) เป็นการทดลองฝังใน engine ครั้งแรก และยัง
+  ผูกกับ engine ตัวนั้นอยู่
+- **ยังไม่ใช่ทุกส่วนที่โมเดลไม่ต้องเรียกอะไร** การใส่ค่ากับตัวปิด loop ไม่ต้องให้โมเดลทำอะไรเลย แต่ sandbox รันโค้ดที่โมเดลเขียน
+  ไว้ในส่วนคิด ส่วน [tool route](#tool-route-โจทย์เหตุผลยาก-ๆ) (`run_python`) กับ MIP Adapter (เรียก `mcp.` จาก block
+  [sandbox](docs/sandbox.md#mip-adapter-mcp-tools-from-a-block)) เป็นการเรียกของโมเดลเอง ส่วนเหล่านี้วัดไว้เป็นตัวเทียบและตัวเลือก
+  ไม่ได้เป็นตัว protocol
 
 ### โหมดเลขคณิต: token ลดลง 95%
 
@@ -462,14 +510,16 @@ tool route (ให้โมเดลเรียก `run_python` ได้ พ�
 
 | แผนงาน | รายละเอียด |
 |---|---|
-| **รันเทียบชุดใหญ่ในรอบเดียว (#19)** | ทดสอบ best config ที่มีตัวปิด loop ครบทุกตัวบนชุดข้อสอบกว้าง เทียบกับโมเดลปกติพร้อมกันทั้งสองฝั่งในรอบเดียวกัน |
-| **ตั้งเกณฑ์บนโมเดลเป้าหมาย & ผสานเข้า Decode Loop** | ตั้งเกณฑ์บน **Qwen3.8-Flash-Next** และ **Qwen3.6-35B-A3B-NVFP4** พร้อมย้ายการใส่ค่าเข้าไปใน decode loop ของ Strata [^th-next] |
+| **รอบ 9 บนชั้น PC (#19)** | General Style เทียบกับโมเดลปกติบน **4B NVFP4 W4A8 · llama.cpp · PC layer** ทั้งสองฝั่งในรอบเดียวกัน ได้ 204 ต่อ 157 ตามกฎตรวจ (208 ต่อ 157 ตามตัวอ่านคำตอบ API) จาก 232 ใน 240 คู่ เหลือ 8 คู่ แล้วจึงตัดสินว่าขึ้น A100 หรือกลับไปทบทวน ([benchmarks](docs/benchmarks.md#4b-nvfp4-w4a8--llamacpp--pc-layer-rtx-5060-ti--rtx-4070-super)) |
+| **ประโยคปิดคำตอบ** | รันจริงแบบจับคู่เพื่อยืนยันประโยคปิดแบบใหม่ ที่จบก่อน `{` เพื่อให้ค่าติดลบไม่เสียเครื่องหมายลบ |
+| **ตั้งเกณฑ์บนโมเดลเป้าหมาย & ผสานเข้า Decode Loop** | หลังจาก 4B นิ่งแล้ว (AGENTS.md ลำดับของโมเดล) ตั้งเกณฑ์บน **Qwen3.8-Flash-Next** และ **Qwen3.6-35B-A3B-NVFP4** พร้อมย้ายการใส่ค่าเข้าไปใน decode loop ของ Strata [^th-next] |
+| **module ที่เสียบเข้า engine** | เป้าหมายปลายทาง ([MIP คืออะไร](#mip-คืออะไร-และตอนนี้อยู่ตรงไหน)) จะเขียนสเปก protocol เมื่อวิธีการนิ่งแล้ว |
 
 ### repo
 
 | พาธ | หน้าที่ |
 |---|---|
-| `tools/igc/tir4b.py` | เครื่องมือทดสอบหลัก (harness): รันโมเดลใน vLLM หรือ `llama-server`, ระบบใส่ค่า, โหมดเลขคณิต และตัวปิด loop ทุกตัว (`--execute/--box` ต้องมี Strata-xeno ใน `PYTHONPATH`) |
+| `tools/igc/tir4b.py` | เครื่องมือทดสอบหลัก (harness) เป็นตัวต้นแบบที่อยู่นอก engine: รันโมเดลใน vLLM หรือ `llama-server`, ระบบใส่ค่า, โหมดเลขคณิต และตัวปิด loop ทุกตัว (`--execute/--box` ต้องมี Strata-xeno ใน `PYTHONPATH`) |
 | `tools/igc/sim_replay.py` | จำลอง replay บน trace ที่เก็บไว้เมื่อเพิ่มกลไกใหม่: ดูจุดที่ทำงาน จำนวนคำตอบที่ตัดจบ การแตะคำตอบที่ถูก และเช็กคำขอที่ vLLM จะปฏิเสธ |
 | `tools/igc/mathbackend/`, `tools/igc/mathexpr.py` | ระบบคำนวณคณิตศาสตร์แบบตรงเป๊ะและตัวอ่านนิพจน์ |
 | `tools/igc/question_read.py` | อ่านการคำนวณที่ตัวโจทย์ระบุไว้ |
@@ -481,7 +531,7 @@ tool route (ให้โมเดลเรียก `run_python` ได้ พ�
 | [`docs/ERRATA.md`](docs/ERRATA.md) | ข้ออ้างใน issue ที่ถูกถอน แก้ค่า ยังไม่ยืนยัน หรือถูกแทนที่ พร้อมค่าที่ใช้ได้ตอนนี้ |
 | [`AGENTS.md`](AGENTS.md) | กฎการวิจัย: simulate ก่อนใช้ A100, General Style ที่ไม่จูนตามข้อสอบ, context เต็ม, รันแบบ sampled, ตัวตรวจผ่าน API และวิธีรายงานผล |
 | [`docs/archive/`](docs/archive/README.md) | แผนและรายงาน 130 ฉบับเรื่อง MIP / IGC / Qwenputer / sandbox ที่เขียนไว้ใน Strata-xeno เก็บไว้เป็นบันทึก |
-| [Strata-xeno](https://github.com/xenodeve/Strata-xeno) (`include/strata/core/igc_*.hpp`, `src/kernels/qwenputer.cu`) | ส่วน engine ของ MIP (สคริปต์ test จะเทียบ schema header กับ `STRATA_ROOT` ให้; เลข issue ก่อนแยก repo ดูเทียบได้ที่ #22) |
+| [Strata-xeno](https://github.com/xenodeve/Strata-xeno) (`include/strata/core/igc_*.hpp`, `src/kernels/qwenputer.cu`) | การทดลองฝัง MIP ใน engine ครั้งแรก ยังผูกกับ engine ของ Strata ยังไม่ใช่ module ที่เสียบได้ (สคริปต์ test จะเทียบ schema header กับ `STRATA_ROOT` ให้; เลข issue ก่อนแยก repo ดูเทียบได้ที่ #22) |
 
 [^th-time-a]: หมายเหตุ: วินาทีต่อคำตอบ ตอนที่รันพร้อมกัน 16 คำตอบ ทั้งสองฝั่งรันบนเครื่องเดียวกัน แต่ไม่ได้จับเวลาแบบ ABBA
 [^th-cap]: หมายเหตุ: โมเดลปกติรันโดยมีเพดาน 4,096 token และมี 20 คำตอบที่ชนเพดาน คำตอบที่ถูกตอนไม่มี MIP แต่ผิดตอนมี MIP มี 1 คำตอบ (`add_or_sub_big-5409`) กฎ hand-off ตั้งขึ้นระหว่างอ่าน 160 ข้อชุดเดียวกันนี้ และโมเดลปกติรันซ้ำ 2 รอบบนเครื่องนี้ได้ 114 กับ 118 ผลจึงขยับได้ไม่กี่ข้อระหว่างรอบ โหมดนี้ใช้กับโจทย์คำนวณตอนปิด thinking บน LiveBench ตัวอ่านโจทย์เจอการคำนวณที่โจทย์เขียนไว้ 0 จาก 568 ข้อ จึงใช้ได้เฉพาะเมื่อตัวโจทย์เป็นการคำนวณ

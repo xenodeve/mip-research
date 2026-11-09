@@ -1,8 +1,8 @@
 # AGENTS.md: rules for agents working on mip-research
 
-MIP (Model Inline Processing): software computes, the model reasons. This repo holds the research side: the reference rules
+MIP (Model Integrated Protocol): software computes, the model reasons. This repo holds the research side: the reference rules
 (`tools/igc/`), the harness (`tools/igc/tir4b.py`), the replay gate, the audits (`scripts/`), the catalog (`docs/INDEX.md`) and the
-records behind published numbers (`results/`). The engine side lives in [Strata-xeno](https://github.com/xenodeve/Strata-xeno)
+records behind published numbers (`results/`). The first trial inside an engine lives in [Strata-xeno](https://github.com/xenodeve/Strata-xeno)
 (`include/strata/core/igc_*.hpp`, `src/program/generate.cpp`).
 
 These rules were set by the developer while the work lived in Strata-xeno (2026-11-01 to 2026-11-08) and moved here with it. A
@@ -10,6 +10,11 @@ bare `#N` written before 2026-11-08 means Strata-xeno #N; read it through the ma
 
 ## The aim
 
+- **The end goal: a module any inference engine plugs in** (developer, 2026-11-09). The name echoes MCP: there the model calls
+  tools outside the engine; here the engine hands MIP the tokens and MIP puts results into the stream, so the model calls
+  nothing. Each engine's developers write the calls into the module. Scope in order: mathematics, then coding, then other
+  software that acts on decoding. **Now is research:** no protocol spec and no module refactor until the methods stop
+  changing, and every result says it came from `tir4b`, the reference outside the engine (README, "What MIP is").
 - **Software computes, the model reasons** (developer, 2026-11-06). Every calculation software can do in the model's place is
   covered, or software is extended until it can: decimals, pi, roots, mod residues, column digits, quotient and remainder. The
   model analyses the question and forms hypotheses.

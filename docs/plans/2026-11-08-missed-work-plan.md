@@ -73,7 +73,7 @@ next frozen set; if rules change, the A100 runs on that new set, not on `frozen9
    `f64cded`/`c093b2f`; the only code between them is `mathexpr.wrong_relations`, reached only by `--check-hand`, which no round 9
    arm runs, so the halves ran the same behaviour.) Halves A and B are done (232 of 240 pairs: rule 204 vs
    157, API reader 208 vs 157).
-2. **Read round 9 in full:** merge `r9a` + `r9a2`; send the half-A answers that got HTTP 503 from the API reader back through it;
+2. **Read round 9 in full:** merge `r9a` + `r9a2`; the API reader has every answer that has a reply (checked 2026-11-09: General 112/112 and 120/120; control 79/112 and 80/120, the rest are `stuck` with no reply, which it routes as wrong by design), so only a2's answers are left for it;
    per-environment report with the three questions for every touch (value right, needed, helped); write the verdict (A100 or review)
    to `docs/benchmarks.md` and a bilingual comment on mip-research#19. Then `frozen9` becomes development rows.
 3. **Answer close, live paired run** of the new cue (`0e14ca1`) against the old on development rows (frozen9's close rows first),
