@@ -60,8 +60,40 @@ close on relapse; C and D the exact value then close; E close; F brake).
 - Nothing here is tuned to these 49: each way is taken from its paper as written (the voice line's wording, the 45 words, the 200-token
   window and the 1.0-nat brake are set before the run and reported as set).
 
+## Result (2026-11-10)
+
+**4B NVFP4 W4A8 · llama.cpp · PC layer**, the 49 round-9 loops that have a settle line, seed 1, continued on the probe's own
+llama-servers (one per card). The rule and the API reader agree on every arm. Records: `results/settle-probe-r9/outcomes.json`,
+scripts beside it.
+
+| Arm | Right | Ended | Relapse | 16k cap | Tokens |
+|---|---|---|---|---|---|
+| plain | 2 | 2 | 28 | 19 | 318k |
+| settle (outside voice) | 7 | 7 | 16 | 26 | 457k |
+| voice | 6 | 6 | 14 | 29 | 522k |
+| voice_nowait | 8 | 8 | 15 | 26 | 483k |
+| brake | 0 | 0 | 28 | 19 | 325k |
+| close (today) | **31** | 33 | 6 | 10 | 213k |
+| **settle_close** | **32** | 34 | 7 | 8 | **174k** |
+| settle_relapse_close (the v1 design) | 16 | 17 | 2 | 30 | 570k |
+
+1. **No wording gets the model out of a doubt loop by itself.** The settle line in any voice ends 6-8 of 49; holding the re-check
+   words down for 200 tokens adds little (voice_nowait-only 4, voice-only 2). What ends these loops is the close.
+2. **ThinkBrake never fired:** in 47 loops in the thinking, `</think>` never came within 1.0 nat of the top token. In a doubt loop the
+   model is not "ready to end", so this reading cannot time a close there. (It may still time a close elsewhere; not measured.)
+3. **Waiting for a relapse before closing is the worst pairing:** settle_relapse_close 16 against close 31 (close-only right 18,
+   it-only 3). After the settle line the model stops repeating that line and writes on about something else, to the cap in 30 of 49;
+   the relapse check never sees it. **The v1 design's "settle first, close if the loop resumes" is withdrawn.**
+4. **The settle line with the close at once matches today's close and costs fewer tokens:** 32 against 31 (2 vs 1 keys apart, noise),
+   174k against 213k tokens in all; on the 30 keys right in both, 26,127 against 26,331.
+
+**By kind** (classifier's class; right, settle_close / close): A 15 / 13, B 13 / 13, C 3 / 4, D 1 / 1. The confirm line may add a
+little for A; the quote (B) and the exact value (C) add nothing over the close. One seed: no difference here is beyond noise.
+
+**What changes:** the pairing per kind is a settle line **and** the close together (A: confirm + close; B, C, D: close, the line is
+optional), never a settle line and a wait. ThinkBrake is not a close timer for doubt loops. Next: more seeds on A before the confirm
+line goes into a round.
+
 ## Status
 
-- `settle_probe.py` (plain, settle, close): running, 2026-11-10.
-- `settle_probe2.py` (voice, voice_nowait, brake): built, runs after it. The brake reads `n_probs` from llama-server's stream; its field
-  names are checked on one short request before the run.
+- Both probes done 2026-11-10 (results above). The brake's `n_probs` fields were checked on one short request first (OK).

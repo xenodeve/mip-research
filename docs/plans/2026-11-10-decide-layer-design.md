@@ -63,6 +63,11 @@ wrong), **both right**, **hurt** (General wrong, control right), **both wrong**.
 
 ## 3. The design
 
+> **Revised by the settle probes (2026-11-10, [settle adoption](2026-11-10-settle-adoption-plan.md#result-2026-11-10)):** a settle line
+> does not end a doubt loop by itself (7 of 49), and "settle, then close only if the loop resumes" scored 16 against today's close 31:
+> the model leaves the repeated line and writes on to the cap. The settle line and the close go **together, at once** (32 of 49, fewer
+> tokens). Where the text below says "close only if the loop resumes", read "close at once". ThinkBrake did not fire in any doubt loop.
+
 The decide layer sits in MIP's core between "collect" and the connected software. It acts at the **same moment the loop is detected
 today** (the repeat check, early cycle, shape cap, cover cap): no new trigger, so it adds no new place to act. At that moment it
 classifies the loop and picks the action: **settle first, close second.**

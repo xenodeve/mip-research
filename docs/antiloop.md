@@ -15,8 +15,9 @@ tell *that* the text loops and by which shape; they do not tell *what* the model
 One closer for all of them hurt where the kind called for something else: all 3 closes that lost a right answer came when the
 answer looped again after the thinking close, 2 of them on a true intermediate step. The decide layer reads the kind and pairs a
 settle line with a close (or a close where the model is ready) per kind: [decide layer](plans/2026-11-10-decide-layer-design.md),
-[settle adoption](plans/2026-11-10-settle-adoption-plan.md). A settle line is not a replacement for a close: alone it ended 6 of
-38 sampled loops against 26 for today's close.
+[settle adoption](plans/2026-11-10-settle-adoption-plan.md). A settle line is not a replacement for a close, and it must not delay one: on 49 round-9 loops (seed 1)
+the settle line alone was right on 7, today's close on 31, the settle line with the close at once on 32 (with fewer tokens), and the
+settle line followed by a wait for the loop to come back on 16 ([settle probes](plans/2026-11-10-settle-adoption-plan.md#result-2026-11-10)).
 
 ## Summary
 

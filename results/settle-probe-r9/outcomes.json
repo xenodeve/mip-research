@@ -1,0 +1,2844 @@
+{
+"dm_conversion-1391#0": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 296,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 277,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_conversion-1391#1": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 301,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 233,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_div_big-1395#1": {
+"brake": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 186,
+"why": "relapse"
+},
+"close": {
+"api": "different",
+"cls": "C",
+"rule": false,
+"tokens": 998,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 186,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 202,
+"why": "relapse"
+},
+"settle_close": {
+"api": "different",
+"cls": "C",
+"rule": false,
+"tokens": 2080,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": "different",
+"cls": "C",
+"rule": false,
+"tokens": 16838,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 447,
+"why": "relapse"
+}
+},
+"dm_div_big-1505#0": {
+"brake": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 145,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "C",
+"rule": true,
+"tokens": 361,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 145,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 207,
+"why": "relapse"
+},
+"settle_close": {
+"api": "same",
+"cls": "C",
+"rule": true,
+"tokens": 467,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "C",
+"rule": true,
+"tokens": 605,
+"why": "end"
+},
+"voice": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 208,
+"why": "relapse"
+},
+"voice_nowait": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 543,
+"why": "relapse"
+}
+},
+"dm_div_big-1505#1": {
+"brake": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 229,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "C",
+"rule": true,
+"tokens": 333,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 229,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "C",
+"rule": true,
+"tokens": 376,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 637,
+"why": "relapse"
+}
+},
+"dm_div_big-2783#0": {
+"brake": {
+"api": null,
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "same",
+"cls": "D",
+"rule": true,
+"tokens": 583,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": "same",
+"cls": "D",
+"rule": true,
+"tokens": 483,
+"why": "end"
+},
+"settle_close": {
+"api": "same",
+"cls": "D",
+"rule": true,
+"tokens": 382,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "D",
+"rule": true,
+"tokens": 537,
+"why": "end"
+},
+"voice": {
+"api": "same",
+"cls": "D",
+"rule": true,
+"tokens": 483,
+"why": "end"
+},
+"voice_nowait": {
+"api": "same",
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_div_big-2783#1": {
+"brake": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 267,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "C",
+"rule": false,
+"tokens": 1758,
+"why": "relapse"
+},
+"plain": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 267,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 434,
+"why": "relapse"
+},
+"settle_close": {
+"api": "same",
+"cls": "C",
+"rule": false,
+"tokens": 1551,
+"why": "relapse"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "C",
+"rule": true,
+"tokens": 992,
+"why": "end"
+},
+"voice": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 649,
+"why": "relapse"
+},
+"voice_nowait": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 460,
+"why": "relapse"
+}
+},
+"dm_div_big-3491#0": {
+"brake": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 103,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "C",
+"rule": true,
+"tokens": 354,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 103,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 250,
+"why": "relapse"
+},
+"settle_close": {
+"api": "same",
+"cls": "C",
+"rule": true,
+"tokens": 432,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "C",
+"rule": true,
+"tokens": 556,
+"why": "end"
+},
+"voice": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 233,
+"why": "relapse"
+},
+"voice_nowait": {
+"api": "same",
+"cls": "C",
+"rule": true,
+"tokens": 621,
+"why": "end"
+}
+},
+"dm_div_big-4138#0": {
+"brake": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 178,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "C",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"plain": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 178,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "different",
+"cls": "C",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 802,
+"why": "relapse"
+},
+"voice_nowait": {
+"api": null,
+"cls": "C",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_div_big-4138#1": {
+"brake": {
+"api": null,
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "hedged",
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"plain": {
+"api": null,
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_div_big-5070#0": {
+"brake": {
+"api": null,
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "same",
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"plain": {
+"api": null,
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "D",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_div_big-5070#1": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "hedged",
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "hedged",
+"cls": "A",
+"rule": false,
+"tokens": 2800,
+"why": "relapse"
+},
+"settle_relapse_close": {
+"api": "different",
+"cls": "A",
+"rule": false,
+"tokens": 2619,
+"why": "end"
+},
+"voice": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_div_big-5942#1": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 207,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 509,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 207,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 660,
+"why": "relapse"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 665,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 4499,
+"why": "end"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 407,
+"why": "relapse"
+}
+},
+"dm_div_big-928#1": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 857,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 859,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 992,
+"why": "relapse"
+}
+},
+"dm_div_big-9977#0": {
+"brake": {
+"api": "same",
+"cls": "C",
+"rule": false,
+"tokens": 0,
+"why": "n/a"
+},
+"close": {
+"api": "same",
+"cls": "C",
+"rule": true,
+"tokens": 18,
+"why": "end"
+},
+"plain": {
+"api": "same",
+"cls": "C",
+"rule": true,
+"tokens": 0,
+"why": "end"
+},
+"settle": {
+"api": "same",
+"cls": "C",
+"rule": false,
+"tokens": 122,
+"why": "relapse"
+},
+"settle_close": {
+"api": "same",
+"cls": "C",
+"rule": false,
+"tokens": 38,
+"why": "relapse"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "C",
+"rule": true,
+"tokens": 147,
+"why": "end"
+},
+"voice": {
+"api": "same",
+"cls": "C",
+"rule": false,
+"tokens": 6270,
+"why": "relapse"
+},
+"voice_nowait": {
+"api": "same",
+"cls": "C",
+"rule": false,
+"tokens": 494,
+"why": "relapse"
+}
+},
+"dm_div_big-9991#0": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_relapse_close": {
+"api": "hedged",
+"cls": "A",
+"rule": false,
+"tokens": 18975,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_div_big-9991#1": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 425,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": false,
+"tokens": 2705,
+"why": "relapse"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 425,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 978,
+"why": "relapse"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_div_remainder-5053#0": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 121,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 569,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 274,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 458,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 986,
+"why": "relapse"
+},
+"voice_nowait": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_div_remainder-926#0": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 228,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 228,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 301,
+"why": "relapse"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 258,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "A",
+"rule": false,
+"tokens": 17015,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_mixed_longer-5053#0": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 122,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 1065,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 230,
+"why": "relapse"
+},
+"settle": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 3249,
+"why": "end"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 1068,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 6136,
+"why": "end"
+},
+"voice_nowait": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 1837,
+"why": "end"
+}
+},
+"dm_mixed_longer-5053#1": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 51,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 984,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 51,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 182,
+"why": "relapse"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 742,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 892,
+"why": "end"
+},
+"voice": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 8832,
+"why": "end"
+},
+"voice_nowait": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 4879,
+"why": "end"
+}
+},
+"dm_mixed_longer-5920#1": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 331,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 942,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 119,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 200,
+"why": "relapse"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 754,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 1085,
+"why": "end"
+},
+"voice": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 1067,
+"why": "relapse"
+},
+"voice_nowait": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 1327,
+"why": "relapse"
+}
+},
+"dm_mixed_longer-926#0": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 70,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 1127,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 70,
+"why": "relapse"
+},
+"settle": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 10438,
+"why": "end"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 1034,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 9295,
+"why": "end"
+},
+"voice": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 7520,
+"why": "end"
+}
+},
+"dm_mixed_longer-926#1": {
+"brake": {
+"api": "different",
+"cls": "B",
+"rule": false,
+"tokens": 0,
+"why": "n/a"
+},
+"close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 984,
+"why": "end"
+},
+"plain": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 550,
+"why": "end"
+},
+"settle": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 562,
+"why": "end"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 6,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 615,
+"why": "end"
+},
+"voice": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 558,
+"why": "end"
+},
+"voice_nowait": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 619,
+"why": "end"
+}
+},
+"dm_mul_div_longer-1395#0": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 186,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 939,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 186,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 1061,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 1574,
+"why": "relapse"
+}
+},
+"dm_mul_div_longer-1395#1": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 73,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 948,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 73,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 528,
+"why": "relapse"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 796,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 376,
+"why": "relapse"
+},
+"voice_nowait": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_mul_div_longer-5070#1": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 865,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 94,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 146,
+"why": "relapse"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 875,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 1043,
+"why": "end"
+},
+"voice": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 6308,
+"why": "end"
+}
+},
+"dm_mul_div_longer-5942#0": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 1293,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 1078,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_mul_div_longer-5942#1": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 119,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 1201,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 119,
+"why": "relapse"
+},
+"settle": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 6083,
+"why": "end"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 1375,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16383,
+"why": "cap"
+}
+},
+"dm_mul_div_longer-9991#1": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 112,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 2792,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 112,
+"why": "relapse"
+},
+"settle": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 3156,
+"why": "end"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 4416,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 6360,
+"why": "end"
+},
+"voice": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 4509,
+"why": "end"
+},
+"voice_nowait": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 6830,
+"why": "end"
+}
+},
+"dm_simplify_surd-1391#0": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "same",
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": false,
+"tokens": 2461,
+"why": "relapse"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_simplify_surd-1501#1": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 1233,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 1004,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_simplify_surd-2773#0": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 1224,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 1105,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_simplify_surd-3480#0": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "hedged",
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": false,
+"tokens": 16383,
+"why": "cap"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_simplify_surd-3480#1": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 102,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "B",
+"rule": false,
+"tokens": 1959,
+"why": "relapse"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 117,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": false,
+"tokens": 2621,
+"why": "relapse"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 388,
+"why": "relapse"
+}
+},
+"dm_simplify_surd-5053#1": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 741,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 671,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_simplify_surd-5920#0": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 720,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 804,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 193,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 895,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 1525,
+"why": "relapse"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 1184,
+"why": "relapse"
+}
+},
+"dm_simplify_surd-5920#1": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 7015,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "B",
+"rule": false,
+"tokens": 8610,
+"why": "relapse"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 12679,
+"why": "end"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 6428,
+"why": "relapse"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_simplify_surd-926#1": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 1151,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 1122,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 1151,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 891,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 1283,
+"why": "relapse"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 1522,
+"why": "relapse"
+}
+},
+"dm_simplify_surd-9937#0": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 227,
+"why": "relapse"
+},
+"close": {
+"api": "hedged",
+"cls": "B",
+"rule": false,
+"tokens": 2417,
+"why": "relapse"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 126,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 446,
+"why": "relapse"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": false,
+"tokens": 1268,
+"why": "relapse"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "B",
+"rule": false,
+"tokens": 1915,
+"why": "relapse"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 1195,
+"why": "relapse"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 528,
+"why": "relapse"
+}
+},
+"dm_simplify_surd-9951#0": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 735,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 278,
+"why": "relapse"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 724,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 319,
+"why": "relapse"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_simplify_surd-9951#1": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 725,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 837,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_swr_p_sequence-3480#0": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "different",
+"cls": "B",
+"rule": false,
+"tokens": 682,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "different",
+"cls": "B",
+"rule": false,
+"tokens": 625,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_swr_p_sequence-3480#1": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 68,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 554,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 68,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 239,
+"why": "relapse"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 580,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 769,
+"why": "end"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"dm_swr_p_sequence-5053#0": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 331,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 831,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 331,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "same",
+"cls": "B",
+"rule": true,
+"tokens": 843,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 910,
+"why": "relapse"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 1560,
+"why": "relapse"
+}
+},
+"stdmath-370853d3#0": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"close": {
+"api": "different",
+"cls": "B",
+"rule": false,
+"tokens": 4012,
+"why": "relapse"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "different",
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_relapse_close": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"stdmath-370853d3#1": {
+"brake": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 661,
+"why": "relapse"
+},
+"close": {
+"api": "different",
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"plain": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 661,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"settle_close": {
+"api": "different",
+"cls": "B",
+"rule": false,
+"tokens": 1200,
+"why": "relapse"
+},
+"settle_relapse_close": {
+"api": "different",
+"cls": "B",
+"rule": false,
+"tokens": 1602,
+"why": "relapse"
+},
+"voice": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": null,
+"cls": "B",
+"rule": false,
+"tokens": 915,
+"why": "relapse"
+}
+},
+"stdmath-5a258a23#0": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 216,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 1059,
+"why": "end"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 216,
+"why": "relapse"
+},
+"settle": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 1884,
+"why": "end"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 1223,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 12743,
+"why": "end"
+},
+"voice": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 3721,
+"why": "end"
+},
+"voice_nowait": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+}
+},
+"stdmath-fbf10ed4#1": {
+"brake": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 143,
+"why": "relapse"
+},
+"close": {
+"api": "same",
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"plain": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 161,
+"why": "relapse"
+},
+"settle": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 254,
+"why": "relapse"
+},
+"settle_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 1478,
+"why": "end"
+},
+"settle_relapse_close": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 15496,
+"why": "end"
+},
+"voice": {
+"api": null,
+"cls": "A",
+"rule": false,
+"tokens": 16384,
+"why": "cap"
+},
+"voice_nowait": {
+"api": "same",
+"cls": "A",
+"rule": true,
+"tokens": 15616,
+"why": "end"
+}
+}
+}
