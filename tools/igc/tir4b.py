@@ -152,7 +152,9 @@ class Arm:
     def __init__(self, force_after=0, execute=False, close_fit=False, loop_close=False, close_repeat=0, inline_calc=False, native_tool=False,
                  hint_calc=False, loop_hint=False, inline_plain=False, whole_hint=False, check_hand=False, whole_plain=False, hand_off=False, question_value=False,
                  trust='cort', logit_value=0.0, suppress_recheck=0, mathbackend=False, candidate_close=False, inline_style='general',
-                 no_digit_join=False, guard_progress=False, answer_close=False, loop_value=False, early_cycle=False, shape_cap=0, cover_cap=0):
+                 no_digit_join=False, guard_progress=False, answer_close=False, loop_value=False, early_cycle=False, shape_cap=0, cover_cap=0,
+                 exact_answer=False):
+        self.exact_answer = exact_answer   # --exact-answer: the question's own computation, exact, is what the answer's box holds (round 9 form)
         self.cover_cap = cover_cap   # --cover-cap W: 97 % of the last W tokens repeat a 12-gram of the last 2,048: a loop (#307 round 8)
         self.shape_cap = shape_cap   # --shape-cap: a cycle of this many rounds with every number read as one token is a loop, progress or not (#307)
         self.early_cycle = early_cycle   # --early-cycle: the thinking is also read for a short exact cycle, every request (#307, V7)
@@ -770,6 +772,44 @@ def inline_value(before, whole=False, use_mathbackend=False):
     return found[1] if found else None
 
 
+def _box_inner(text, i):
+    """The index of the `}` that closes the brace opened just before `i`, or None (an unclosed box)."""
+    depth = 1
+    while i < len(text):
+        depth += {'{': 1, '}': -1}.get(text[i], 0)
+        if depth == 0:
+            return i
+        i += 1
+    return None
+
+
+def _shortening(written, exact):
+    """True when `written` (a box's content) is a shortening of the non-integer Fraction `exact`, not the value itself: rounded or cut at
+    the places it shows, its integer part, or (with 4 or more significant digits) its first 4 significant digits. A lost sign, another value, or the
+    exact value in any spelling is False."""
+    from tools.igc.mathexpr import evaluate
+    text = written.strip().strip('$').replace(',', '').replace('\\,', '')
+    text = re.sub(r'(?:\\ldots|\\dots|\.\.\.|…)$', '', text).strip()
+    m = re.fullmatch(r'-?\d+(?:\.(\d+))?', text)
+    if not m:
+        return False   # a fraction, a root or words: the exact value in another spelling, or another value
+    got = Fraction(text)
+    if got == exact or (got < 0) != (exact < 0) and got != 0:
+        return False
+    places = len(m.group(1) or '')
+    scale = 10 ** places
+    near = {Fraction(math.floor(exact * scale), scale), Fraction(math.ceil(exact * scale), scale)}
+    if got in near:   # rounded either way, or cut toward zero: both are the floor or the ceiling at these places
+        return True
+    # the model's own digits drifting past the ones it got (5070#1: 0.00456226 for 0.0045623759...): its first 4 significant digits are
+    # the value's, cut. A relative 0.1 % let -1.9875 for -1.98868 through, wrong in the third digit
+    if len(text.lstrip('-').replace('.', '').lstrip('0')) < 4:
+        return False
+    top = math.floor(math.log10(abs(exact)))
+    unit = Fraction(10) ** (top - 3)
+    return math.floor(abs(got) / unit) == math.floor(abs(exact) / unit)
+
+
 def spelled(value):
     """An integer as itself, a value with a terminating decimal as that decimal (the model's own spelling: 9/2 written for 0.9 x 5 broke its
     decimal sum into a loop, dm 6890), and only the rest as a reduced fraction, as Qwenputer's library prints."""
@@ -840,6 +880,7 @@ class Rollout:
         self.loop_nudges = 0
         self.answer_closed_at = None   # --answer-close: where the model's value after the cue begins
         self.loop_valued = False   # --loop-value: put once per answer
+        self._question = ()   # question_read's (expression, value) of this row, read once; () = not read yet
         self.echo_skips = 0   # values echoing() left to the model
         if arm.candidate_close:
             from tools.igc.unified_detect import CandidateAnswerTracker
@@ -1041,6 +1082,7 @@ class Rollout:
             return True
         if last in self.ids.ends:
             if self.phase == 'answer':
+                self.exact_box()
                 self.done('stop')
             elif self.runs:   # an end of turn inside thinking would leave no answer after a call (:384)
                 self.out.pop()
@@ -1202,10 +1244,9 @@ class Rollout:
         """--loop-value: a loop is being closed. When the question states a computation (tools.igc.question_read: gold on 160 of 160
         DeepMind rows), its exact value is put on a line of its own first, once: software computes, the model decides what to answer.
         #307: 5 of 15 loop-lc closes were a doubt the close did not settle; 2 were an endless division of the question's own fraction."""
-        if not self.arm.loop_value or self.loop_valued or not self.row.get('question'):
+        if not self.arm.loop_value or self.loop_valued:
             return
-        from tools.igc.question_read import read
-        got = read(self.row['question'])
+        got = self.question_computation()
         if got is None:
             return
         self.loop_valued = True
@@ -1225,9 +1266,63 @@ class Rollout:
             del self.out[floor + start:]
         self.join_guard = False
         self.put_loop_value()
+        exact = self.exact_value()
         self.inject(ANSWER_CLOSE, 'answer close')
         self.events[-1].update(cut_tokens=taken)
         self.answer_closed_at = len(self.out)
+        if exact is not None:
+            # --exact-answer: the question states one computation, so the value after the cue is software's (2783#0: the cue cut `Let's
+            # provide the fraction` and the model wrote `{0}`). Spelled with `{` here; the cue itself still ends before it (0e14ca1)
+            value = spelled(exact[1])
+            self.inject('{' + value + '}$.', 'exact answer')
+            self.events[-1].update(via='cue', expr=exact[0][:200], value=value, copied=None)
+            self.out.append(self.tok.convert_tokens_to_ids('<|im_end|>'))
+            self.done('stop')
+
+    def question_computation(self):
+        """question_read's (expression, exact value) for this row's question, or None; read once per answer."""
+        if self._question == ():
+            self._question = None
+            if self.row.get('question'):
+                from tools.igc.question_read import read
+                self._question = read(self.row['question'])
+        return self._question
+
+    def exact_value(self):
+        """--exact-answer: the question's computation and its exact value when the question states one, else None."""
+        if not self.arm.exact_answer:
+            return None
+        got = self.question_computation()
+        return got if got is not None and isinstance(got[1], Fraction) else None
+
+    def exact_box(self):
+        """--exact-answer at the answer's end (round 9, 4B NVFP4 W4A8, llama.cpp): the model wrote `-73388/36903 \\approx -1.9886` and
+        boxed `-1.9886` on purpose; told the exact value (loop value, the class-C settle line) it still chose a decimal. When the question
+        states one computation whose value is not an integer and the answer's last box holds a shortening of that value (rounded, cut, its
+        integer part, or its own digits within 0.1 %), the box gets the exact value. A different value or a lost sign is the model's answer
+        and is left alone; an integer value is never rewritten."""
+        exact = self.exact_value()
+        if exact is None or exact[1].denominator == 1:
+            return
+        end = self.out.pop() if self.out and self.out[-1] in self.ids.ends else None
+        start = max(self.answer_start(), self.spans[-1][1] if self.spans else 0)
+        j = len(self.out)
+        while j > start and '\\boxed' not in self.tok.decode(self.out[j:]):
+            j -= 1
+        tail = self.tok.decode(self.out[j:])
+        at = tail.rfind('\\boxed{')
+        inner = _box_inner(tail, at + len('\\boxed{')) if at >= 0 else None
+        if inner is None or not _shortening(tail[at + 7:inner], exact[1]):
+            if end is not None:
+                self.out.append(end)
+            return
+        value = spelled(exact[1])
+        copied = tail[at + 7:inner]
+        del self.out[j:]
+        self.inject(tail[:at + 7] + value + tail[inner:], 'exact answer')
+        self.events[-1].update(via='box', expr=exact[0][:200], value=value, copied=copied[:120])
+        if end is not None:
+            self.out.append(end)
 
     def whole_line(self):
         """The --whole-hint's step written as a line of its own, with no `=` (pc-whole dm mul_div 3350: the whole expression, then pieces):
@@ -1250,11 +1345,10 @@ class Rollout:
         """--question-value (MIP catch point 1): the whole value is the computation the question states, read by software
         (tools.igc.question_read), when it states one and the model's copy of it gives another value. pc4/pc8 lost 4 DeepMind rows to a
         copied sign or term; question_read gives gold on 160 of 160."""
-        if not self.arm.question_value or not self.row.get('question'):
+        if not self.arm.question_value:
             return value
         from tools.igc.mathexpr import evaluate
-        from tools.igc.question_read import read
-        got = read(self.row['question'])
+        got = self.question_computation()
         if got is None or evaluate(value) == got[1]:
             return value
         self.events.append(dict(kind='question value', at=len(self.out), model_tokens=self.model_tokens(), copied=value,
@@ -1773,7 +1867,8 @@ def run(args):
               args.whole_hint, args.check_hand, args.whole_plain, args.hand_off, args.question_value, trust=args.trust_line, logit_value=args.logit_value,
               suppress_recheck=args.suppress_recheck, mathbackend=args.mathbackend, candidate_close=args.candidate_close,
               inline_style=args.inline_style, no_digit_join=args.no_digit_join, guard_progress=args.guard_progress, answer_close=args.answer_close,
-              loop_value=args.loop_value, early_cycle=args.early_cycle, shape_cap=args.shape_cap, cover_cap=args.cover_cap)
+              loop_value=args.loop_value, early_cycle=args.early_cycle, shape_cap=args.shape_cap, cover_cap=args.cover_cap,
+              exact_answer=args.exact_answer)
     if args.no_digit_join and not (args.inline_calc and args.inline_plain):
         raise SystemExit('--no-digit-join holds digits down after a plain inline put: it needs --inline-calc --inline-plain')
     if args.suppress_recheck and (args.server or not (args.inline_calc or args.logit_value)):
@@ -1974,6 +2069,8 @@ def main(argv=None):
     r.add_argument('--execute', action='store_true')
     r.add_argument('--close-fit', action='store_true')
     r.add_argument('--loop-close', action='store_true')
+    r.add_argument('--exact-answer', action='store_true', help="when the question states one computation, the answer's box holds its exact "
+                   'value: the answer-close cue ends with it, and a rounded, cut or integer-part box of it is rewritten')
     r.add_argument('--loop-value', action='store_true', help="before a loop is closed, put the question's own computation, exact")
     r.add_argument('--shape-cap', type=int, default=0, help='a cycle of this many rounds, every number read as one token, is a loop even '
                                                             'when each round is new (#307: 1024; right answers reached 805 at most)')

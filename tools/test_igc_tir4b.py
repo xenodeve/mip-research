@@ -1322,5 +1322,94 @@ class FamilyProfile(unittest.TestCase):
         self.assertEqual(tir4b.inline_found('so 10044/42', use_mathbackend=True, style='qwen')[1], '239.1428...')
 
 
+class ExactAnswer(unittest.TestCase):
+    """--exact-answer: when the question states one computation (question_read), the answer's box holds its exact value. Round 9 (4B
+    NVFP4 W4A8, llama.cpp, PC layer): the model wrote `-73388/36903` and then boxed `-1.9886` on purpose; told the exact value (loop value,
+    the class-C settle line) it still chose the decimal. Software writes the box; the model's reasoning is untouched."""
+
+    def arm(self, question, answer, **more):
+        row = dict(id='dm_div_big-1', suite='arith', answer=answer,
+                   question=question + '\n\nGive the final answer as a single number in \\boxed{} at the end.')
+        return tir4b.Rollout(row, 0, [1, 2, 3], tir4b.Arm(exact_answer=True, **more), IDS, TOK, seed=1)
+
+    def answered(self, r, box):
+        play(r, 'x</think>\n\nSo the result is $\\boxed{' + box + '}$.<|im_end|>', Kernel([]))
+        return r
+
+    def acts(self, r):
+        return [e for e in r.events if e['kind'] == 'exact answer']
+
+    def test_a_rounded_decimal_of_the_questions_value_is_boxed_exact(self):
+        # 1395#0: `-73388/36903 \approx -1.9886`, then `I will provide the decimal value rounded to 4 decimal places`, \boxed{-1.9886}
+        r = self.answered(self.arm('Divide -73388 by 36903.', '-73388/36903'), '-1.9886')
+        self.assertTrue(r.text().endswith('So the result is $\\boxed{-73388/36903}$.<|im_end|>'), r.text()[-80:])
+        self.assertEqual(r.finish, 'stop')
+        act, = self.acts(r)
+        self.assertEqual((act['copied'], act['value'], act['via']), ('-1.9886', '-73388/36903', 'box'))
+        from tools.igc.select_rows import right
+        self.assertTrue(right(r.row, r.text()))
+
+    def test_every_shortening_of_the_value_counts(self):
+        cases = [('Divide -73388 by 36903.', '-73388/36903', '-1.9887'),          # rounded (1395#1)
+                 ('Divide 139241497 by 13.', '139241497/13', '10710884.384615...'),  # cut, with dots
+                 ('Divide -139241497 by 13.', '-139241497/13', '-10710884'),        # the integer part (4138#0)
+                 ('Divide -171 by 2221234.', '-171/2221234', '0'),                  # the integer part of a small one (2783#0)
+                 ('Divide 11294 by 2475526.', '5647/1237763', '0.00456226'),        # the model's own digits drift (5070#1)
+                 ('Divide 11294 by 2475526.', '5647/1237763', '0.004562376')]       # 5070#0
+        for question, gold, box in cases:
+            r = self.answered(self.arm(question, gold), box)
+            self.assertEqual(len(self.acts(r)), 1, (question, box))
+            self.assertIn('\\boxed{' + gold + '}', r.text())
+
+    def test_a_wrong_value_or_a_lost_sign_is_left_to_the_model(self):
+        # not a form of the value: a different number, or the opposite one. Software does not answer for the model there
+        # -2 and -1.98 are the value rounded to a whole number and cut at 2 places: shortenings, rewritten; these are not
+        for box in ('-1.5', '1.9886', '-3', '-1.97', '2', '-1.95', '-1.9875'):
+            r = self.answered(self.arm('Divide -73388 by 36903.', '-73388/36903'), box)
+            self.assertEqual(self.acts(r), [], box)
+            self.assertIn('\\boxed{' + box + '}', r.text())
+
+    def test_the_value_already_exact_is_left_alone(self):
+        for box in ('-73388/36903', '-\\frac{73388}{36903}', '\\frac{-73388}{36903}'):
+            r = self.answered(self.arm('Divide -73388 by 36903.', '-73388/36903'), box)
+            self.assertEqual(self.acts(r), [], box)
+
+    def test_an_integer_value_is_never_rewritten(self):
+        # 9977: the question's value is the integer -70468; whatever the model boxed is its answer, right or wrong
+        for box in ('70468', '-70468.0', '-70468'):
+            r = self.answered(self.arm('Divide -418157112 by 5934.', '-70468'), box)
+            self.assertEqual(self.acts(r), [], box)
+
+    def test_no_act_without_a_computation_the_question_states(self):
+        for question in ('Divide 3 by 7. Round to 2 decimal places.', 'Tom has 3 apples and gives away 7. How many per friend?'):
+            r = self.answered(self.arm(question, '3/7'), '0.43')
+            self.assertEqual(self.acts(r), [], question)
+        r = tir4b.Rollout(dict(id='q', suite='arith', answer='-73388/36903', question='Divide -73388 by 36903.'), 0, [1],
+                          tir4b.Arm(), IDS, TOK, seed=1)
+        self.answered(r, '-1.9886')
+        self.assertEqual(self.acts(r), [])   # off without the flag
+
+    def test_only_the_last_box_of_the_answer_is_read(self):
+        r = self.arm('Divide -73388 by 36903.', '-73388/36903')
+        play(r, 'x</think>\n\nRoughly $\\boxed{-1.9886}$, exactly $\\boxed{-73388/36903}$.<|im_end|>', Kernel([]))
+        self.assertEqual(self.acts(r), [])
+
+    def test_the_answer_close_cue_carries_the_exact_value(self):
+        # 2783#0: the cue cut `Let's provide the fraction` and the model wrote `{0}`; 5070#0: it wrote `{0.004562376}`. With the question's
+        # value known the cue ends with it, and the answer ends there
+        r = self.arm('Divide -73388 by 36903.', '-73388/36903', answer_close=True)
+        r.take(TOK.encode('x</think>'))
+        r.take(TOK.encode('\n\nso ' + 'ab' * 600))
+        self.assertEqual(r.finish, 'stop')
+        self.assertTrue(r.text().endswith('The final answer is $\\boxed{-73388/36903}$.<|im_end|>'), r.text()[-80:])
+        act, = self.acts(r)
+        self.assertEqual(act['via'], 'cue')
+        r = rollout(answer_close=True, exact_answer=True)   # no question: the cue is as before, the model writes the value
+        r.take(TOK.encode('x</think>'))
+        r.take(TOK.encode('\n\nso ' + 'ab' * 600))
+        self.assertIsNone(r.finish)
+        self.assertTrue(r.text().endswith('The final answer is $\\boxed'))
+
+
 if __name__ == '__main__':
     unittest.main()
