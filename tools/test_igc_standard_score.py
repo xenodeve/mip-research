@@ -83,6 +83,17 @@ class Math(unittest.TestCase):
         self.assertFalse(math_right('</think>\n\n\\boxed{1+\\sqrt{19}}', '1\\pm\\sqrt{19}'))
         self.assertFalse(math_right('</think>\n\n\\boxed{2, -1}', '1,-2'))
 
+    def test_a_set_in_set_braces(self):
+        """Round 9 a3 (4B NVFP4 W4A8, llama.cpp, PC layer) stdmath-bf7ece2b x2: `\\{-2, 1-\\sqrt{5}, 1+\\sqrt{5}\\}` for gold
+        `\\{1\\pm\\sqrt{5},-2\\}` was right and scored wrong: the set braces stayed on the first and last value."""
+        from tools.igc.standard_score import math_right
+        gold = '\\{1\\pm\\sqrt{5},-2\\}'
+        self.assertTrue(math_right('</think>\n\n\\boxed{\\{-2, 1-\\sqrt{5}, 1+\\sqrt{5}\\}}', gold))
+        self.assertTrue(math_right('</think>\n\n\\boxed{\\left\\{-2, 1+\\sqrt{5}, 1-\\sqrt{5}\\right\\}}', gold))
+        self.assertTrue(math_right('</think>\n\n\\boxed{-2, 1\\pm\\sqrt{5}}', gold))
+        self.assertFalse(math_right('</think>\n\n\\boxed{\\{-2, 1+\\sqrt{5}\\}}', gold))           # one value missing
+        self.assertFalse(math_right('</think>\n\n\\boxed{\\{2, 1-\\sqrt{5}, 1+\\sqrt{5}\\}}', gold))  # a wrong value
+
     def test_a_box_asked_about_and_rejected_is_not_the_answer(self):
         """#24, round 9 (4B NVFP4 W4A8, llama.cpp, PC layer) dm_div_big-9977#0 and dm_simplify_surd-9937#0: the last box was written
         as a question and rejected on its line."""

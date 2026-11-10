@@ -194,6 +194,9 @@ def math_right(text, gold):
     # A set of answers: `-2, 1` for `1,-2`, `1-\sqrt{19}, 1+\sqrt{19}` for `1\pm\sqrt{19}` (#307 A100 General arm, 3 rows right and scored
     # wrong). Each side is a list of exact values, ± spelled out as both signs; the two lists must hold the same values, in any order.
     def values(text):
+        # set braces around the list: `\{-2, 1-\sqrt{5}, 1+\sqrt{5}\}` (round 9 a3 stdmath-bf7ece2b), `\left\{...\right\}`
+        text = re.sub(r'^\s*(?:\\left)?\\\{(.*)(?:\\right)?\\\}\s*$', r'\1', text, flags=re.S)
+        text = re.sub(r'\\right$', '', text.strip())
         out = []
         for part in re.split(r',(?![^{]*\})', text):
             part = part.strip()
@@ -210,7 +213,7 @@ def math_right(text, gold):
                 out.append(v)
         return out
 
-    if ',' not in got + want and not re.search(r'\\pm|±', got + want):
+    if not re.search(r',|\\pm|±', got + want):
         return False
     a, b = values(got), values(want)
     return a is not None and b is not None and len(a) == len(b) and all(x in b for x in a) and all(y in a for y in b)
