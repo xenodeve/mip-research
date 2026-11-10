@@ -57,3 +57,12 @@ And the `=` put's forms are wrong after `\approx`: it would put `0 \text{ rem } 
 motivating case is not even read: the reader refuses `(1.01)^{30}`. So a put at `\approx` needs its own design: a decimal form with
 enough significant digits, the decimal power read, and a rule for estimates; first a scan that reads `\times 10^{k}` and splits the 316
 by hand. Not in the paired test.
+
+## Paused (2026-11-10, the developer)
+
+The developer paused this work after the summary. Where it stands:
+- a3 was at General 6 of 8, control 5 of 8 records (`a100/pc/r9a3-*`); `scripts/pc/pc_round9.sh` resumes it with `RESUME=1`.
+- Waiting on the developer: re-enable the 5060 Ti (Device Manager, code 22) or run the paired test on the 4070 alone (~9 h vs
+  ~4.5-5 h); `swr_p_sequence` by Sandbox or a sentence reader.
+- Pick-up order: finish a3 -> round 9's final totals (rule + API) to #19 and the profile README 232 -> 240 (PR xenodeve/xenodeve#7)
+  -> the paired live test (step 4) -> frozen10.
