@@ -15,7 +15,7 @@ Claims in the issues that were later withdrawn, corrected or never confirmed: [E
 | Page | What it covers | Mechanisms | In best config | Engine only | Kept as option | Not measured yet / spec | Paused |
 |---|---|---|---|---|---|---|---|
 | [Detection](detect.md) | Where a calculation is or is about to be: the `=` stop and reader, the question reader, the engine's token parser and MTP-draft interception, natural-language levels, probes, router, readiness | 13 | 2 | 4 | 5 | 2 | 0 |
-| [Inject](inject.md) | How a value or note gets into the model: the General Style put, refusals, digit-join hold, echo guard, arithmetic mode, check-hand, logit override, hints, the engine's result bridge and inline execution, notes | 16 | 5 | 4 | 6 | 1 | 0 |
+| [Inject](inject.md) | How a value or note gets into the model: the General Style put, refusals, digit-join hold, echo guard, arithmetic mode, check-hand, logit override, hints, the engine's result bridge and inline execution, notes | 17 | 5 | 4 | 6 | 2 | 0 |
 | [Anti-loop](antiloop.md) | Loop detectors and closers: repeat check, counting guard, line-back, A, B, V7, shape cap, cover cap, the engine's own closes | 18 | 9 | 6 | 2 | 1 | 0 |
 | [Compute](compute.md) | What computes the exact value: MathBackend, the inline bridge, the audit, the engine's CUDA executors ABI1-3, Qwenputer, oracles | 11 | 3 | 5 | 2 | 1 | 0 |
 | [Sandbox and tools](sandbox.md) | Code run inside the reasoning: the C1 interpreter, forced block and close, hypothesis loop, tool route, real-Python box, workspace, MCP adapter, 4B port | 14 | 0 | 2 | 7 | 5 | 0 |
@@ -138,7 +138,7 @@ The mechanisms most worth carrying over, with what each needs. Every one has its
 | หน้า | ครอบคลุม | กลไก | ใน best config | เฉพาะ engine | เก็บเป็นตัวเลือก | ยังไม่วัด / spec | พักไว้ |
 |---|---|---|---|---|---|---|---|
 | [Detect](detect.md) | หาว่าการคำนวณอยู่ตรงไหนหรือกำลังจะมา: หยุดที่ `=` ตัวอ่านโจทย์ parser ใน engine ที่ดักก่อน KV และทิ้ง MTP draft ระดับภาษาพูด probe router readiness | 13 | 2 | 4 | 5 | 2 | 0 |
-| [ใส่ค่า](inject.md) | ค่าหรือหมายเหตุเข้าไปใน model ยังไง: put แบบ General Style กฎปฏิเสธ กันเลขต่อกัน echo guard arithmetic mode check-hand logit hint result bridge และ inline exec ของ engine | 16 | 5 | 4 | 6 | 1 | 0 |
+| [ใส่ค่า](inject.md) | ค่าหรือหมายเหตุเข้าไปใน model ยังไง: put แบบ General Style กฎปฏิเสธ กันเลขต่อกัน echo guard arithmetic mode check-hand logit hint result bridge และ inline exec ของ engine | 17 | 5 | 4 | 6 | 2 | 0 |
 | [ปิด loop](antiloop.md) | ตัวจับและตัวปิด loop: repeat counting line-back A B V7 shape cap cover cap และตัวปิดของ engine เอง | 18 | 9 | 6 | 2 | 1 | 0 |
 | [ตัวคำนวณ](compute.md) | ใครคำนวณค่าที่แม่น: MathBackend สะพาน inline การตรวจทุก put ตัวคำนวณ CUDA ABI1-3 ของ engine Qwenputer oracle | 11 | 3 | 5 | 2 | 1 | 0 |
 | [Sandbox และเครื่องมือ](sandbox.md) | รันโค้ดในส่วนคิด: ตัวแปลภาษา C1 บังคับเปิด block แล้วปิด hypothesis loop tool route กล่อง Python จริง workspace MCP adapter และพอร์ตสำหรับ 4B | 14 | 0 | 2 | 7 | 5 | 0 |
