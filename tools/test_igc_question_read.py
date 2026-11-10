@@ -34,5 +34,31 @@ class Read(unittest.TestCase):
         self.assertIsNone(value('What is 12?'))
 
 
+class ReadExact(unittest.TestCase):
+    """read_exact: as read, and a computation with square roots computed exactly (round 9, dm_simplify_surd 3480 and 9937 looped on
+    their parentheses; read gives a Fraction or nothing, so the surd questions were never read)."""
+
+    def test_a_surd_expression_is_computed_exactly(self):
+        from tools.igc.question_read import read_exact
+        from tools.igc.exactexpr import spell
+        q = 'Simplify (6*(-3*(3 + (sqrt(108) + sqrt(108) + -2*sqrt(108) + sqrt(108))*-5 + 4) + 5))**2.\n\nPut the final answer in \\boxed{} at the end.'
+        expr, v = read_exact(q)
+        self.assertEqual(spell(v, latex=False), '884016 - 103680*sqrt(3)')
+        expr, v = read_exact('Simplify (-2*sqrt(77)*-3 + sqrt(77)*3*-1)/(1*sqrt(176)*-1*2).')
+        self.assertEqual(spell(v, latex=False), '-3*sqrt(7)/8')
+
+    def test_rational_questions_read_as_before(self):
+        from tools.igc.question_read import read, read_exact
+        for q in ('Divide -73388 by 36903.', 'What is 20*(-8)/(-60)*329*9/((-36)/2)*7*(-6)/49?', 'Simplify sqrt(16)*3.'):
+            got = read_exact(q)
+            self.assertIsInstance(got[1], Fraction, q)
+        self.assertEqual(read_exact('Divide -73388 by 36903.'), read('Divide -73388 by 36903.'))
+
+    def test_no_single_computation_is_still_none(self):
+        from tools.igc.question_read import read_exact
+        for q in ('Simplify sqrt(x)**2.', 'Tom has sqrt(16) apples. How many?', 'Simplify sqrt(108).  Round to 2 places.', 'What is 12?'):
+            self.assertIsNone(read_exact(q), q)
+
+
 if __name__ == '__main__':
     unittest.main()

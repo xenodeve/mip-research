@@ -14,7 +14,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT))
 from tools.igc import tir4b  # noqa: E402
-from tools.igc.question_read import read  # noqa: E402
+from tools.igc.question_read import read_exact as read  # noqa: E402
 from tools.igc.select_rows import right  # noqa: E402
 
 
@@ -41,7 +41,7 @@ def main():
             for rec in json.loads((d / 'records.json').read_text(encoding='utf-8')):
                 row = rows[rec['id']]
                 got = read(row.get('question') or '')
-                if got is None or not hasattr(got[1], 'denominator'):
+                if got is None:
                     continue
                 key = f"{rec['id']}#{rec['sample']}"
                 text = rec['text']
@@ -58,7 +58,7 @@ def main():
                     if box is not None:
                         at, inner = (start + box[0], start + box[1])
                         written = text[at + 7:inner]
-                        if tir4b._box_value(written) != got[1]:
+                        if not tir4b._holds(written, got[1]):
                             act, copied = 'box', written
                             new = text[:at + 7] + value + text[inner:]
                 if act is None:

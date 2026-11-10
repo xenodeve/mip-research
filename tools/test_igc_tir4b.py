@@ -1404,6 +1404,23 @@ class ExactAnswer(unittest.TestCase):
         play(r, 'x</think>\n\nRoughly $\\boxed{-1.9886}$, exactly $\\boxed{-73388/36903}$.<|im_end|>', Kernel([]))
         self.assertEqual(self.acts(r), [])
 
+    def test_a_surd_question_gets_its_exact_value(self):
+        # round 9 dm_simplify_surd-3480#1: a loop on the parentheses, closed, and `\boxed{2633616 - 103680\sqrt{3}}`
+        q = 'Simplify (6*(-3*(3 + (sqrt(108) + sqrt(108) + -2*sqrt(108) + sqrt(108))*-5 + 4) + 5))**2.'
+        gold = '-103680*sqrt(3) + 884016'
+        r = self.answered(self.arm(q, gold), '2633616 - 103680\\sqrt{3}')
+        act, = self.acts(r)
+        self.assertEqual((act['held'], act['value']), ('other value', '884016 - 103680\\sqrt{3}'))
+        from tools.igc.select_rows import right
+        self.assertTrue(right(r.row, r.text()))
+        for box in ('884016 - 103680\\sqrt{3}', '-103680\\sqrt{3} + 884016', '884016-103680\\sqrt3'):   # already the value
+            r = self.answered(self.arm(q, gold), box)
+            self.assertEqual(self.acts(r), [], box)
+        r = self.arm(q, gold, answer_close=True)   # the cue carries it too
+        r.take(TOK.encode('x</think>'))
+        r.take(TOK.encode('\n\nso ' + 'ab' * 600))
+        self.assertTrue(r.text().endswith('$\\boxed{884016 - 103680\\sqrt{3}}$.<|im_end|>'), r.text()[-80:])
+
     def test_the_answer_close_cue_carries_the_exact_value(self):
         # 2783#0: the cue cut `Let's provide the fraction` and the model wrote `{0}`; 5070#0: it wrote `{0.004562376}`. With the question's
         # value known the cue ends with it, and the answer ends there

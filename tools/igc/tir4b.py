@@ -811,15 +811,36 @@ def _shortening(written, exact):
 
 
 def _box_value(written):
-    """The exact value a box's content spells, or None (words, two values, an unread form)."""
+    """The exact value a box's content spells, or None (words, two values, an unread form): a Fraction, or an exactexpr.Value when it
+    has square roots (`884016 - 103680\\sqrt{3}`)."""
     from tools.igc.mathexpr import evaluate
     text = written.strip().strip('$').replace(',', '').replace('\\,', '').replace(' ', '')
     text = re.sub(r'\\[dt]?frac\{([^{}]+)\}\{([^{}]+)\}', r'(\1)/(\2)', text)
     try:
         got = evaluate(text)
     except Exception:
+        got = None
+    if isinstance(got, (Fraction, int)):
+        return Fraction(got)
+    from tools.igc.exactexpr import evaluate as exact
+    try:
+        got = exact(written.strip().strip('$'))
+    except Exception:
         return None
-    return got if isinstance(got, (Fraction, int)) else None
+    if got is None:
+        return None
+    rational = got.rational()
+    return rational if rational is not None else got
+
+
+def _holds(written, exact):
+    """True when the box's content is the exact value (a Fraction or an exactexpr.Value), in any spelling read."""
+    got = _box_value(written)
+    if got is None:
+        return False
+    if isinstance(exact, Fraction) or isinstance(got, Fraction):
+        return isinstance(exact, Fraction) and isinstance(got, Fraction) and got == exact
+    return got == exact
 
 
 def spelled(value):
@@ -829,6 +850,9 @@ def spelled(value):
         return value
     if isinstance(value, int):
         return str(value)
+    if hasattr(value, 'has_pi'):   # an exactexpr.Value: `884016 - 103680\sqrt{3}`
+        from tools.igc.exactexpr import spell
+        return spell(value)
     if not hasattr(value, 'denominator'):
         return str(value)
     if value.denominator == 1:
@@ -893,6 +917,7 @@ class Rollout:
         self.answer_closed_at = None   # --answer-close: where the model's value after the cue begins
         self.loop_valued = False   # --loop-value: put once per answer
         self._question = ()   # question_read's (expression, value) of this row, read once; () = not read yet
+        self._exact = ()      # --exact-answer's read_exact of this row, the same way
         self.echo_skips = 0   # values echoing() left to the model
         if arm.candidate_close:
             from tools.igc.unified_detect import CandidateAnswerTracker
@@ -1304,8 +1329,13 @@ class Rollout:
         """--exact-answer: the question's computation and its exact value when the question states one, else None."""
         if not self.arm.exact_answer:
             return None
-        got = self.question_computation()
-        return got if got is not None and isinstance(got[1], Fraction) else None
+        if self._exact == ():
+            self._exact = None
+            if self.row.get('question'):
+                from tools.igc.question_read import read_exact
+                got = read_exact(self.row['question'])   # a Fraction, or an exactexpr.Value for a surd question (round 9 3480, 9937)
+                self._exact = got if got is not None and (isinstance(got[1], Fraction) or hasattr(got[1], 'has_pi')) else None
+        return self._exact
 
     def exact_box(self):
         """--exact-answer at the answer's end (round 9, 4B NVFP4 W4A8, llama.cpp): the model wrote `-73388/36903 \\approx -1.9886` and
@@ -1326,13 +1356,13 @@ class Rollout:
         tail = self.tok.decode(self.out[j:])
         at = tail.rfind('\\boxed{')
         inner = _box_inner(tail, at + len('\\boxed{')) if at >= 0 else None
-        if inner is None or _box_value(tail[at + 7:inner]) == exact[1]:
+        if inner is None or _holds(tail[at + 7:inner], exact[1]):
             if end is not None:
                 self.out.append(end)
             return
         value = spelled(exact[1])
         copied = tail[at + 7:inner]
-        held = 'shortening' if exact[1].denominator != 1 and _shortening(copied, exact[1]) else 'other value'
+        held = 'shortening' if isinstance(exact[1], Fraction) and exact[1].denominator != 1 and _shortening(copied, exact[1]) else 'other value'
         del self.out[j:]
         self.inject(tail[:at + 7] + value + tail[inner:], 'exact answer')
         self.events[-1].update(via='box', held=held, expr=exact[0][:200], value=value, copied=copied[:120])

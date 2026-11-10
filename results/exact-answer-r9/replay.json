@@ -84,6 +84,42 @@
   "api_before": "same"
  },
  {
+  "key": "dm_simplify_surd-3480#0",
+  "half": "a",
+  "arm": "gen",
+  "act": "cue",
+  "copied": "{9216}$ if the sum is 0.\n",
+  "value": "884016 - 103680\\sqrt{3}",
+  "gold": "-103680*sqrt(3) + 884016",
+  "right_before": false,
+  "right_after": true,
+  "api_before": "same"
+ },
+ {
+  "key": "dm_simplify_surd-3480#1",
+  "half": "a",
+  "arm": "gen",
+  "act": "cue",
+  "copied": "{2633616 - 103680\\sqrt{3}}$.\n\n",
+  "value": "884016 - 103680\\sqrt{3}",
+  "gold": "-103680*sqrt(3) + 884016",
+  "right_before": false,
+  "right_after": true,
+  "api_before": "different"
+ },
+ {
+  "key": "dm_simplify_surd-9937#0",
+  "half": "a",
+  "arm": "gen",
+  "act": "cue",
+  "copied": "{899940 + 7216\\sqrt{13}}$? No, it's negative.\n",
+  "value": "-899940 - 7216\\sqrt{13}",
+  "gold": "-899940 - 7216*sqrt(13)",
+  "right_before": false,
+  "right_after": true,
+  "api_before": "same"
+ },
+ {
   "key": "dm_mixed_longer-5920#1",
   "half": "b",
   "arm": "gen",
@@ -226,5 +262,29 @@
   "right_before": false,
   "right_after": true,
   "api_before": "hedged"
+ },
+ {
+  "key": "dm_simplify_surd-1391#0",
+  "half": "b",
+  "arm": "gen",
+  "act": "cue",
+  "copied": "{21969 - 448\\sqrt{7}}$.\n",
+  "value": "21969 - 448\\sqrt{7}",
+  "gold": "-448*sqrt(7) + 21969",
+  "right_before": true,
+  "right_after": true,
+  "api_before": "same"
+ },
+ {
+  "key": "dm_simplify_surd-2773#1",
+  "half": "b",
+  "arm": "gen",
+  "act": "cue",
+  "copied": "{9817 + 240\\sqrt{17}}$.\n\n",
+  "value": "9817 + 240\\sqrt{17}",
+  "gold": "240*sqrt(17) + 9817",
+  "right_before": true,
+  "right_after": true,
+  "api_before": "same"
  }
 ]

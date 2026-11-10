@@ -57,6 +57,28 @@ def read(question):
     return (body, value) if value is not None and re.search(r'[-+*/×÷^]', body.lstrip('-')) else None
 
 
+def read_exact(question):
+    """As read, and also a question whose one computation has square roots (`Simplify (6*(-3*(3 + sqrt(108)*-5 + 4) + 5))**2.`),
+    computed exactly by exactexpr: (expression, Fraction or exactexpr.Value) or None. A Value only when the result is not rational;
+    any letter left beyond `sqrt` and the lead word, and it reads nothing."""
+    got = read(question)
+    if got is not None:
+        return got
+    q = _clean(question)
+    body = re.sub(rf'^(?:{LEAD}|simplify)\s*', '', q, flags=re.I).rstrip(' ?.')
+    if 'sqrt(' not in body or re.search(r'[A-Za-z]', body.replace('sqrt', '')):
+        return None
+    from tools.igc.exactexpr import NotExact, evaluate as exact
+    try:
+        value = exact(body)
+    except (NotExact, ArithmeticError, ValueError, OverflowError, RecursionError):
+        return None
+    if value is None or value.has_pi():
+        return None
+    rational = value.rational()
+    return (body, rational if rational is not None else value)
+
+
 def as_answer(value):
     """The value as DeepMind spells it: an integer, a terminating decimal, or a reduced fraction."""
     from tools.igc.tir4b import spelled
