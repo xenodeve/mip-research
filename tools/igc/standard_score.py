@@ -69,9 +69,36 @@ def reply(text):
     return parts[1].replace('<|im_end|>', '') if len(parts) == 2 else ''
 
 
+def _boxes(line):
+    """The contents of every \\boxed{...} on a line, braces matched."""
+    out, i = [], line.find('\\boxed{')
+    while i >= 0:
+        depth, j = 0, i + len('\\boxed')
+        for j in range(i + len('\\boxed'), len(line)):
+            depth += (line[j] == '{') - (line[j] == '}')
+            if depth == 0:
+                break
+        out.append(line[i + len('\\boxed{'):j])
+        i = line.find('\\boxed{', j)
+    return out
+
+
+def _stated(said):
+    """The reply without the lines whose box was asked about (`$\\boxed{70468}$? No, dividend is negative.`, #24): a box followed on its
+    line by `?` is a question, not the answer. None when the last line with a box holds two different values (`\\boxed{275}$ or
+    $\\boxed{-275}$`, round 9 dm_mul_div_longer-5942#1): a hedge is no answer."""
+    lines = [x for x in said.split('\n') if not re.search(r'\\boxed\{.*\}\s*\$*\s*\?', x)]
+    boxed = [x for x in lines if '\\boxed{' in x]
+    if boxed and len({b.replace(' ', '') for b in _boxes(boxed[-1])}) > 1:
+        return None
+    return '\n'.join(lines)
+
+
 def math_answer(text):
     # The base model copies the exemplars' `I hope it is correct.`; a post-trained model stops at the answer.
-    said = reply(text)
+    said = _stated(reply(text))
+    if said is None:
+        return None
     found = re.search(r'[Tt]he final answer is(.*?)(?:\.\s*I hope it is correct|\.?\s*(?:\n|$))', said, re.S)
     boxed = last_boxed(said)   # a reply with the thinking on ends in a box, not in the exemplars' sentence
     # Whichever comes later is the answer: `the final answer is negative.` above `\boxed{-3387650}` was read as `negative` (#307,
@@ -109,6 +136,15 @@ def math_value(answer):
     return None
 
 
+def evaluate_any(text):
+    """An exact value of a short expression, or None."""
+    from tools.igc.mathexpr import evaluate
+    try:
+        return evaluate(text.replace(' ', ''))
+    except Exception:
+        return None
+
+
 def math_right(text, gold):
     answer = math_answer(text)
     if answer is None:
@@ -119,6 +155,22 @@ def math_right(text, gold):
     a, b = math_value(got), math_value(want)   # the same number in another spelling: 5/2 and 2.5
     if a is not None and a == b:
         return True
+    # An inequality for an interval: `3 < \lambda \le 4` for `(3,4]` (round 9 stdmath-9f7f1563#0)
+    m = re.fullmatch(r'\s*(-?[\d./]+)\s*(<|\\le|\\leq|≤)\s*\\?[A-Za-z]+\s*(<|\\le|\\leq|≤)\s*(-?[\d./]+)\s*', answer)
+    if m and re.fullmatch(r'\s*[(\[]\s*-?[\d./]+\s*,\s*-?[\d./]+\s*[)\]]\s*', gold):
+        spelled = ('(' if m.group(2) == '<' else '[') + m.group(1) + ',' + m.group(4) + (')' if m.group(3) == '<' else ']')
+        return spelled == gold.replace(' ', '')
+    # A vector or matrix entry by entry: `(0.2, -3.6)` for `(1/5, -18/5)` (round 9 stdmath-2aff3e30#0)
+    def entries(s):
+        m = re.search(r'\\begin\{[pb]matrix\}(.*?)\\end\{[pb]matrix\}', s, re.S)
+        # rows split by `\\`, or by a lone `\` before a number (the MATH-500 gold of 2aff3e30 is `1/5\-18/5`)
+        return [x.strip() for x in re.split(r'\\\\|\\(?=[-+.\d])|&', m.group(1)) if x.strip()] if m else None
+    ea, eb = entries(answer), entries(gold)
+    if ea is not None and eb is not None:
+        def one(x):
+            v = math_value(normalize_math(x))
+            return v if v is not None else evaluate_any(x)
+        return len(ea) == len(eb) and all(one(x) is not None and one(x) == one(y) for x, y in zip(ea, eb))
     # The same exact number written as an expression: `26! 2^{25}` for `2^{25}\cdot26!` (r1-ctrl a6f7b142) was scored wrong
     from tools.igc.mathexpr import evaluate
     a, b = evaluate(got), evaluate(want)

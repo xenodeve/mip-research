@@ -20,7 +20,7 @@ decode loop, as token ids, between MTP draft windows.
 | [Refusals](#refusals) | No put where the literal value is not what `=` means there | tir4b; engine has its own | yes | Truth gate 0 false puts on dev and fresh sets | in best config |
 | [Model profiles](#model-profiles) | A family layer that picks among the General Style's true forms | tir4b `--inline-style qwen` | no | Wrong-row rerun: 67 -> 79 of 104 (control 73 -> 71) | built, measured, kept as option |
 | [Arithmetic mode](#arithmetic-mode) | Asks for the whole step as one expression, reads the question's own computation, hands off to the answer | tir4b (llama-server) | no | DeepMind 160, thinking off: 156 / 160 against 118, 0.05x tokens | built, measured, kept as option |
-| [`--exact-answer`](#--exact-answer) | When the question states one computation, the answer's box holds its exact value (at the answer-close cue, and over a rounded, cut or integer-part box at the end) | tir4b | no | Replay on round 9 (4B NVFP4 W4A8 · llama.cpp · PC layer): 18 acts, 12 wrong -> right, 0 right answers changed; no live run | built, not measured yet |
+| [`--exact-answer`](#--exact-answer) | When the question states one computation, the answer's box holds its exact value (at the answer-close cue, and over any other value in the last box) | tir4b | no | Replay on round 9 (4B NVFP4 W4A8 · llama.cpp · PC layer): 19 acts, 13 wrong -> right, 0 right -> wrong; no live run | built, not measured yet |
 | [`--check-hand`](#--check-hand) | Checks each hand value at its line end and writes a correction | tir4b | no | DeepMind 160: 116 against base 121 | built, measured, kept as option |
 | [Soft logit override](#soft-logit-override) | No text put; software's next value token gets +8 logit | tir4b (vLLM) | no | 19/48 against 21/48; re-check 37.6 % against 38.5 % | built, measured, kept as option |
 | [Re-check hold-down](#re-check-hold-down) | Re-check words held at -30 logit for 60 steps after a put | tir4b (vLLM) | no | lb1 48 rows: median tokens 10-15 % lower, right 19/48 | built, measured, kept as option |
@@ -162,8 +162,8 @@ in pc9. [^arithtuned] [^arithscope]
 ## `--exact-answer`
 
 **Why.** Round 9's General arm (**4B NVFP4 W4A8 · llama.cpp · PC layer**) lost `dm_div_big` answers to the form, not the value. The model
-wrote the exact fraction and then boxed something else on purpose: `-73388/36903 pprox -1.9886`, then `I will provide the decimal
-value rounded to 4 decimal places`, `oxed{-1.9886}` (1395#0); `I will provide the integer quotient`, `oxed{-10710884}` (4138#0).
+wrote the exact fraction and then boxed something else on purpose: `-73388/36903 \approx -1.9886`, then `I will provide the decimal
+value rounded to 4 decimal places`, `\boxed{-1.9886}` (1395#0); `I will provide the integer quotient`, `\boxed{-10710884}` (4138#0).
 Telling it the value did not change the choice: `--loop-value` was adopted on 0 of 2 division rows (A100), and the class-C settle line
 with the close was right on 6 of 15 `div_big` loops against 7 for the close alone (settle probes). So software writes the box instead
 of telling the model. The pattern is not the 4B's alone: any model asked for "a single number" can choose a decimal over the exact
@@ -177,17 +177,20 @@ any word left, such as `Round to 2 places`, and it reads nothing):
 1. **At the answer-close cue:** the value after the cue is the question's exact value, and the answer ends there (the developer chose
    this over a form-only cue, 2026-11-10: the question *is* the computation, so its value is the answer, as in arithmetic mode's
    hand-off).
-2. **At the answer's end:** when the question's value is not an integer and the answer's last box holds a *shortening* of it, the box
-   gets the exact value. A shortening is the value rounded or cut at the places the box shows (`-1.9886`, `-1.98`, `-2`, `0`,
-   `10710884.384615...`), or the model's own digits drifting after the first four significant ones (`0.00456226` for `0.0045623759...`).
-   A different value (`-1.5`), a lost sign (`1.9886`), the exact value in any spelling, and any box when the value is an integer are
-   left to the model.
+2. **At the answer's end:** when the answer's last box does not hold the question's exact value, the box gets it. The event's `held`
+   says what the box held: a *shortening* (the value rounded or cut at the places the box shows, `-1.9886`, `-2`, `0`,
+   `10710884.384615...`, or the model's own digits drifting after the first four significant ones, `0.00456226` for `0.0045623759...`)
+   or *other value*. A box that already holds the exact value, in any spelling read (`-\frac{73388}{36903}`, `-70,468`), is left alone.
+   - *Widened 2026-11-10,* after every wrong General answer of round 9 was read ([plan](plans/2026-11-10-round9-fixes.md)): the first
+     version left a different value, a lost sign and every integer value to the model. `dm_mul_div_longer-1505#0` then stayed wrong: the
+     model took `(-25)/X*1/(-4)` as `-25/(X/(-4))` and boxed `-12.375`, while `question_read` read the gold `-198`. The rule is the
+     developer's: when the question is the computation, its value is the answer.
 
 **Replay on round 9** (`results/exact-answer-r9/replay_exact.py`, rule-scored; stored text, so what the model would write after a live
 rewrite is not shown): General, 18 acts. 6 on answers already right (the box unchanged in value), **12 wrong -> right, 0 right -> wrong**:
 cue 9 (5070 x2 and 2783#0 a decimal or `0`; 4138#1 and 9977#0 a lost sign; 9951#0 `4694/15` and 9991#1 `-136/3`, wrong values; 9991
 x2 two values offered), box 3 (1395 x2, 4138#0). Control: 0 acts (its loops end `stuck`, with no box and no cue). A form-only cue
-would have made 6 of the 12.
+would have made 6 of the 12. With the widened box rule: 19 acts, **13 wrong -> right** (1505#0 added), 0 right -> wrong.
 
 **Status:** built, not measured yet. Next: paired live rows (`div_big`, `mixed_longer`, `mul_div_longer`, several seeds), then a
 round on frozen10 with round 9's flags plus `--exact-answer`, rule + API reader.

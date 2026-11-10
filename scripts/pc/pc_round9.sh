@@ -6,8 +6,8 @@
 N=${1:?np}; GPU=${2:?gpu}; PORT=${3:?port}; GGUF=${4:?gguf}; ROWS=${5:?rows}; TAG=${6:?tag}; shift 6
 W=C:/Users/xenod/mip-work/a100
 G=C:/Users/xenod/mip-work
-cd /d/Github/mip-research || exit 1
-export PYTHONPATH=/d/Github/mip-research PYTHONIOENCODING=utf-8
+cd ${REPO:-/d/Github/mip-research} || exit 1
+export PYTHONPATH=${REPO:-/d/Github/mip-research} PYTHONIOENCODING=utf-8
 git diff --quiet HEAD -- tools serve || { echo "uncommitted code"; exit 1; }
 git rev-parse HEAD > $W/pc/r9$TAG.commit
 # SRV: the sm_89-only build, so NVFP4 multiplies with q8_1 activations (W4A8) on both cards (the sm_120 build is W4A4 on the 5060 Ti)

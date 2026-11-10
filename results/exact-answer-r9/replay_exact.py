@@ -2,7 +2,7 @@
 
 For every answer of both arms: where the question states one computation (question_read), what --exact-answer would do.
 - `cue`: the answer has an `answer close` event, so the value after the cue would be the question's exact value.
-- `box`: no cue; the last box of the answer is a shortening of the exact value (tir4b._shortening), so it would be rewritten.
+- `box`: no cue; the last box of the answer does not hold the exact value (tir4b._box_value), so it would be rewritten (widened 2026-11-10: any value).
 An answer that ended `stuck` (no box, no cue) is not touched: the flag acts only at an answer's end or at the cue.
 Right is the rule (select_rows.right) on the rewritten text; the API reader's verdict of the stored text is shown beside it.
 
@@ -53,12 +53,12 @@ def main():
                     cue = text.rfind(tir4b.ANSWER_CLOSE)
                     act, copied = 'cue', text[cue + len(tir4b.ANSWER_CLOSE):][:60]
                     new = text[:cue] + tir4b.ANSWER_CLOSE + '{' + value + '}$.'
-                elif rec['finish'] == 'stop' and got[1].denominator != 1:
+                elif rec['finish'] == 'stop':
                     box = last_box(text[start:])
                     if box is not None:
                         at, inner = (start + box[0], start + box[1])
                         written = text[at + 7:inner]
-                        if tir4b._shortening(written, got[1]):
+                        if tir4b._box_value(written) != got[1]:
                             act, copied = 'box', written
                             new = text[:at + 7] + value + text[inner:]
                 if act is None:

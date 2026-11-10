@@ -24,6 +24,18 @@
   "api_before": "same"
  },
  {
+  "key": "dm_mul_div_longer-1505#0",
+  "half": "a",
+  "arm": "gen",
+  "act": "box",
+  "copied": "-12.375",
+  "value": "-198",
+  "gold": "-198",
+  "right_before": false,
+  "right_after": true,
+  "api_before": "different"
+ },
+ {
   "key": "dm_div_big-1505#0",
   "half": "a",
   "arm": "gen",

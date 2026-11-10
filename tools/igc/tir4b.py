@@ -810,6 +810,18 @@ def _shortening(written, exact):
     return math.floor(abs(got) / unit) == math.floor(abs(exact) / unit)
 
 
+def _box_value(written):
+    """The exact value a box's content spells, or None (words, two values, an unread form)."""
+    from tools.igc.mathexpr import evaluate
+    text = written.strip().strip('$').replace(',', '').replace('\\,', '').replace(' ', '')
+    text = re.sub(r'\\[dt]?frac\{([^{}]+)\}\{([^{}]+)\}', r'(\1)/(\2)', text)
+    try:
+        got = evaluate(text)
+    except Exception:
+        return None
+    return got if isinstance(got, (Fraction, int)) else None
+
+
 def spelled(value):
     """An integer as itself, a value with a terminating decimal as that decimal (the model's own spelling: 9/2 written for 0.9 x 5 broke its
     decimal sum into a loop, dm 6890), and only the rest as a reduced fraction, as Qwenputer's library prints."""
@@ -1299,10 +1311,12 @@ class Rollout:
         """--exact-answer at the answer's end (round 9, 4B NVFP4 W4A8, llama.cpp): the model wrote `-73388/36903 \\approx -1.9886` and
         boxed `-1.9886` on purpose; told the exact value (loop value, the class-C settle line) it still chose a decimal. When the question
         states one computation whose value is not an integer and the answer's last box holds a shortening of that value (rounded, cut, its
-        integer part, or its own digits within 0.1 %), the box gets the exact value. A different value or a lost sign is the model's answer
-        and is left alone; an integer value is never rewritten."""
+        integer part, or its own digits within 0.1 %), the box gets the exact value.
+        Widened after round 9's reading (1505#0: the model took `(-25)/X*1/(-4)` as `-25/(X/(-4))` and boxed -12.375 for -198): when the
+        question is the computation, its value is the answer (the developer), so any last box whose value is not the exact value gets it,
+        integer values included. A box that already holds the exact value, in any spelling read, is left alone. `held` says which it was."""
         exact = self.exact_value()
-        if exact is None or exact[1].denominator == 1:
+        if exact is None:
             return
         end = self.out.pop() if self.out and self.out[-1] in self.ids.ends else None
         start = max(self.answer_start(), self.spans[-1][1] if self.spans else 0)
@@ -1312,15 +1326,16 @@ class Rollout:
         tail = self.tok.decode(self.out[j:])
         at = tail.rfind('\\boxed{')
         inner = _box_inner(tail, at + len('\\boxed{')) if at >= 0 else None
-        if inner is None or not _shortening(tail[at + 7:inner], exact[1]):
+        if inner is None or _box_value(tail[at + 7:inner]) == exact[1]:
             if end is not None:
                 self.out.append(end)
             return
         value = spelled(exact[1])
         copied = tail[at + 7:inner]
+        held = 'shortening' if exact[1].denominator != 1 and _shortening(copied, exact[1]) else 'other value'
         del self.out[j:]
         self.inject(tail[:at + 7] + value + tail[inner:], 'exact answer')
-        self.events[-1].update(via='box', expr=exact[0][:200], value=value, copied=copied[:120])
+        self.events[-1].update(via='box', held=held, expr=exact[0][:200], value=value, copied=copied[:120])
         if end is not None:
             self.out.append(end)
 

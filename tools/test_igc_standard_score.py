@@ -83,6 +83,46 @@ class Math(unittest.TestCase):
         self.assertFalse(math_right('</think>\n\n\\boxed{1+\\sqrt{19}}', '1\\pm\\sqrt{19}'))
         self.assertFalse(math_right('</think>\n\n\\boxed{2, -1}', '1,-2'))
 
+    def test_a_box_asked_about_and_rejected_is_not_the_answer(self):
+        """#24, round 9 (4B NVFP4 W4A8, llama.cpp, PC layer) dm_div_big-9977#0 and dm_simplify_surd-9937#0: the last box was written
+        as a question and rejected on its line."""
+        from tools.igc.standard_score import math_right
+        text = ('</think>\n\nThe final answer is \\boxed{-70468}.\n\n\\boxed{-70468}\n\n'
+                'The final answer is $\\boxed{70468}$? No, dividend is negative.\n')
+        self.assertTrue(math_right(text, '-70468'))
+        self.assertFalse(math_right(text, '70468'))
+        text = '</think>\n\nThe final answer is $\\boxed{899940 + 7216\\sqrt{13}}$? No, it\'s negative.\n'
+        self.assertFalse(math_right(text, '-899940 - 7216*sqrt(13)'))   # nothing stated is left
+        self.assertFalse(math_right(text, '899940 + 7216*sqrt(13)'))
+        self.assertTrue(math_right('</think>\n\nIs it $\\boxed{5}$?\n\nYes: \\boxed{5}', '5'))
+
+    def test_two_values_boxed_on_the_last_line_is_hedged(self):
+        """Round 9 dm_mul_div_longer-5942#1: `The final answer is $\\boxed{275}$ or $\\boxed{-275}$.` was scored right."""
+        from tools.igc.standard_score import math_right
+        text = '</think>\n\nThe final answer is $\\boxed{275}$ or $\\boxed{-275}$.\n'
+        self.assertFalse(math_right(text, '-275'))
+        self.assertFalse(math_right(text, '275'))
+        self.assertTrue(math_right('</think>\n\nSo $\\boxed{275}$, that is $\\boxed{275}$.', '275'))   # the same value twice
+
+    def test_a_vector_with_decimals_for_fractions(self):
+        """Round 9 stdmath-2aff3e30#0: `(0.2, -3.6)` for gold `(1/5, -18/5)` was scored wrong."""
+        from tools.igc.standard_score import math_right
+        gold = '\\begin{pmatrix}1/5\\\\-18/5\\end{pmatrix}'
+        self.assertTrue(math_right('</think>\n\n\\boxed{\\begin{pmatrix} 0.2 \\\\ -3.6 \\end{pmatrix}}<|im_end|>', gold))
+        self.assertFalse(math_right('</think>\n\n\\boxed{\\begin{pmatrix} 0.2 \\\\ 3.6 \\end{pmatrix}}<|im_end|>', gold))
+        self.assertFalse(math_right('</think>\n\n\\boxed{\\begin{pmatrix} 0.2 \\end{pmatrix}}<|im_end|>', gold))
+        gold = '\\begin{pmatrix}1/5\\-18/5\\end{pmatrix}'   # the stored gold: rows split by a lone backslash
+        self.assertTrue(math_right('</think>\n\n\\boxed{\\begin{pmatrix} 0.2 \\\\ -3.6 \\end{pmatrix}}<|im_end|>', gold))
+        self.assertFalse(math_right('</think>\n\n\\boxed{\\begin{pmatrix} 0.2 \\\\ 3.6 \\end{pmatrix}}<|im_end|>', gold))
+
+    def test_an_inequality_for_an_interval(self):
+        """Round 9 stdmath-9f7f1563#0: `3 < \\lambda \\le 4` for gold `(3,4]` was scored wrong."""
+        from tools.igc.standard_score import math_right
+        self.assertTrue(math_right('</think>\n\n\\boxed{3 < \\lambda \\le 4}<|im_end|>', '(3,4]'))
+        self.assertTrue(math_right('</think>\n\n\\boxed{3 \\leq x < 4}', '[3,4)'))
+        self.assertFalse(math_right('</think>\n\n\\boxed{3 \\le \\lambda \\le 4}', '(3,4]'))
+        self.assertFalse(math_right('</think>\n\n\\boxed{3 < \\lambda < 5}', '(3,4]'))
+
 
 if __name__ == '__main__':
     unittest.main()

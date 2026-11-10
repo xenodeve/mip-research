@@ -1361,24 +1361,34 @@ class ExactAnswer(unittest.TestCase):
             self.assertEqual(len(self.acts(r)), 1, (question, box))
             self.assertIn('\\boxed{' + gold + '}', r.text())
 
-    def test_a_wrong_value_or_a_lost_sign_is_left_to_the_model(self):
-        # not a form of the value: a different number, or the opposite one. Software does not answer for the model there
-        # -2 and -1.98 are the value rounded to a whole number and cut at 2 places: shortenings, rewritten; these are not
-        for box in ('-1.5', '1.9886', '-3', '-1.97', '2', '-1.95', '-1.9875'):
+    def test_any_other_value_gets_the_exact_value(self):
+        # widened after round 9's reading: when the question is the computation, its value is the answer (the developer). 1505#0: the
+        # model took the precedence of `(-25)/X*1/(-4)` wrongly and boxed -12.375 for -198; a lost sign or another value is rewritten too
+        for box in ('-1.5', '1.9886', '-3', '-1.97', '2', '-1.95', '-1.9875', 'undefined'):
             r = self.answered(self.arm('Divide -73388 by 36903.', '-73388/36903'), box)
-            self.assertEqual(self.acts(r), [], box)
-            self.assertIn('\\boxed{' + box + '}', r.text())
+            act, = self.acts(r)
+            self.assertEqual((act['held'], act['copied']), ('other value', box))
+            self.assertIn('\\boxed{-73388/36903}', r.text())
+        r = self.answered(self.arm('Divide -73388 by 36903.', '-73388/36903'), '-1.9886')
+        self.assertEqual(self.acts(r)[0]['held'], 'shortening')
 
     def test_the_value_already_exact_is_left_alone(self):
-        for box in ('-73388/36903', '-\\frac{73388}{36903}', '\\frac{-73388}{36903}'):
+        for box in ('-73388/36903', '-\\frac{73388}{36903}', '\\frac{-73388}{36903}', '-\\dfrac{73388}{36903}'):
             r = self.answered(self.arm('Divide -73388 by 36903.', '-73388/36903'), box)
             self.assertEqual(self.acts(r), [], box)
-
-    def test_an_integer_value_is_never_rewritten(self):
-        # 9977: the question's value is the integer -70468; whatever the model boxed is its answer, right or wrong
-        for box in ('70468', '-70468.0', '-70468'):
+        for box in ('-70468', '-70468.0', '-70,468'):
             r = self.answered(self.arm('Divide -418157112 by 5934.', '-70468'), box)
             self.assertEqual(self.acts(r), [], box)
+
+    def test_an_integer_value_is_rewritten_too(self):
+        # 9977#0 boxed 70468 for -70468 after the old cue; 1505#0 boxed -12.375 for the integer -198
+        r = self.answered(self.arm('Divide -418157112 by 5934.', '-70468'), '70468')
+        act, = self.acts(r)
+        self.assertEqual((act['held'], act['value']), ('other value', '-70468'))
+        r = self.answered(self.arm('What is (18/4)/(11/(-264)*6)*1/((-25)/((-3025)/(-44))*1/(-4))?', '-198'), '-12.375')
+        self.assertIn('\\boxed{-198}', r.text())
+        from tools.igc.select_rows import right
+        self.assertTrue(right(r.row, r.text()))
 
     def test_no_act_without_a_computation_the_question_states(self):
         for question in ('Divide 3 by 7. Round to 2 decimal places.', 'Tom has 3 apples and gives away 7. How many per friend?'):
