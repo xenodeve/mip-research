@@ -438,3 +438,24 @@ minus positions of all 64 bytes, the fixed parts compared lane by lane, each dig
 then answered. Correct on every corpus, but slower: device 1.8 us against 1.1 us for the one-thread read it replaced (the restructured
 kernel was 1.5 us even with the warp read off). The ballots, shuffles and the warp synchronisation cost more than the ~26 serial byte
 reads they replace. Reverted; the one-thread register path stays.
+
+### The full path for big numbers (2026-11-12)
+
+Profiled by stage (measurement-only build, RTX 5060 Ti, device time): the reduction took 75-93 % of every big call, because an
+integer result (denominator 1) still went through a binary gcd with 1, which walks every bit of the numerator: add of two 2,000-digit
+integers 17.2 of 19.2 ms. Now an integer result is not reduced and a one-limb denominator reduces by one pass over the numerator and a
+32-bit Euclid:
+
+| Case | Before | After | Stages after (read a+b / products / reduction / printing) |
+|---|---|---|---|
+| add, 300-digit integers | 674 us | **170 us** | 87 / 7 / 0.2 / 46 |
+| add, 2,000-digit integers | 19.2 ms | **2.1 ms** | 985 / 40 / 0.2 / 857 |
+| mul, 2,000-digit integers | 71.2 ms | **5.1 ms** | 985 / 923 / 0.2 / 3,037 |
+| add, 300-digit fractions | 3.06 ms | 3.0 ms | 174 / 73 / 2,462 / 235 (a multi-limb gcd: still the binary gcd) |
+| add, 4,000-character strings | 80.8 ms | **11.6 ms** | 5,324 / 90 / 0.2 / 3,257 |
+
+`numbers-s1` now **1,816 / 1,816** in modes 1 and 2 (the 20,000-digit cases finish inside the time guard); fuzz and paths as before.
+Against Python per call (`speed8-numbers-s1.txt`): 300 digits 123 us vs 5-11 us, 4,000 digits 8.1 ms vs 72-139 us. What remains is
+quadratic and serial: decimal digits to limbs (9 digits at a time) and limbs to decimal (repeated division by 10^9, each pass a carry
+chain), plus the binary gcd for multi-limb fractions. A literal 10^9 divisor (so the compiler multiplies by its reciprocal) did not help:
+the passes are bound by the limb loads, not the divide.

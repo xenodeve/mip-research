@@ -346,6 +346,21 @@ __device__ void rat_reduce(Ctx &c, Rat &r, int cap) {
         r.d.neg = 0;
         return;
     }
+    if (r.d.n == 1 && r.d.w[0] == 1) return;   // an integer: nothing to reduce (a binary gcd with 1 walked every bit of n)
+    if (r.d.n == 1) {   // a one-limb denominator: gcd(n, d) = gcd(d, n mod d), one pass over n and a 32-bit Euclid
+        Big t = big_new(c, r.n.n + 1);
+        if (c.fail) return;
+        big_copy(t, r.n);
+        uint32_t d0 = r.d.w[0], x = d0, y = mag_divmod_small(t, d0);   // y = n mod d
+        while (y) { uint32_t m = x % y; x = y; y = m; }
+        uint32_t g0 = x;   // gcd(d, n mod d); d itself when d divides n
+        if (g0 == 1) return;
+        int neg = r.n.neg;
+        mag_divmod_small(r.n, g0);
+        r.n.neg = r.n.n ? neg : 0;
+        r.d.w[0] /= g0;
+        return;
+    }
     Big g = big_new(c, cap);
     if (c.fail) return;
     mag_gcd(c, g, r.n, r.d);
