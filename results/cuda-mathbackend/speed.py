@@ -7,6 +7,7 @@ on every call. One process, one card (CUDA_VISIBLE_DEVICES); run it with no othe
 python results/cuda-mathbackend/speed.py results/cuda-mathbackend/corpus/numbers-s1.jsonl [--repeat 50]
 """
 import argparse
+import os
 import statistics
 import sys
 import time
@@ -28,6 +29,7 @@ def main():
     ported = set(cuda_backend.ops())
     rows = [r for r in rows if r['op'] in ported]
     py_t, dev_t, bad = defaultdict(list), defaultdict(list), 0
+    cpu = defaultdict(float)
     for r in rows:
         args_b = r['args'].encode()
         args = tuple(canon.decode(args_b))
@@ -35,6 +37,8 @@ def main():
             bad += 1
             continue
         size = max(len(x) for x in r['args'].split('"')) // 10 * 10   # digits of the longest argument, to the ten
+        # the host's CPU time is read per block of calls: Windows counts thread time in ~15.6 ms ticks, too coarse for one call
+        c0 = time.thread_time()
         for _ in range(a.repeat):
             t = time.perf_counter()
             try:
@@ -42,9 +46,14 @@ def main():
             except Exception:   # noqa: BLE001  refusals are calls too
                 pass
             py_t[(r['op'], size)].append(time.perf_counter() - t)
+        cpu['python'] += time.thread_time() - c0
+        c0 = time.thread_time()
+        for _ in range(a.repeat):
             t = time.perf_counter()
             cuda_backend.call(r['op'], args_b)
             dev_t[(r['op'], size)].append(time.perf_counter() - t)
+        cpu['device'] += time.thread_time() - c0
+        cpu['calls'] += a.repeat
     print(f'{len(rows)} cases of {sorted(ported)}; {bad} disagreed and were not timed; launches {cuda_backend.launches()}')
     print('op               digits   cases   Python us (median)   device us (median)   device / Python')
     for key in sorted(py_t):
@@ -53,6 +62,9 @@ def main():
     allp = statistics.median(x for v in py_t.values() for x in v) * 1e6
     alld = statistics.median(x for v in dev_t.values() for x in v) * 1e6
     print(f'all calls: Python {allp:.1f} us, device {alld:.1f} us median')
+    n = max(1, cpu['calls'])
+    print(f'host CPU per call (mean over {n} calls): Python {1e6 * cpu["python"] / n:.1f} us, device {1e6 * cpu["device"] / n:.1f} us '
+          f'(MIP_SPIN {os.environ.get("MIP_SPIN", "2000")})')
     cuda_backend.close()
 
 

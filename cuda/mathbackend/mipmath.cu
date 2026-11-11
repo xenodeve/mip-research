@@ -10,10 +10,12 @@
 
 #include <cuda_runtime.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <atomic>
 #include <mutex>
+#include <thread>
 
 // ---- limits --------------------------------------------------------------------------------------------------------------------------
 // MIP_LIMBS caps one integer at 8192 limbs (262,144 bits). Python's add/mul/... are "any size": a bound in bits both sides keep is open
@@ -332,12 +334,14 @@ __device__ int utf8_next(const uint8_t *s, int len, int &i, uint32_t &cp) {
 }
 
 __device__ int nd_digit(uint32_t cp) {   // re's \d and int(): the digit's value, or -1
+    if (cp < 0x80) return cp >= '0' && cp <= '9' ? (int)(cp - '0') : -1;   // ASCII first: no other run starts below 0x80
     for (int k = 0; k < MIP_ND_ZEROS; k++)
         if (cp >= mip_nd_zero[k] && cp < mip_nd_zero[k] + 10) return (int)(cp - mip_nd_zero[k]);
     return -1;
 }
 
 __device__ int is_space(uint32_t cp) {
+    if (cp < 0x80) return cp == ' ' || (cp >= 0x09 && cp <= 0x0D) || (cp >= 0x1C && cp <= 0x1F);   // str.isspace() on ASCII
     for (int k = 0; k < MIP_SPACES; k++)
         if (mip_space[k] == cp) return 1;
     return 0;
@@ -661,6 +665,161 @@ __device__ int read_rat(Ctx &c, Rat &r, const uint8_t *s, int len, int &i) {
 // Python's argument order: each argument is converted in turn, so a refusal comes from the first bad argument; for div, _rat(b) and the
 // zero check come before _rat(a). Both conversions raise BadInput, so the class is the same whichever is first, except where a device
 // bound (NOT_COVERED) meets a BadInput: then Python's order is followed.
+// ---- the small fast path -------------------------------------------------------------------------------------------------------------
+// Most calls the model's text makes are small. When both arguments are an int, a Fraction or a plain ASCII string ([sign] digits,
+// optionally '/' digits or '.' digits) whose parts have at most 9 digits, the call runs in registers with 64-bit integers and no
+// arena. Anything else (Unicode, whitespace, underscores, a zero denominator or divisor, a malformed string, a longer number, another
+// type) is not judged here: the call goes to the full path, which holds Python's rules and its order of refusals. So the fast path only
+// answers calls the full path would answer with a value. Parts below 10^9 keep each product below 10^18 and a sum of two below
+// 2 * 10^18 < 2^63. (MSVC, nvcc's host compiler here, has no __int128, so 18-digit parts would need a two-word type.)
+typedef long long i128;
+typedef unsigned long long u128;
+#define FAST_DIGITS 9
+
+__device__ int fast_digits(const uint8_t *s, int a, int b, long long &v) {   // s[a..b): 1 to FAST_DIGITS ASCII digits
+    if (b - a < 1 || b - a > FAST_DIGITS) return 0;
+    long long x = 0;
+    for (int k = a; k < b; k++) {
+        if (s[k] < '0' || s[k] > '9') return 0;
+        x = x * 10 + (s[k] - '0');
+    }
+    v = x;
+    return 1;
+}
+
+// the end of a JSON string's bytes starting at p, if it holds no escape; -1 otherwise
+__device__ int fast_string_end(const uint8_t *s, int len, int p) {
+    int q = p;
+    while (q < len && s[q] != '"' && s[q] != '\\') q++;
+    return q < len && s[q] == '"' ? q : -1;
+}
+
+// one argument item at s[i] as n / d, d > 0 (not reduced); i moves past the item. 0: not a fast argument.
+__device__ int fast_arg(const uint8_t *s, int len, int &i, long long &n, long long &d) {
+    i = skip_ws(s, len, i);
+    if (i + 6 > len || s[i] != '[' || s[i + 1] != '"' || s[i + 3] != '"' || s[i + 4] != ',' || s[i + 5] != '"') return 0;
+    uint8_t tag = s[i + 2];
+    int p = i + 6;
+    int q = fast_string_end(s, len, p);
+    if (q < 0) return 0;
+    long long v, w;
+    if (tag == 'i' || tag == 'q') {
+        int neg = p < q && s[p] == '-';
+        if (!fast_digits(s, p + neg, q, v)) return 0;
+        n = neg ? -v : v;
+        d = 1;
+        if (tag == 'q') {
+            if (q + 2 >= len || s[q + 1] != ',' || s[q + 2] != '"') return 0;
+            int t = fast_string_end(s, len, q + 3);
+            if (t < 0 || !fast_digits(s, q + 3, t, w) || w == 0) return 0;
+            d = w;
+            q = t;
+        }
+    } else if (tag == 's') {
+        int a = p, neg = 0;
+        if (a < q && (s[a] == '-' || s[a] == '+')) { neg = s[a] == '-'; a++; }
+        int slash = -1, dot = -1;
+        for (int k = a; k < q; k++) {
+            if (s[k] == '/' && slash < 0 && dot < 0) slash = k;
+            else if (s[k] == '.' && dot < 0 && slash < 0) dot = k;
+            else if (s[k] < '0' || s[k] > '9') return 0;
+        }
+        if (slash >= 0) {
+            if (!fast_digits(s, a, slash, v) || !fast_digits(s, slash + 1, q, w) || w == 0) return 0;
+            n = v;
+            d = w;
+        } else if (dot >= 0) {   // '5.', '.5', '1.25': the digits of both sides over 10^(fraction digits)
+            int ni = dot - a, nf = q - dot - 1;
+            if (ni + nf < 1 || ni + nf > FAST_DIGITS) return 0;
+            long long x = 0, scale = 1;
+            for (int k = a; k < dot; k++) x = x * 10 + (s[k] - '0');
+            for (int k = dot + 1; k < q; k++) { x = x * 10 + (s[k] - '0'); scale *= 10; }
+            n = x;
+            d = scale;
+        } else {
+            if (!fast_digits(s, a, q, v)) return 0;
+            n = v;
+            d = 1;
+        }
+        if (neg) n = -n;
+    } else {
+        return 0;
+    }
+    int e = skip_ws(s, len, q + 1);
+    if (e >= len || s[e] != ']') return 0;
+    i = e + 1;
+    return 1;
+}
+
+__device__ int ctz128(u128 x) { return __ffsll((long long)x) - 1; }   // x nonzero
+
+__device__ u128 gcd128(u128 a, u128 b) {   // binary gcd, both nonzero
+    int sh = ctz128(a | b);
+    a >>= ctz128(a);
+    while (b) {
+        b >>= ctz128(b);
+        if (a > b) { u128 t = a; a = b; b = t; }
+        b -= a;
+    }
+    return a << sh;
+}
+
+__device__ void put_u128(Out &o, u128 v) {
+    char t[24], buf[24];
+    int n = 0;
+    do { t[n++] = (char)('0' + (int)(v % 10)); v /= 10; } while (v);
+    for (int k = 0; k < n; k++) buf[k] = t[n - 1 - k];
+    buf[n] = 0;
+    put(o, buf);
+}
+
+// 1: answered into o; 0: not a fast call (o untouched)
+__device__ int process_fast(int op, const uint8_t *s, int len, Out &o) {
+    int i = skip_ws(s, len, 0);
+    if (i + 4 > len || s[i] != '[' || s[i + 1] != '"' || s[i + 2] != 'l' || s[i + 3] != '"') return 0;
+    i = skip_ws(s, len, i + 4);
+    if (i >= len || s[i] != ',') return 0;
+    i = skip_ws(s, len, i + 1);
+    if (i >= len || s[i] != '[') return 0;
+    i++;
+    long long an, ad, bn, bd;
+    if (!fast_arg(s, len, i, an, ad)) return 0;
+    i = skip_ws(s, len, i);
+    if (i >= len || s[i] != ',') return 0;
+    if (!fast_arg(s, len, ++i, bn, bd)) return 0;
+    i = skip_ws(s, len, i);
+    if (i >= len || s[i] != ']') return 0;
+    i = skip_ws(s, len, i + 1);
+    if (i >= len || s[i] != ']' || skip_ws(s, len, i + 1) != len) return 0;
+    i128 N, D;
+    if (op == OP_ADD) { N = (i128)an * bd + (i128)bn * ad; D = (i128)ad * bd; }
+    else if (op == OP_SUB) { N = (i128)an * bd - (i128)bn * ad; D = (i128)ad * bd; }
+    else if (op == OP_MUL) { N = (i128)an * bn; D = (i128)ad * bd; }
+    else {
+        if (bn == 0) return 0;   // division by zero: the full path refuses it
+        N = (i128)an * bd;
+        D = (i128)ad * bn;
+        if (D < 0) { N = -N; D = -D; }
+    }
+    int neg = N < 0;
+    u128 un = neg ? (u128)(-N) : (u128)N, ud = (u128)D;
+    if (un == 0) {
+        put(o, "[\"i\",\"0\"]");
+        return !o.over;
+    }
+    u128 g = gcd128(un, ud);
+    un /= g;
+    ud /= g;
+    put(o, ud == 1 ? (neg ? "[\"i\",\"-" : "[\"i\",\"") : (neg ? "[\"q\",\"-" : "[\"q\",\""));
+    put_u128(o, un);
+    if (ud != 1) {
+        put(o, "\",\"");
+        put_u128(o, ud);
+    }
+    put(o, "\"]");
+    return !o.over;
+}
+
 __device__ int process(Ctx &c, int op, const uint8_t *s, int len, Out &o) {
     int i = skip_ws(s, len, 0);
     // ["l",[ ... ]]
@@ -732,6 +891,19 @@ __device__ void serve(Slot *slot, uint32_t *arena) {
     o.n = 0;
     o.cap = MIP_OUT_MAX;
     o.over = 0;
+    if (slot->args_len <= 256) {   // small arguments: a local copy (L1-cached), then the register path
+        uint32_t loc[64];
+        uint32_t w = (slot->args_len + 3) / 4;
+        const uint32_t *src0 = (const uint32_t *)slot->args;
+        for (uint32_t k = 0; k < w; k++) loc[k] = src0[k];
+        if (process_fast(slot->op, (const uint8_t *)loc, (int)slot->args_len, o)) {
+            slot->status = MIP_OK;
+            slot->out_len = o.n;
+            return;
+        }
+        o.n = 0;
+        o.over = 0;
+    }
     // the arguments are read many times while parsing: copy them once into device memory in 4-byte words (in the resident mode the
     // slot is mapped host memory, and every byte read there is a PCIe transaction)
     uint32_t len = slot->args_len, words = (len + 3) / 4;
@@ -781,6 +953,7 @@ static cudaStream_t g_stream;
 static cudaEvent_t g_done;
 static long long g_budget = 0;
 static int g_running = 0;
+static int g_spin = 2000;   // polls before the host starts yielding the core (MIP_SPIN)
 static std::atomic<uint64_t> g_launches{0};
 
 static int launch_worker() {
@@ -802,7 +975,9 @@ extern "C" MIP_API int mip_open(int device, int resident) {
     std::lock_guard<std::mutex> l(g_lock);
     if (g_open) return MIP_OK;
     if (cudaSetDevice(device) != cudaSuccess) return MIP_HOST_ERROR;
-    cudaSetDeviceFlags(cudaDeviceMapHost);
+    // one launch per call: the host blocks in the driver while the kernel runs instead of spinning
+    cudaSetDeviceFlags(cudaDeviceMapHost | (resident ? cudaDeviceScheduleAuto : cudaDeviceScheduleBlockingSync));
+    if (const char *e = getenv("MIP_SPIN")) g_spin = atoi(e);
     int clock_khz = 0;
     cudaDeviceGetAttribute(&clock_khz, cudaDevAttrClockRate, device);
     g_budget = (long long)(clock_khz * 1000.0 * MIP_WORKER_SECONDS);
@@ -869,7 +1044,10 @@ extern "C" MIP_API int mip_call(const char *op, const uint8_t *args, size_t args
         std::atomic_thread_fence(std::memory_order_seq_cst);
         h->state = 1;
         if (!worker_alive() && launch_worker()) return MIP_HOST_ERROR;
+        int spins = 0;
         while (h->state != 2) {
+            // poll a little (a small call answers in microseconds), then give the core away between polls
+            if (++spins > g_spin) std::this_thread::yield();
             if (!worker_alive()) {   // the worker ended (its budget) before it took the request: launch the next
                 if (h->state == 2) break;
                 if (cudaGetLastError() != cudaSuccess) return MIP_DEVICE_FAILED;
