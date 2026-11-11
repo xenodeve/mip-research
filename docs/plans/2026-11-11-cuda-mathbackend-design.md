@@ -431,3 +431,10 @@ read in one pass (its value accumulated while its end is found) instead of a sca
 
 `MIP_DIAG=0` drops the register path's two diagnostic writes (the path bits and the device cycles, over PCIe): 10.5 -> 10.4 us inside
 the DLL. On by default, since the tests read them.
+
+**A warp-parallel read, tried and dropped:** launching the parameter kernel with 32 threads instead of 1 costs nothing (10.4-10.6 us
+either way), so the two-integer form was read by the whole warp: the request copied to shared memory, ballots for the quote, digit and
+minus positions of all 64 bytes, the fixed parts compared lane by lane, each digit's digit * 10^place summed by warp shuffles; lane 0
+then answered. Correct on every corpus, but slower: device 1.8 us against 1.1 us for the one-thread read it replaced (the restructured
+kernel was 1.5 us even with the warp read off). The ballots, shuffles and the warp synchronisation cost more than the ~26 serial byte
+reads they replace. Reverted; the one-thread register path stays.
