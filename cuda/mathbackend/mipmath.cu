@@ -580,7 +580,7 @@ struct Out {
     int over;
 };
 
-__device__ void put(Out &o, const char *s) {
+__device__ __forceinline__ void put(Out &o, const char *s) {
     while (*s) {
         if (o.n >= o.cap) { o.over = 1; return; }
         o.p[o.n++] = (uint8_t)*s++;
@@ -630,7 +630,7 @@ __device__ void put_rat(Ctx &c, Out &o, Rat &r) {
 // ---- arguments ---------------------------------------------------------------------------------------------------------------------
 // The canonical arguments: ["l",[item, item, ...]]. read_rat parses one item as numbers._rat reads a value: int and Fraction pass,
 // a string goes through Fraction(str), bool and every other type is BadInput. On return i is past the item.
-__device__ int skip_ws(const uint8_t *s, int len, int i) {
+__device__ __forceinline__ int skip_ws(const uint8_t *s, int len, int i) {
     while (i < len && (s[i] == ' ' || s[i] == '\n' || s[i] == '\t' || s[i] == '\r')) i++;
     return i;
 }
@@ -716,7 +716,7 @@ __device__ int read_rat(Ctx &c, Rat &r, const uint8_t *s, int len, int &i) {
 // sum of two below 2^121. (MSVC, nvcc's host compiler here, has no __int128: U2 is two 64-bit words, products by __umul64hi.)
 #define FAST_DIGITS 18
 
-__device__ int fast_digits(const uint8_t *s, int a, int b, long long &v) {   // s[a..b): 1 to FAST_DIGITS ASCII digits
+__device__ __forceinline__ int fast_digits(const uint8_t *s, int a, int b, long long &v) {   // s[a..b): 1 to FAST_DIGITS ASCII digits
     if (b - a < 1 || b - a > FAST_DIGITS) return 0;
     // two 32-bit runs of at most 9 digits each (a 64-bit multiply per digit costs several instructions here), joined once
     int mid = b - a > 9 ? b - 9 : a;
@@ -736,7 +736,7 @@ __device__ int fast_digits(const uint8_t *s, int a, int b, long long &v) {   // 
 }
 
 // the end of a JSON string's bytes starting at p, if it holds no escape; -1 otherwise
-__device__ int fast_string_end(const uint8_t *s, int len, int p) {
+__device__ __forceinline__ int fast_string_end(const uint8_t *s, int len, int p) {
     int q = p;
     while (q < len && s[q] != '"' && s[q] != '\\') q++;
     return q < len && s[q] == '"' ? q : -1;
@@ -744,7 +744,7 @@ __device__ int fast_string_end(const uint8_t *s, int len, int p) {
 
 // one argument item at s[i] as n / d, d > 0 (not reduced); i moves past the item. 0: not a fast argument.
 // canon.encode writes no whitespace, so the register path reads none: a request with any goes to the full path, which reads JSON
-__device__ int fast_arg(const uint8_t *s, int len, int &i, long long &n, long long &d) {
+__device__ __forceinline__ int fast_arg(const uint8_t *s, int len, int &i, long long &n, long long &d) {
     if (i + 6 > len || s[i] != '[' || s[i + 1] != '"' || s[i + 3] != '"' || s[i + 4] != ',' || s[i + 5] != '"') return 0;
     uint8_t tag = s[i + 2];
     int p = i + 6;
@@ -830,7 +830,7 @@ __device__ int u2_ctz(U2 x) { return x.lo ? __ffsll((long long)x.lo) - 1 : 64 + 
 __device__ int u2_bits(U2 x) { return x.hi ? 128 - __clzll((long long)x.hi) : x.lo ? 64 - __clzll((long long)x.lo) : 0; }
 
 // q = u / v, r = u % v (v nonzero). One word each: the hardware divide. Otherwise shift-subtract over the bits u has above v's top only.
-__device__ void u2_divmod(U2 u, U2 v, U2 &q, U2 &r) {
+__device__ __forceinline__ void u2_divmod(U2 u, U2 v, U2 &q, U2 &r) {
     if (!u.hi && !v.hi) {
         q = u2(u.lo / v.lo);
         r = u2(u.lo % v.lo);
@@ -850,7 +850,7 @@ __device__ void u2_divmod(U2 u, U2 v, U2 &q, U2 &r) {
     }
 }
 
-__device__ U2 u2_gcd(U2 a, U2 b) {   // binary gcd, both nonzero
+__device__ __forceinline__ U2 u2_gcd(U2 a, U2 b) {   // binary gcd, both nonzero
     int sh = u2_ctz(U2{a.lo | b.lo, a.hi | b.hi});
     a = u2_shr(a, u2_ctz(a));
     while (!u2_zero(b)) {
@@ -881,7 +881,7 @@ __device__ U2 u2_gcd(U2 a, U2 b) {   // binary gcd, both nonzero
 
 // a value below 2^32 printed with 32-bit division: the GPU has no 64-bit divide instruction (each 64-bit `/` or `%` is a long software
 // routine), and most answers of the register path are this small
-__device__ void put_u32(Out &o, unsigned x) {
+__device__ __forceinline__ void put_u32(Out &o, unsigned x) {
     char t[12], buf[12];
     int m = 0;
     do { t[m++] = (char)('0' + x % 10u); x /= 10u; } while (x);
@@ -890,7 +890,7 @@ __device__ void put_u32(Out &o, unsigned x) {
     put(o, buf);
 }
 
-__device__ void put_u2(Out &o, U2 v) {   // decimal, in chunks of 18 digits
+__device__ __forceinline__ void put_u2(Out &o, U2 v) {   // decimal, in chunks of 18 digits
     if (!v.hi && v.lo <= 0xFFFFFFFFull) {
         put_u32(o, (unsigned)v.lo);
         return;
@@ -924,14 +924,14 @@ struct S2 {
     int neg;
 };
 
-__device__ S2 s2_mul(long long a, long long b) {   // |a|, |b| < 2^63
+__device__ __forceinline__ S2 s2_mul(long long a, long long b) {   // |a|, |b| < 2^63
     S2 r;
     r.m = u2_mul((unsigned long long)(a < 0 ? -a : a), (unsigned long long)(b < 0 ? -b : b));
     r.neg = !u2_zero(r.m) && ((a < 0) != (b < 0));
     return r;
 }
 
-__device__ S2 s2_add(S2 x, S2 y) {
+__device__ __forceinline__ S2 s2_add(S2 x, S2 y) {
     S2 r;
     if (x.neg == y.neg) { r.m = u2_add(x.m, y.m); r.neg = x.neg; }
     else if (u2_cmp(x.m, y.m) >= 0) { r.m = u2_sub(x.m, y.m); r.neg = x.neg; }
@@ -941,7 +941,7 @@ __device__ S2 s2_add(S2 x, S2 y) {
 }
 
 // 1: answered into o; 0: not a fast call (o untouched)
-__device__ int process_fast(int op, const uint8_t *s, int len, Out &o) {
+__device__ __forceinline__ int process_fast(int op, const uint8_t *s, int len, Out &o) {
     // ["l",[ <arg> , <arg> ]] exactly, no whitespace (canon.encode's form)
     if (len < 10 || s[0] != '[' || s[1] != '"' || s[2] != 'l' || s[3] != '"' || s[4] != ',' || s[5] != '[') return 0;
     int i = 6;
@@ -1054,7 +1054,7 @@ __device__ int process(Ctx &c, int op, const uint8_t *s, int len, Out &o) {
 
 __device__ void serve_inner(Slot *slot, uint32_t *arena, uint32_t *sh, int op, uint32_t len);
 
-__device__ void serve_req(Slot *slot, uint32_t *arena, uint32_t *sh, int op, uint32_t len) {
+__device__ __noinline__ void serve_req(Slot *slot, uint32_t *arena, uint32_t *sh, int op, uint32_t len) {
     long long t = clock64();
     g_deadline = t + g_call_cycles;
     g_timed_out = 0;
@@ -1069,7 +1069,7 @@ __device__ void serve_req(Slot *slot, uint32_t *arena, uint32_t *sh, int op, uin
 }
 
 // the header read from the slot (modes 0 and 1, and mode 2's fallbacks)
-__device__ void serve(Slot *slot, uint32_t *arena, uint32_t *sh) { serve_req(slot, arena, sh, slot->op, slot->args_len); }
+__device__ __noinline__ void serve(Slot *slot, uint32_t *arena, uint32_t *sh) { serve_req(slot, arena, sh, slot->op, slot->args_len); }
 
 __device__ void serve_inner(Slot *slot, uint32_t *arena, uint32_t *sh, int op, uint32_t len_arg) {
     Out o;
@@ -1175,14 +1175,14 @@ __global__ void once(Slot *slot, uint32_t *arena) {
 __device__ long long g_linger_cycles = 0;
 __device__ unsigned g_linger_sleep_ns = 100;
 
-__device__ void serve_flag(Slot *slot, uint32_t *arena, uint32_t *sh) {
+__device__ __noinline__ void serve_flag(Slot *slot, uint32_t *arena, uint32_t *sh) {
     __threadfence_system();
     serve(slot, arena, sh);
     __threadfence_system();
     slot->state = 2;   // volatile store after __threadfence_system(): the answer is visible before the flag
 }
 
-__device__ void linger(Slot *slot, uint32_t *arena, uint32_t *sh) {
+__device__ __noinline__ void linger(Slot *slot, uint32_t *arena, uint32_t *sh) {
     if (g_linger_cycles <= 0) return;
     slot->lingering = 1;
     __threadfence_system();

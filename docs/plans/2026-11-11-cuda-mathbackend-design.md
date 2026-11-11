@@ -402,3 +402,9 @@ kernel's 8.7 us: the 2.5 us between them is the call's work (2.1 us on the devic
 the reduction by the gcd and the gcd's last steps in 32 bits when the values fit. Device time 2.0 -> 1.9 us; back to back with the linger
 7.3 -> **7.0-7.2 us** on the 5060 Ti; a single call 11.1 us inside the DLL against the empty kernel's 8.7. Every corpus in modes 1 and 2
 as before, 40,000 racing calls 0 wrong. What is left of the work is the byte-wise parse on one GPU thread (~1.2 us of the 1.9).
+
+**How much the work can still give** (RTX 5060 Ti, single call, inside the DLL): force-inlining the register path, keeping the full path
+out of line (`__noinline__`: 121 -> 114 registers, stack 1,120 -> 720 bytes) changed nothing (11.0-11.6 us, device 1.9 us). A
+measurement-only build that skips parse and arithmetic and writes a fixed answer: **9.8 us** inside the DLL (device 0.6 us) against 11.2 us
+with the work. So a parse and arithmetic of zero cost would save 1.4 us of the 11.2; a warp-parallel parse, which cannot reach zero, is
+bounded below that. With the empty-kernel floor at 8.7 us, the single call is within 2.5 us of it and at most 1.4 us of that is reachable.
