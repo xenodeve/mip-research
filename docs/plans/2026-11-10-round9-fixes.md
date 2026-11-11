@@ -14,7 +14,7 @@ readers disagree. The control arm's 75 wrong answers are almost all loops that r
 | 4 | No put after `\approx`: `(1.01)^{30} \approx 1.3448888` (true 1.3478489); both arms wrong | `stdmath-45fa3ef2#0` | 1 | **Changed 2026-11-11:** stop at `\approx` as at `=` and put the value to 10 significant digits (scientific form when very small or large): a more precise value is a true approximation under every reading, deliberate estimates (`\approx 34000`) included, so no estimate rule is needed. First the reader for a decimal base to an integer power (D4: `(1.01)^{30}` is read by neither evaluator). Published work shows the case is general (MATH 401, MedCalc audit); ours to test: 0 false reads in replay of every stored `\approx`, round 9 and the A100 traces |
 | 5 | The answer close boxed an unfinished step: the model looped doubting a right `72 - 14 = 58` and the cue took 58 | `stdmath-fbf10ed4#1` | 1 | **Changed 2026-11-11:** the forced final-answer cue is the failing mechanism (detection-extraction gap, arXiv 2604.06613: forced extraction fails on 42 % of prefixes that free continuation answers; round 9: all 3 hurt answers came after a forced cue). Fix: when the answer loops, do not force the answer; cut the loop and let the model continue (with a confirm line for a true equation), and force the cue only as the last resort. Ours to test: which continuation ends the loop on the 4B (the settle probe saw free writing run to the cap), probe on the 25 L7 answers + the A100 answer-close answers |
 | 6 | Letters of the question's string miscounted | `dm_swr_p_sequence` 3480#0, 9951#1 | 2 | **Changed 2026-11-11:** in. The case is general (The Strawberry Problem, arXiv 2505.14172: character-level tasks fail from tokenization), not DeepMind's. Fix: software reads the string the question quotes, in any wording, and puts the letter count when the model starts counting; the count of a quoted string is exact. Ours to test: the reader on wordings and string tasks it was not written from, 0 false reads |
-| 7 | Reasoning, not computation: arccot convention, a figure the model cannot see, a hard maximum guessed | `stdmath` e3263989×2, 370853d3×2, 97b18f58×2 | 6 | Not a put. arccot: checking candidates against the equation is the right structure (arXiv 2608.28725), but the branch has two conventions, so software cannot decide it under every reading: a Sandbox check by the model (A100). The maximum: a numeric search is evidence, not a value: brute-force oracle in the Sandbox (A100). The figure: the question has no figure code; ceiling |
+| 7 | Reasoning, not computation: arccot convention, a figure the model cannot see, a hard maximum guessed | `stdmath` e3263989×2, 370853d3×2, 97b18f58×2 | 6 | Not a put. arccot: checking candidates against the equation is the right structure (arXiv 2608.28725), but the branch has two conventions, so software cannot decide it under every reading: a Sandbox check by the model (A100). The maximum: a numeric search is evidence, not a value: brute-force oracle in the Sandbox (A100). The figure (re-read 2026-11-11): the text leaves the layout open but fixes it by tangency (r = 14/3 by testing layouts): the Sandbox (`--loop-hint`, arm C) |
 | 8 | Rule scorer | `dm_div_big-9977#0` and `dm_simplify_surd-9937#0` (a `? No` box, #24); `dm_mul_div_longer-5942#1` ("275 or -275" counted right); `stdmath-2aff3e30#0` (`0.2` for `1/5` counted wrong); `stdmath-9f7f1563#0` (`3<\lambda\le4` for `(3,4]`) | 5 | Fix the rule; re-score round 9. Read `dm_simplify_surd-3480#0` by hand: the API reader says right, the last box is `9216 if the sum is 0` |
 
 If 1-4 and 8 hold, up to about 17 of the 23 can move; replay has to show it.
@@ -112,7 +112,7 @@ Sources: arXiv [2304.02015](https://arxiv.org/abs/2304.02015), [2603.02222](http
 + `--execute --box --loop-hint --verify-gate`, on the round's 23 MATH rows (12 + 11 per card, `--live 1`): P8 by `--verify-gate` (new,
 `tir4b.GATE_OPEN`, the engine's `--igc-sandbox-gate` ported; reach `results/exact-answer-r9/gate_reach.py`: MATH-500 11, GSM8K 0), P9 by
 `--loop-hint` (built in #12). Blocks run in the AppContainer box (D1; smoke 2026-11-11: start 2.2 s, sympy runs, `D:/Github` refused).
-P10 (the figure) stays a ceiling.
+P10 (the figure) is not a ceiling after all: the text gives r = 14/3 by testing layouts; `--loop-hint` in arm C reaches it.
 
 ## Changed 2026-11-11: `--exact-answer` withdrawn
 
@@ -127,3 +127,25 @@ the answer to the model:
 | P5 a surd loop on brackets (2) | `--question-quote` at the thinking loop's close | settle and close at once, 32 vs 31 of 49 |
 
 Round 10's arm B is now `--question-quote --approx-put --answer-rewind 2 --letter-count`; arm C adds the Sandbox.
+
+## Coverage of round 9's wrong General answers (2026-11-11, after the form rule)
+
+25 wrong by the old rule -> 3 counted right with a form note (1395 x2, 5070#1) -> 22 wrong. Every one is reached by a mechanism of round 10,
+checked against its stored text (the trigger reads it, or the answer has the loop / close the mechanism acts on):
+
+| Answers | Mechanism | Arm |
+|---|---|---|
+| div_big 5070#0 | `--approx-put` (its own wrong `\approx` digits) + `--answer-rewind` | B, C |
+| div_big 4138#1, 9991 x2, 2783#0; mul_div 5942#1, 9991#1; mixed 9951#0; stdmath fbf10ed4#1 | `--answer-rewind` | B, C |
+| div_big 4138#0 | `--question-quote` at its thinking loop's close; its cause is the prompt's "single number" (kept, the developer's choice) | B, C |
+| mul_div 1505#0 | `--question-quote` (its copy moved a bracket; the trigger fires on the stored line) | B, C |
+| surd 3480 x2 | `--question-quote` at the loop's close + `--answer-rewind` | B, C |
+| swr 3480#0, 9951#1 | `--letter-count` (both strings read) | B, C |
+| stdmath 45fa3ef2#0 | `--approx-put` (`(1.01)^{30}` read) | B, C |
+| stdmath e3263989 x2 | `--verify-gate` | C |
+| stdmath 97b18f58 x2 | `--loop-hint` (+ `--answer-rewind` in B) | C |
+| stdmath 370853d3 x2 | `--loop-hint` (layouts testable; first called a ceiling, wrongly) | C |
+
+Reached is not fixed: each mechanism that leaves the answer to the model works only if the model uses it, which round 10 measures.
+Why two were first called uncovered: they were labelled once (4138#0 "a deliberate choice", 370853d3 "a ceiling") and the label was
+carried on without checking which later mechanism reaches them, nor trying to solve the ceiling question from its text.
