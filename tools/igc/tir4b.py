@@ -18,6 +18,12 @@ from fractions import Fraction
 from pathlib import Path
 
 OPEN_LINE = 'Need a short Python program here.\n\n```python\n'   # kOpenBlock, as text
+# --verify-gate (round 9 P8): the question asks for every solution of an equation it gives; before the thinking closes, a program checks
+# each candidate in the original equation (the engine's --igc-sandbox-gate, mip-research#8). The model writes the check and chooses the
+# convention; software only runs it. Candidates kept from a step that adds roots (squaring, a branch) are what it catches.
+GATE_OPEN = '\nBefore I answer, let me check each solution in the original equation with a short program.\n\n```python\n'
+_ALL_SOLUTIONS = re.compile(r'\b(?:find|enter|determine|compute|list|give)\b[^.?]{0,40}?\ball\b[^.?]{0,40}?\b(?:solutions?|roots?|values?|'
+                            r'real numbers?|numbers?|zeros?)\b|\bseparated by commas\b', re.I)
 NOTHING = '[it ran and printed nothing: call your function and print the result]'   # kNothingPrinted
 SPENT = '[no more runs]'
 TOO_LONG = '[too long, not run]'
@@ -159,7 +165,8 @@ class Arm:
                  hint_calc=False, loop_hint=False, inline_plain=False, whole_hint=False, check_hand=False, whole_plain=False, hand_off=False, question_value=False,
                  trust='cort', logit_value=0.0, suppress_recheck=0, mathbackend=False, candidate_close=False, inline_style='general',
                  no_digit_join=False, guard_progress=False, answer_close=False, loop_value=False, early_cycle=False, shape_cap=0, cover_cap=0,
-                 exact_answer=False, approx_put=False, answer_rewind=0, letter_count=False):
+                 exact_answer=False, approx_put=False, answer_rewind=0, letter_count=False, verify_gate=False):
+        self.verify_gate = verify_gate   # --verify-gate: an all-solutions question's candidates are checked by a program before the close (P8)
         self.approx_put = approx_put   # --approx-put: after `X \approx`, X's value to 10 significant digits (round 9 P11)
         self.answer_rewind = answer_rewind   # --answer-rewind N: an answer loop is cut out whole and resampled, N times, before the cue (P12)
         self.letter_count = letter_count   # --letter-count: the letters of a string the question writes out, counted, at the start (P7)
@@ -910,6 +917,7 @@ class Rollout:
         self.moduli = None   # --check-hand: the moduli the question and the answer so far name
         self._custom, self._custom_at = None, 0   # operators the question or the answer defines (`a * b = a - b`), read as the text grows
         self.given = []      # --hand-off: the whole values software put in (Fractions)
+        self.gated = False   # --verify-gate: the check was opened (once per answer)
         self.rewinds = 0   # --answer-rewind: answer loops cut out and resampled so far
         self.reseed = 0    # added to the request seed after a rewind, so the resampled text is not the same draw again
         if arm.letter_count and row.get('question'):
@@ -1178,6 +1186,12 @@ class Rollout:
             elif self.looping_now():
                 self.on_loop()
             return False
+        if last == self.ids.think_close and self.phase == 'think' and self.gate_due():
+            self.out.pop()
+            self.gated = True
+            self.inject(GATE_OPEN, 'verify gate')
+            self.enter('gate')
+            return False
         if last == self.ids.think_close:
             if self.phase == 'block':
                 self.events.append(dict(kind='thinking closed in a block', at=len(self.out), model_tokens=self.model_tokens()))
@@ -1362,6 +1376,13 @@ class Rollout:
         lead = '' if text.endswith('\n') else '\n'
         self.inject(f'{lead}{LOOP_VALUE.format(expr=got[0], value=spelled(got[1]))}\n', 'loop value')
         self.events[-1].update(expr=got[0][:200], value=spelled(got[1]))
+
+    def gate_due(self):
+        """--verify-gate: once per answer, when the question gives an equation and asks for all its solutions."""
+        if not self.arm.verify_gate or self.gated:
+            return False
+        q = (self.row.get('question') or '').split('\n\nPut the final answer')[0]
+        return '=' in q and _ALL_SOLUTIONS.search(q) is not None
 
     def rewind_answer(self):
         """--answer-rewind (round 9 P12): forcing the final answer out of a looping answer boxed whatever was on the page (all 3 answers the
@@ -1996,7 +2017,7 @@ def run(args):
         from serve.reasoning_tool import box_factory
         start = box_factory()
         kernel_factory = lambda: Kernel(box=start())
-    elif (args.execute or args.native_tool or args.hint_calc or args.loop_hint) and not throwaway():
+    elif (args.execute or args.native_tool or args.hint_calc or args.loop_hint or args.verify_gate) and not throwaway():
         raise SystemExit('a block runs only on a throwaway VM, or in the isolation box (--box)')
     rows = [json.loads(l) for l in Path(args.rows).read_text(encoding='utf-8').splitlines() if l.strip()]
     rows = rows[args.offset:args.offset + args.limit] if args.limit else rows[args.offset:]
@@ -2008,7 +2029,9 @@ def run(args):
               inline_style=args.inline_style, no_digit_join=args.no_digit_join, guard_progress=args.guard_progress, answer_close=args.answer_close,
               loop_value=args.loop_value, early_cycle=args.early_cycle, shape_cap=args.shape_cap, cover_cap=args.cover_cap,
               exact_answer=args.exact_answer, approx_put=args.approx_put, answer_rewind=args.answer_rewind,
-              letter_count=args.letter_count)
+              letter_count=args.letter_count, verify_gate=args.verify_gate)
+    if args.verify_gate and not args.execute:
+        raise SystemExit('--verify-gate opens a program: it needs --execute (and --box on this PC)')
     if args.answer_rewind and not args.answer_close:
         raise SystemExit('--answer-rewind acts before the answer close: it needs --answer-close')
     if args.no_digit_join and not (args.inline_calc and args.inline_plain):
@@ -2217,6 +2240,8 @@ def main(argv=None):
                    'digits: a true approximation under every reading (round 9 P11)')
     r.add_argument('--answer-rewind', type=int, default=0, help='a loop in the answer is cut out whole and resampled with another seed, up to N '
                    'times, before the final-answer cue (round 9 P12; forced extraction fails, arXiv 2604.06613)')
+    r.add_argument('--verify-gate', action='store_true', help='when the question asks for all solutions of an equation it gives, the first '
+                   'close of the thinking opens a program that checks each candidate in the original equation (round 9 P8; needs --execute)')
     r.add_argument('--letter-count', action='store_true', help='when the question asks about the letters of a string it writes out, the '
                    'string\'s letter counts are put at the start (round 9 P7)')
     r.add_argument('--loop-value', action='store_true', help="before a loop is closed, put the question's own computation, exact")

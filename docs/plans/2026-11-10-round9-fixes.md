@@ -107,3 +107,9 @@ Sources: arXiv [2304.02015](https://arxiv.org/abs/2304.02015), [2603.02222](http
 | P12 | `--answer-rewind N`, `Rollout.rewind_answer`, `loop_rewind` | round 9 reach | 8 answers (5 questions): 1 the close hurt, 5 wrong in both arms, 2 the close helped. The live round decides; the 2 are watched |
 | P7 | `--letter-count`, `tools/igc/letters.py` | `results/exact-answer-r9/letters_heldout.py` | 8 string wordings 8/8, 6 non-string letter questions 0/6; MATH-500 1 read (ELLIPSE, right), GSM8K 0 of 1,319; stored rows 10 (raw-string draws). The first rule (any word after `in`/`from`) read 6 prose words; fixed by requiring the phrase to end at the string |
 | all | `tools/test_igc_round10_fixes.py`, `tools/test_igc_tir4b.py` `Round10Fixes`; `sim_replay` | 891 tests pass; replay of r9b-gen and r9a-ctrl with the new flags runs, `vllm_refused` 0 |
+
+**Added 2026-11-11: the Sandbox on the PC** (the developer: the Sandbox has to be tested on the PC before the A100 anyway). Arm C = arm B
++ `--execute --box --loop-hint --verify-gate`, on the round's 23 MATH rows (12 + 11 per card, `--live 1`): P8 by `--verify-gate` (new,
+`tir4b.GATE_OPEN`, the engine's `--igc-sandbox-gate` ported; reach `results/exact-answer-r9/gate_reach.py`: MATH-500 11, GSM8K 0), P9 by
+`--loop-hint` (built in #12). Blocks run in the AppContainer box (D1; smoke 2026-11-11: start 2.2 s, sympy runs, `D:/Github` refused).
+P10 (the figure) stays a ceiling.

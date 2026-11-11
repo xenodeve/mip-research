@@ -1507,5 +1507,30 @@ class Round10Fixes(unittest.TestCase):
         self.assertEqual(plain.text(), '')
 
 
+
+class VerifyGate(unittest.TestCase):
+    """--verify-gate (round 9 P8, stdmath-e3263989: roots that fail the arccot convention were kept): when the question gives an equation
+    and asks for all its solutions, the first close of the thinking opens a program that checks each candidate; the model writes it."""
+
+    def row(self, q):
+        return dict(id='s-1', suite='stdmath', answer='3\\pm2\\sqrt{2}', question=q)
+
+    def test_the_first_close_opens_a_check_and_the_output_comes_back(self):
+        q = 'Find all solutions to \\[\\sin(\\tan^{-1}(x) + \\cot^{-1}(1/x)) = 1/3.\\] Enter all the solutions, separated by commas.'
+        r = tir4b.Rollout(self.row(q), 0, [1, 2, 3], tir4b.Arm(execute=True, verify_gate=True), IDS, TOK, seed=1)
+        play(r, 'So x = 3+2r2 or -3+2r2.</think>print("checked")\n```\nOnly 3+2r2 works.</think>\n\n\\boxed{3+2\\sqrt{2}}', Kernel([(True, 'checked')]))
+        self.assertIn('verify gate', kinds(r))
+        self.assertIn('Before I answer, let me check each solution in the original equation', r.text())
+        self.assertIn('```output\nchecked\n```', r.text())
+        self.assertEqual(kinds(r).count('verify gate'), 1)   # once: the second close passes
+        self.assertTrue(r.text().endswith('\\boxed{3+2\\sqrt{2}}<|im_end|>'), r.text()[-60:])
+
+    def test_other_questions_close_as_before(self):
+        for q in ('What is 3 + 4?', 'Find all positive divisors of 12.', 'Tom has 3 apples. Find all of them.'):
+            r = tir4b.Rollout(self.row(q), 0, [1, 2, 3], tir4b.Arm(execute=True, verify_gate=True), IDS, TOK, seed=1)
+            play(r, 'thinking</think>\n\n\\boxed{1}', Kernel([]))
+            self.assertNotIn('verify gate', kinds(r), q)
+
+
 if __name__ == '__main__':
     unittest.main()
