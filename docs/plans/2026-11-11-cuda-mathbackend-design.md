@@ -428,3 +428,6 @@ read in one pass (its value accumulated while its end is found) instead of a sca
 (the no-work build: 0.6); a single call **10.3 us** inside the DLL (no-work bound 9.8, empty kernel 8.7); back to back with the linger
 **6.4-6.5 us** on the 5060 Ti and **5.8-5.9 us** on the 4070 SUPER. Every corpus in modes 1 and 2, memcheck 0, 40,000 racing calls
 0 wrong. What the code still adds over the no-work bound: ~0.5 us.
+
+`MIP_DIAG=0` drops the register path's two diagnostic writes (the path bits and the device cycles, over PCIe): 10.5 -> 10.4 us inside
+the DLL. On by default, since the tests read them.

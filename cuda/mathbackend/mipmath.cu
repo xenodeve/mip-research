@@ -1313,6 +1313,8 @@ typedef ParamArgsT<64> ParamArgs;    // 256 bytes
 
 __device__ int g_param_smem = 0;   // 1: once_param launches with the shared arena (MIP_PARAM_SMEM); 0: none, a faster start
 
+__device__ int g_diag = 1;
+
 template <int W>
 __global__ void once_param(Slot *slot, uint32_t *arena, ParamArgsT<W> pa) {
     extern __shared__ uint32_t sh_arena[];
@@ -1345,8 +1347,7 @@ __global__ void once_param(Slot *slot, uint32_t *arena, ParamArgsT<W> pa) {
         for (uint32_t k = 0; k < (o.n + 3) / 4; k++) dst[k] = lout[k];
         slot->status = MIP_OK;
         slot->out_len = o.n;
-        slot->path = 1;
-        slot->dev_cycles = (uint64_t)(clock64() - t);
+        if (g_diag) { slot->path = 1; slot->dev_cycles = (uint64_t)(clock64() - t); }   // diagnostics: two PCIe writes (MIP_DIAG=0 drops them)
     } else {
         serve(slot, arena, sh);   // no shared memory asked: the full path uses the global arena
     }
@@ -1408,6 +1409,7 @@ extern "C" MIP_API int mip_open(int device, int resident) {
     cudaSetDeviceFlags(cudaDeviceMapHost | sync);
     if (const char *e = getenv("MIP_GRAPH")) g_use_graph = atoi(e);
     if (const char *e = getenv("MIP_PARAM")) g_param_args = atoi(e);
+    if (const char *e = getenv("MIP_DIAG")) { int v = atoi(e); cudaMemcpyToSymbol(g_diag, &v, sizeof v); }
     if (const char *e = getenv("MIP_LINGER_SLEEP")) { unsigned ns = (unsigned)atoi(e); cudaMemcpyToSymbol(g_linger_sleep_ns, &ns, sizeof ns); }
     if (const char *e = getenv("MIP_LINGER_US")) {
         int cr = 0;
