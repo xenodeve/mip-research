@@ -34,14 +34,14 @@ rows; those families hold few one-computation questions, so silence there is exp
 miss the same situation asked another way. **Fixed (D19, 2026-11-11):** `read_exact` was widened from the situation's statement: around one expression may stand only the
 grammar of asking (courtesy, the asking verb, "the value/result of", "equals", `= ?`), a word list written from English request
 grammar; any other word (round, decimal, binary, remainder, percent, squared, a unit, a variable, `and`) reads nothing; LaTeX
-(`	imes`, `\cdot`, `\div`, `rac`, `\sqrt`, `$`) is read. Tests in `tools/test_igc_question_read.py` (`TheSituation`), written before
+(`\times`, `\cdot`, `\div`, `\frac`, `\sqrt`, `$`) is read. Tests in `tools/test_igc_question_read.py` (`TheSituation`), written before
 the measurement. Measured on lists fixed before the run and not used to write it (`results/exact-answer-r9/heldout_wordings.py`,
 `outside_reach.py`):
 
 | Check | Result |
 |---|---|
 | 8 new request wordings (`Would you work out {e} please?`, `Solve: {e}`, ...) | 80 / 80 each, same value |
-| the same expressions in LaTeX (`Compute $... 	imes rac{a}{b}$.`) | 80 / 80, same value |
+| the same expressions in LaTeX (`Compute $... \times \frac{a}{b}$.`) | 80 / 80, same value |
 | 10 wordings that change what is asked (`to three significant figures`, `in hexadecimal`, `squared`, `modulo 3`, `Estimate`, ...) | **0 / 80** each |
 | MATH-500 (500, never used here) | 6 read, **6 equal to gold** (`Simplify $\sqrt{242}$.`, `What is the value of $513^2 - 487^2$?`, ...) |
 | GSM8K test (1,319 word problems) | 0 read |
