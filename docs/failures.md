@@ -37,6 +37,8 @@ PC layer**, General Style + closers), each read by hand (plan:
 | P14 | A put value read and not adopted: the model restarts the long division | A100 round 5 (`--loop-value`): 2 of 2 division rows | the box rule (`--exact-answer`) instead of a line before the close | P1 live run | replaced by P1's fix |
 | P15 | Patterns MIP caused itself (put forms that started loops) | see the section below | each fixed in the put | replay gates | fixed |
 | P16 | The rule scorer read a right answer as wrong (or a hedge as right) | round 9: 6 | the scorer rules | re-score of round 9 | fixed |
+| L1-L8 | Loops, by the shape the detectors see | A100 rounds, round 9 | [Anti-loop](antiloop.md) detectors + closes | see [Loops](#loops) | mostly in best config |
+| LA-LF | Loops, by what the model repeats (round 9's 69 closes) | round 9 | decide layer: one pairing per kind | simulation + settle probe | fix planned |
 
 ## Round 9, one by one
 
@@ -128,6 +130,47 @@ PC layer**, General Style + closers), each read by hand (plan:
 - `div_big-2783#0` 70,772 tokens, `div_big-5070#1` 67,665 in the targeted run. `--exact-answer` fixes the value at the close, not the
   loop's length. The settle probe (2026-11-10): settle line and close together 32 of 49, today's close 31, fewer tokens.
 
+## Loops
+
+A loop makes the model wrong two ways: with no closer it runs until the stuck stop and ends with **no answer** (control: 73 of 240
+answers in round 9 ended `stuck`), and with a closer it can be **closed on the wrong value** (P3, P12). The developer's principle
+(2026-11-10): loops are of several kinds and each kind gets its own pairing, never one closer for all. Two views: the shape the
+detectors see (L), and what the model repeats (LA-LF). Detail: [Anti-loop](antiloop.md), [decide layer](plans/2026-11-10-decide-layer-design.md).
+
+### By shape: what the detectors see
+
+| # | Shape | Example | Detector + action | Tested | Status |
+|---|---|---|---|---|---|
+| L1 | Exact cycle: the same text again and again | `Wait, $72 - 14 = 58$.` x12; a repeating decimal on one line (`-5511170.918918...`) | repeat check (20 rounds, 8 past 512 tokens); V7 early cycle (6 rounds over 500+ tokens, at every line end); then loop close A | A100: 197 guard stops classified, the widest 6 read, all real loops. V7 replay: 0 of 915 right answers touched, 212 of 243 loops caught sooner. Loop rows 25 -> 37 of 48 with A | in best config |
+| L2 | Counting loop: the same shape with changing numbers (hand counting) | digit-masked cycle of 64 rounds | counting check; `--guard-progress` lets real work go (trial division by one prime after another, a search over x) | replay: changes exactly the 3 rows still working; every other stop kept | in best config |
+| L3 | Line back with small rewording | spelling the prompt's letters 13-25 times; `So ∠AFD = 80` x17 | line-back check (a 12+ token line seen 16 times) | A100: 23 stops, the 12 widest read, none cut early | in best config |
+| L4 | Long division digit by digit, numbers changing length (no exact cycle) | `div_big-2208`: 0 right in 28 earlier answers | shape cap: digit runs read as one token, close at 1,024 rounds | A100 round 8: closed at 55k model tokens | in best config |
+| L5 | Long division where zero digits break the cycle | round 8 `div_big` #1: shape rounds never past 46, 196k tokens to the context end | cover cap: 97 % of the last 32,768 tokens repeat a 12-gram seen in the 2,048 before | replay: 0 of 1,078 right touched; 12 of 13 answers past 150k stopped at 40k-114k | in best config |
+| L6 | A loop in the answer after the thinking was closed | 3 of 15 closed thinking loops carried the doubt into the answer (A100 loop-lc) | answer close B: cut to one round, then the final-answer cue | A100: cut answers 3 -> 1; replay 0 of 370 right touched | in best config |
+| L7 | **The close came too early:** loop close, then the answer loops again, and B boxes what is on the page | round 9: 25 answers with this pattern, **3 hurt** (`fbf10ed4#1`, `9991#1`, `9951#0`), 11 both wrong; 0 hurt with the loop close alone (41) | `--exact-answer` at the cue (when the question is one computation); decide layer: the class's settle before the answer close | `--exact-answer`: live, see P3. Decide layer: simulation only | fixed for one-computation questions; open for the rest (P12) |
+| L8 | Echo: the model checks the same expression again and again after a put | 100 times `-1/2` (`livebench-652451e2`) | echo guard (the 3rd put in a row within 64 tokens skipped) | stored traces: echo in 7 of 48 answers | in best config |
+
+### By what the model repeats: round 9's 69 closes
+
+Every General answer with a close in round 9 (232 pairs), read by hand at the close; the outcome against control on the same key.
+
+| # | What the model repeated | Example | Helped / both right / hurt / both wrong | Planned pairing | Status |
+|---|---|---|---|---|---|
+| LA | An equation that is already true | `Wait, $72 - 14 = 58$.` | 7 / 9 / **2** / 3 (21) | confirm line `Checked exactly: <equation>.`, no close while the value is not the question's | simulation; P12 shows the confirm alone may not be enough |
+| LB | How the question's input reads | ``what if the `-2` is `-2`?``, a string's letters, "three quarters" | 14 / 6 / 0 / 3 (23) | quote the question verbatim: `The question writes: <quote>.` | simulation: missed the 2 `swr` rows (the model's misquote shares no term with the question, P7) |
+| LC | The form of a value already found | `I'll write 1/10.` / `I'll write 0.1.` | 5 / 4 / 0 / 2 (11) | the exact value in its exact form, once, then close | **covered by `--exact-answer`** on one-computation questions (P1) |
+| LD | A common factor by trial division | `$1237763 / 6491 = 190 \text{ rem } 4473$`, ... | 0 / 0 / **1** / 4 (5) | the result of the search: `gcd(a, b) = g`, or the fraction in lowest terms | simulation; on `div_big` covered by `--exact-answer` |
+| LE | A run of one token | `000...`, `Wait.`, `I'll write the response.` | 1 / 2 / 0 / 0 (3) | close, as today | in best config |
+| LF | A contradiction in a hard problem it cannot resolve | MATH level 5 | 1 / 1 / 0 / 4 (6) | close, as today; Sandbox / oracle (P8-P9) | ceiling of the close |
+
+- **Control's 73 stuck loops**, read the same way: A 6, B 21, C 11, D 1, E 8, F 26. General ended 29 of those keys right with no close at
+  all; what kept them out of the loop is not shown (paired by question, not by path).
+- **Classifier in simulation** (`tools/igc/loop_class.py`): 55 of 69 agree with the hand labels; every settle line it would write is
+  exact by construction; a settle line is available on 49 of 69.
+- **Settle probe** (2026-11-10, the 49 stored prefixes, on its own llama-server): a settle line alone ended 7 of 49 doubt loops;
+  "settle, then close only if the loop resumes" 16; settle and close at once **32**, against today's close 31, with fewer tokens. So
+  a settle line does not end a loop by itself; it goes with the close. The gain over today's close is not shown yet.
+
 ## Patterns MIP itself caused (fixed in the put)
 
 | Pattern | Seen | Fix |
@@ -172,3 +215,34 @@ PC layer**, General Style + closers), each read by hand (plan:
 | P14 | โมเดลอ่านค่าที่ใส่ให้แต่ไม่ใช้ เริ่มหารยาวใหม่ | A100 รอบ 5 | ใช้กฎแก้กล่องแทน | ผลรันจริงของ P1 | ถูกแทนด้วย P1 |
 | P15 | รูปแบบที่ MIP ทำให้เกิดเอง | ดูตาราง | แก้ที่วิธีใส่ค่า | replay | แก้แล้ว |
 | P16 | ตัวตรวจคะแนนด้วยกฎตัดผิด | รอบ 9: 6 | แก้กฎ | ตรวจรอบ 9 ใหม่ | แก้แล้ว |
+
+### การวน (loop)
+
+loop ทำให้ตอบผิดได้สองทาง ถ้าไม่มีตัวปิดจะวนจนหมดแล้วจบแบบไม่มีคำตอบ (control รอบ 9 จบ `stuck` 73 จาก 240) ถ้ามีตัวปิดก็อาจปิดด้วยค่าผิด (P3, P12)
+หลักของผู้พัฒนา: loop มีหลายแบบ แต่ละแบบต้องจับคู่วิธีของมันเอง ไม่ใช้ตัวปิดตัวเดียวกับทุกแบบ
+
+**ตามรูปร่างที่ตัวตรวจเห็น**
+
+| # | รูปร่าง | ตัวตรวจและสิ่งที่ทำ | ผลทดสอบ | สถานะ |
+|---|---|---|---|---|
+| L1 | ข้อความเดิมซ้ำเป๊ะ | repeat check, V7 early cycle แล้วปิดด้วย A | V7 ไม่แตะข้อที่ถูก 0/915, จับเร็วขึ้น 212/243; A100 loop rows 25 → 37 จาก 48 | อยู่ใน best config |
+| L2 | วนนับเลข รูปเดิมแต่ตัวเลขเปลี่ยน | counting check + `--guard-progress` ปล่อยงานที่คืบหน้าจริง | replay เปลี่ยนแค่ 3 ข้อที่ยังทำงานอยู่ | อยู่ใน best config |
+| L3 | บรรทัดเดิมกลับมาโดยเปลี่ยนคำนิดหน่อย | line-back check | 23 ครั้ง ไม่ตัดก่อนเวลาเลย | อยู่ใน best config |
+| L4 | หารยาวทีละหลัก ตัวเลขยาวไม่เท่ากัน | shape cap 1024 | A100 ปิดได้ที่ 55k token | อยู่ใน best config |
+| L5 | หารยาวที่หลัก 0 ทำให้รอบไม่ซ้ำเป๊ะ | cover cap 32768 | ไม่แตะข้อที่ถูก 0/1,078, หยุดได้ 12/13 | อยู่ใน best config |
+| L6 | วนต่อในคำตอบหลังปิดการคิดแล้ว | answer close B | A100 ข้อที่ถูกตัดลดจาก 3 เหลือ 1 | อยู่ใน best config |
+| L7 | **ปิดเร็วเกินไป:** ปิดการคิดแล้ววนต่อในคำตอบ B เลยเอาค่าที่อยู่บนหน้าไปตอบ | `--exact-answer` (โจทย์คำนวณเดียว); decide layer | รอบ 9: รูปแบบนี้ 25 ข้อ ทำให้ผิด 3; ถ้าปิดการคิดอย่างเดียวไม่ทำให้ผิดเลย (41) | แก้แล้วสำหรับโจทย์คำนวณเดียว ที่เหลือยังเปิด |
+| L8 | echo: ตรวจนิพจน์เดิมซ้ำหลังได้ค่า | echo guard | พบใน 7 จาก 48 คำตอบ | อยู่ใน best config |
+
+**ตามสิ่งที่โมเดลวนซ้ำ** (69 ครั้งที่ปิดในรอบ 9)
+
+| # | สิ่งที่วน | ช่วย / ถูกทั้งคู่ / ทำให้ผิด / ผิดทั้งคู่ | วิธีที่วางไว้ | สถานะ |
+|---|---|---|---|---|
+| LA | สมการที่ถูกอยู่แล้ว | 7 / 9 / **2** / 3 | บรรทัดยืนยันค่า | จำลองแล้ว อาจไม่พอ (P12) |
+| LB | การอ่านข้อมูลในโจทย์ | 14 / 6 / 0 / 3 | ยกข้อความในโจทย์มาให้ตรงตัว | จำลองแล้ว จับข้อ swr ไม่ได้ (P7) |
+| LC | รูปของค่าที่หาได้แล้ว (เศษส่วนหรือทศนิยม) | 5 / 4 / 0 / 2 | ใส่ค่าเป๊ะครั้งเดียวแล้วปิด | **`--exact-answer` ครอบคลุมแล้ว** |
+| LD | หาตัวประกอบร่วมด้วยการหารลองทีละตัว | 0 / 0 / **1** / 4 | ใส่ผล gcd ให้ | จำลองแล้ว; `div_big` ครอบคลุมด้วย `--exact-answer` |
+| LE | token เดิมซ้ำ (`000...`, `Wait.`) | 1 / 2 / 0 / 0 | ปิดเหมือนเดิม | อยู่ใน best config |
+| LF | ขัดแย้งในโจทย์ยากที่แก้ไม่ได้ | 1 / 1 / 0 / 4 | ปิดเหมือนเดิม; Sandbox / oracle | เพดานของตัวปิด |
+
+settle probe: บรรทัด settle อย่างเดียวหยุด loop ได้ 7 จาก 49, settle แล้วปิดทันทีได้ 32 เทียบกับปิดแบบปัจจุบัน 31 ยังไม่เห็นว่าดีกว่า
