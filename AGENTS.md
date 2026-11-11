@@ -146,8 +146,9 @@ How it runs (scripts in `scripts/pc/`, data in `WORK`, outside the repository):
 
 - **One config, locked, on both cards.** llama.cpp `1deefcca3` built for **sm_89 only** (`build-w4a8.cmd`): NVFP4 then multiplies
   with q8_1 activations on both cards. A build that includes sm_120 uses FP4 activations (W4A4) on the 5060 Ti and would make the
-  two cards two different models. Same GGUF, KV `q8_0`, `-c 262144 -kvu -fa on --no-cache-idle-slots -cram 0 --prio 2`, same flags and seed
-  (`-cram 0 --prio 2`: +13-25 % on the two cards; MTP drafting and `--backend-sampling` measured slower, `docs/benchmarks.md`).
+  two cards two different models. Same GGUF, KV `q8_0`, `-c 262144 -kvu -fa on --no-cache-idle-slots`, same flags and seed. The launchers also pass
+  `-cram 0 --prio 2` (no RAM prompt cache, server thread priority): proposed, faster on both cards in one run each but inside
+  that run's noise, so an ABBA check decides it and adopting it into the locked config is the developer's call (`docs/benchmarks.md`).
   Checked: greedy tokens identical on the two cards (3 questions x 400 tokens, 2026-11-08). Each run writes the server's sha256 and
   arguments (`r9<half>.setup`).
 - **Both arms on the same card.** The rows are split in two halves balanced by group; each card runs General and control on its

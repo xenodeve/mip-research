@@ -99,11 +99,16 @@ not a guide to a round's length now.[^np4cpu]
 | + `--spec-type draft-mtp --spec-draft-n-max 2` | 92, 32.6 | 90, 32.6 |
 | + `--spec-type draft-mtp,ngram-mod` | 88, 31.1 | 88, 30.3 |
 
-`-cram 0 --prio 2` is faster on both cards and frees the RAM prompt cache (8 GB per server by default); it is in the launchers.
+`-cram 0 --prio 2` came out faster on both cards and frees the RAM prompt cache (8 GB per server by default); it is in the launchers
+as a proposal. One 8-minute window per config with both cards busy is noisy: the 4070's base here (111) sat 16 % under the same
+config in the sweep (132), so the gain is not confirmed until an ABBA run.[^flagnoise]
 The MTP drafter (Qwen3.5's own head) passes `scripts/pc/spec_probe.py` (24 stopped requests, 0 tokens past a stop) and its drafts are
-accepted 77-84 %, yet it is a third slower here: tir4b stops the server every ~18 tokens, so each request drafts only a few tokens
+accepted 77-84 %, yet it read a third slower here (unconfirmed: whether the log's token count includes accepted drafts is
+not yet checked against the reply's tokens): tir4b stops the server every ~18 tokens, so each request drafts only a few tokens
 (4-8 accepted per request), while every step of a hybrid model pays the recurrent-state checkpoint, and four slots leave the GPU
 little idle time to fill. Untested: one answer at a time, or a run that stops less often.
+
+[^flagnoise]: The 5060 Ti's two windows for base and `-cram 0 --prio 2` held 1,222 and 800 requests: the rows in flight differed.
 
 [^np4cpu]: The `-np 4` points ran partly while an 8-process replay used the CPU (llama-server raised to AboveNormal a few minutes in);
     they may be a little low.

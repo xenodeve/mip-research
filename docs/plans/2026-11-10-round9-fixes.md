@@ -238,8 +238,8 @@ context grew to 30k, 3,523 of 3,527 selections by LCP, GPU 63-91 %. Both changed
 config round 10 uses (`pc_round10.sh`: five slots, five in flight) has not run yet: a 5-minute smoke through the launcher comes first. Round 9 had it milder, with four answers on four slots: LRU on
 7 % of selections in r9b, 17 % in r9a2 (whose per-slot speed fell from 12 to 4 tok/s); its timing is not comparable to round 10's.
 The fixed sweep (`docs/benchmarks.md`, speed of the PC layer): 5060 Ti np 4 / 6 / 8 = 124 / 144 / 154 tok/s total, 37 / 29 / 23 per slot;
-4070 SUPER np 4 / 6 = 132 / 159, 39 / 31. Server flags (`docs/benchmarks.md`): `-cram 0 --prio 2` +13-25 %, now in the launchers; `--backend-sampling` and MTP drafting
-measured a third slower under tir4b's short requests.
+4070 SUPER np 4 / 6 = 132 / 159, 39 / 31. Server flags (`docs/benchmarks.md`): `-cram 0 --prio 2` read faster in one noisy window per card (proposed, ABBA pending);
+`--backend-sampling` read a third slower; MTP drafting read slower too, its token count still to be checked.
 With `-c 524288 -np 5` the 5060 Ti uses 14.8 of 16.3 GB (measured); the 4070 SUPER cannot, so it would split the config: the developer's
 call. The KV pool has not overflowed so far: no `purging slot` and no failed decode in any log of round 9 or the smoke.
 

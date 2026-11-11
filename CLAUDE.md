@@ -8,7 +8,7 @@ The rules agents miss most, all in full in `AGENTS.md`:
 1. **Simulation → PC layer → A100.** A mechanism leaves the simulation only when the replay (`tools/igc/sim_replay.py`) shows zero
    misreads, no act on a right answer (or every one read and understood), every test passing and `vllm_refused` 0. Then the **PC
    layer**: Qwen3.5-4B NVFP4 as W4A8 on the RTX 5060 Ti + RTX 4070 Super, one locked config (sm_89 build,
-   `--no-cache-idle-slots`, a slot for every answer in flight), both arms on the same card. It tests the concept, confirms before the A100, and records a normal user's environment. **More right answers than control
+   `--no-cache-idle-slots`, a slot for every answer in flight; `-cram 0 --prio 2` proposed, see `AGENTS.md`), both arms on the same card. It tests the concept, confirms before the A100, and records a normal user's environment. **More right answers than control
    beyond noise (sign test p < 0.05, rule and API reader both): go to the A100; otherwise review the method first.** NVFP4 loops
    more than bf16, so it is the hardest test of the anti-loop software and a normal user's real result; report it per environment,
    A frozen set measures once; once its round is read it becomes development rows and may be studied, and the next
