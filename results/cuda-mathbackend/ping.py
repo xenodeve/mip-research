@@ -21,7 +21,7 @@ def main():
     assert cuda_backend.call('numbers.add', args) == b'["i","2"]'
     import ctypes
     lib = cuda_backend._load()
-    v = (ctypes.c_uint64 * 6)()
+    v = (ctypes.c_uint64 * 8)()
     wall, dev, seen, done = [], [], [], []
     for _ in range(a.n):
         t = time.perf_counter()

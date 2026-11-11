@@ -160,15 +160,28 @@ copied; **linking a library as a dependency needs a conversation with the develo
 
 ## Progress (2026-11-11)
 
-**Build:** `cuda/mathbackend/mipmath.cu` at `02f2587` (branch `cuda-mathbackend`), CUDA 13.3, sm_89 + sm_120; RTX 5060 Ti alone, no
+**Build:** `cuda/mathbackend/mipmath.cu` on branch `cuda-mathbackend` (the commit of this section), CUDA 13.3, sm_89 + sm_120; RTX 5060 Ti alone, no
 llama-server on the card; Python 3.11.9. Ported: `numbers.add`, `sub`, `mul`, `div` (exact rationals; Python's `Fraction(str)` grammar
 with Unicode digits and whitespace on the device), one device thread per call.
 
-| Check | Result |
-|---|---|
-| Corpus `results/cuda-mathbackend/corpus/numbers-s1.jsonl` (1,416 cases: 800 seeded, 616 boundary) | **1,416 / 1,416 byte-identical**, refusals 269 / 269, in both modes (resident worker, one launch per call) |
-| The answer came from the device | an unported op returns `device:UNKNOWN_OP`; the process holds the 5060 Ti; a 2^200 product matches |
-| Null backend / wrong backends | 100 % / each caught (`tools/test_mathbackend_harness.py`) |
+Correct per path (`results/cuda-mathbackend/path_cases.py census`: the device reports which paths each call took):
+
+| Corpus | Agree | Register path | Full path | Knuth D (multi-limb division) | Its add-back step |
+|---|---|---|---|---|---|
+| `numbers-paths-s3` (220, built to force the rare branches; add-back vectors found by mirroring the device's Knuth D) | **220 / 220** | 24 | 196 | 194 | **29** |
+| `numbers-fuzz-s2` (4,000 random, 1-20 digits) | **4,000 / 4,000** | 2,182 | 1,818 | 35 | 0 |
+| `numbers-s1` (1,816 seeded + boundary) | **1,800 / 1,816** | 945 | 823 | 6 | 0 |
+
+The 16 of `numbers-s1` are the boundary cases with a 20,000-digit integer: the device answers `DEVICE_FAILED` (never a value), because
+one thread's quadratic arithmetic does not finish within the call's time guard. Before the guard the same input came back as
+**BadInput** where Python answers: a string longer than the shared-memory arena failed to copy, the failure was not flagged, and the
+parser read on into a refusal (fixed: a resource failure now retries on the global arena and never turns into a refusal; the boundary
+set gained 5,000- and 20,000-digit integers). Both modes agree; the 4070 (sm_89) and `compute-sanitizer` have not run yet.
+
+**Time guard.** Windows resets the driver for the whole machine when a kernel runs past ~2 s. Every long loop checks a deadline set
+when the call starts (`MIP_CALL_SECONDS` 0.4 of the rated clock) and ends the call as `DEVICE_FAILED`; checked with 20,000- and
+50,000-digit products (~0.41-0.45 s, then the card serves the next call). A clock is not the input-defined cap the design asks for
+(open question 3): it keeps the machine safe until that cap exists, and the cap, or faster big-integer kernels, decides the 16 above.
 
 **Speed per call** (`results/cuda-mathbackend/speed.py`, resident worker, RTX 5060 Ti alone at Idle priority, Python 3.11.9 in the same
 process, medians; `speed7-*.txt`). Correct on every run: `numbers-s1` 1,768 / 1,768 and the fuzz corpus `numbers-fuzz-s2` 4,000 / 4,000,

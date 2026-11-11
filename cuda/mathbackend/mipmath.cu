@@ -41,9 +41,32 @@ struct Slot {
     uint64_t polls;        // diagnostics: polls of the flag since this worker launched, and the cycles they spanned
     uint64_t poll_cycles;
     uint64_t wait_cycles;  // cycles from the previous answer to seeing this request (the device side of the gap)
+    uint32_t path;         // the paths the last call took (g_path bits)
     uint8_t args[MIP_ARGS_MAX];
     uint8_t out[MIP_OUT_MAX];
 };
+
+
+// ---- the time guard and the path record ----------------------------------------------------------------------------------------------
+// A kernel that runs past ~2 s is killed by Windows' TDR watchdog and the driver resets for every program on the machine (a game on the
+// other card included). The long loops (schoolbook multiply, long division, gcd, digit conversions) check a deadline set when a call
+// starts; past it the call ends as DEVICE_FAILED, never as a value. It is a clock, so it is not the input-defined step cap the design
+// asks for (open question 3); it only keeps the machine safe until that cap exists. One device thread serves a call at a time, so the
+// state is plain device globals.
+#define MIP_CALL_SECONDS 0.4
+__device__ long long g_deadline = 0x7fffffffffffffffLL;
+__device__ long long g_call_cycles = 0x7fffffffffffffffLL;   // set at open: MIP_CALL_SECONDS of the rated clock
+__device__ int g_timed_out = 0;
+__device__ unsigned g_path = 0;   // bits of the paths this call took: 1 register, 2 full, 4 Knuth D, 8 its add-back, 16 timed out
+
+__device__ __forceinline__ int past_deadline() {
+    if (clock64() > g_deadline) {
+        g_timed_out = 1;
+        g_path |= 16;
+        return 1;
+    }
+    return 0;
+}
 
 // ---- big integers (sign and magnitude, little-endian 32-bit limbs, no leading zero limbs; zero has n == 0) ------------------------------
 struct Big {
@@ -137,6 +160,7 @@ __device__ void big_mul(Big &r, const Big &a, const Big &b) {
     }
     for (int i = 0; i < a.n + b.n; i++) r.w[i] = 0;
     for (int i = 0; i < a.n; i++) {
+        if ((i & 63) == 0 && past_deadline()) { r.n = 0; return; }
         uint64_t carry = 0, ai = a.w[i];
         for (int j = 0; j < b.n; j++) {
             uint64_t t = ai * b.w[j] + r.w[i + j] + carry;
@@ -198,7 +222,9 @@ __device__ void mag_div(Ctx &c, Big &q, const Big &u, const Big &v) {
     un.w[0] = u.w[0] << s;
     int n = v.n, m = u.n - v.n;
     const uint64_t B = (uint64_t)1 << 32;
+    g_path |= 4;
     for (int j = m; j >= 0; j--) {
+        if ((j & 63) == 0 && past_deadline()) { c.fail = 1; return; }
         uint64_t num = ((uint64_t)un.w[j + n] << 32) | un.w[j + n - 1];
         uint64_t qhat = num / vn.w[n - 1], rhat = num % vn.w[n - 1];
         while (qhat >= B || qhat * vn.w[n - 2] > ((rhat << 32) | un.w[j + n - 2])) {
@@ -218,6 +244,7 @@ __device__ void mag_div(Ctx &c, Big &q, const Big &u, const Big &v) {
         int64_t t = (int64_t)un.w[j + n] - borrow - (int64_t)carry;
         un.w[j + n] = (uint32_t)t;
         if (t < 0) {   // added back: qhat was one too large
+            g_path |= 8;
             qhat--;
             uint64_t cc = 0;
             for (int i = 0; i < n; i++) {
@@ -290,7 +317,9 @@ __device__ void mag_gcd(Ctx &c, Big &g, const Big &a, const Big &b) {
     int zx = mag_ctz(x), zy = mag_ctz(y), shift = zx < zy ? zx : zy;
     mag_shr(x, zx);
     mag_shr(y, zy);
+    int turns = 0;
     while (y.n) {
+        if ((++turns & 255) == 0 && past_deadline()) { c.fail = 1; return; }
         int cmp = mag_cmp(x, y);
         if (cmp > 0) { Big t = x; x = y; y = t; }
         mag_sub(y, y, x);
@@ -361,6 +390,7 @@ __device__ void big_from_digits(Big &r, const uint8_t *dig, int n) {
     r.neg = 0;
     int i = 0, first = n % 9 ? n % 9 : 9;
     while (i < n) {
+        if ((i & 511) == 0 && past_deadline()) { r.n = 0; return; }
         int take = i == 0 ? first : 9;
         uint32_t chunk = 0, mul = 1;
         for (int k = 0; k < take; k++) {
@@ -561,6 +591,7 @@ __device__ void put_big(Ctx &c, Out &o, Big a) {
     uint32_t *chunks = c.arena + c.used;   // base-10^9 digits, least significant first
     int nc = 0;
     while (a.n) {
+        if ((nc & 63) == 0 && past_deadline()) { c.fail = 1; return; }
         if (c.used + nc + 1 > c.cap) { c.fail = 1; return; }
         chunks[nc++] = mag_divmod_small(a, 1000000000u);
     }
@@ -635,7 +666,7 @@ __device__ int read_rat(Ctx &c, Rat &r, const uint8_t *s, int len, int &i) {
         uint8_t *buf = (uint8_t *)(c.arena + c.used);
         int room = (c.cap - c.used) * 4 / 2;
         int bl = json_string(s, len, i, buf, room);
-        if (bl < 0) return MIP_DEVICE_FAILED;
+        if (bl < 0) { c.fail = 1; return MIP_DEVICE_FAILED; }   // no room: a resource failure, retried on the global arena, never a refusal
         c.used += (bl + 7) / 4;
         int st;
         if (tag[0] == 's') {
@@ -653,7 +684,7 @@ __device__ int read_rat(Ctx &c, Rat &r, const uint8_t *s, int len, int &i) {
                     i = skip_ws(s, len, i + 1);
                     uint8_t *b2 = (uint8_t *)(c.arena + c.used);
                     int l2 = json_string(s, len, i, b2, (c.cap - c.used) * 4 / 2);
-                    if (l2 < 0) return MIP_DEVICE_FAILED;
+                    if (l2 < 0) { c.fail = 1; return MIP_DEVICE_FAILED; }
                     c.used += (l2 + 7) / 4;
                     st = big_from_ascii(c, r.d, b2, l2);
                 }
@@ -943,12 +974,12 @@ __device__ int process(Ctx &c, int op, const uint8_t *s, int len, Out &o) {
     Rat a, b;
     int ia = i;
     int sa = read_rat(c, a, s, len, i);
-    if (c.fail) return MIP_DEVICE_FAILED;
+    if (c.fail || sa == MIP_DEVICE_FAILED) return MIP_DEVICE_FAILED;   // never read on past a failed argument
     i = skip_ws(s, len, i);
     if (s[i] != ',') return MIP_BAD_INPUT;   // not two arguments: a TypeError in Python, never in the corpus
     i++;
     int sb = read_rat(c, b, s, len, i);
-    if (c.fail) return MIP_DEVICE_FAILED;
+    if (c.fail || sb == MIP_DEVICE_FAILED) return MIP_DEVICE_FAILED;
     (void)ia;
     if (op == OP_DIV) {
         if (sb != MIP_OK) return sb;
@@ -993,7 +1024,15 @@ __device__ void serve_inner(Slot *slot, uint32_t *arena, uint32_t *sh);
 
 __device__ void serve(Slot *slot, uint32_t *arena, uint32_t *sh) {
     long long t = clock64();
+    g_deadline = t + g_call_cycles;
+    g_timed_out = 0;
+    g_path = 0;
     serve_inner(slot, arena, sh);
+    if (g_timed_out) {   // whatever the call left is not an answer
+        slot->status = MIP_DEVICE_FAILED;
+        slot->out_len = 0;
+    }
+    slot->path = g_path;
     slot->dev_cycles = (uint64_t)(clock64() - t);
 }
 
@@ -1009,6 +1048,7 @@ __device__ void serve_inner(Slot *slot, uint32_t *arena, uint32_t *sh) {
         const uint32_t *src0 = (const uint32_t *)slot->args;
         for (uint32_t k = 0; k < w; k++) loc[k] = src0[k];
         if (process_fast(slot->op, (const uint8_t *)loc, (int)slot->args_len, o)) {
+            g_path |= 1;
             slot->status = MIP_OK;
             slot->out_len = o.n;
             return;
@@ -1021,6 +1061,7 @@ __device__ void serve_inner(Slot *slot, uint32_t *arena, uint32_t *sh) {
     // The arguments are copied in once, in 4-byte words (in the resident mode the slot is mapped host memory: a read there crosses PCIe).
     uint32_t len = slot->args_len, words = (len + 3) / 4;
     int st = MIP_DEVICE_FAILED;
+    g_path |= 2;
     for (int attempt = sh ? 0 : 1; attempt < 2; attempt++) {
         uint32_t *ar = attempt == 0 ? sh : arena;
         int cap = attempt == 0 ? SH_WORDS : ARENA_WORDS;
@@ -1136,6 +1177,7 @@ extern "C" MIP_API int mip_open(int device, int resident) {
     cudaDeviceGetAttribute(&clock_khz, cudaDevAttrClockRate, device);
     g_clock_khz = clock_khz ? clock_khz : 1;
     g_budget = (long long)(clock_khz * 1000.0 * MIP_WORKER_SECONDS);
+    { long long cc = (long long)(clock_khz * 1000.0 * MIP_CALL_SECONDS); cudaMemcpyToSymbol(g_call_cycles, &cc, sizeof cc); }
     if (cudaMalloc(&g_arena, sizeof(uint32_t) * ARENA_WORDS) != cudaSuccess) return MIP_HOST_ERROR;
     int lo, hi;
     cudaDeviceGetStreamPriorityRange(&lo, &hi);
@@ -1187,7 +1229,8 @@ extern "C" MIP_API uint64_t mip_launches(void) { return g_launches.load(); }
 // microseconds the last call spent in serve() on the device (clock64 over the rated clock: an estimate under boost clocks)
 extern "C" MIP_API void mip_diag(uint64_t *v) {   // polls, poll cycles, wait cycles, clock kHz
     v[0] = g_host_slot->polls; v[1] = g_host_slot->poll_cycles; v[2] = g_host_slot->wait_cycles; v[3] = (uint64_t)g_clock_khz;
-    v[4] = (uint64_t)(g_us_seen * 1000); v[5] = (uint64_t)(g_us_done * 1000);   // ns: request written -> seen flag back, -> answer back
+    v[4] = (uint64_t)(g_us_seen * 1000); v[5] = (uint64_t)(g_us_done * 1000);
+    v[6] = g_host_slot->path;   // ns: request written -> seen flag back, -> answer back
 }
 
 extern "C" MIP_API double mip_last_device_us(void) { return g_host_slot ? g_host_slot->dev_cycles / (g_clock_khz / 1000.0) : 0.0; }
