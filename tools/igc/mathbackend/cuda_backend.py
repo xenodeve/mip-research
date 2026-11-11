@@ -29,6 +29,7 @@ def _load():
                              ctypes.POINTER(ctypes.c_size_t)]
     lib.mip_ops.restype = ctypes.c_char_p
     lib.mip_launches.restype = ctypes.c_uint64
+    lib.mip_last_device_us.restype = ctypes.c_double
     st = lib.mip_open(int(os.environ.get('MIP_CUDA_DEVICE', '0')), int(os.environ.get('MIP_CUDA_RESIDENT', '1')))
     if st != 0:
         raise RuntimeError(f'mip_open: {STATUS.get(st, st)}')
@@ -52,6 +53,10 @@ def call(name, args_b):
     if st in (0, 1, 2):
         return _out.raw[:n.value]
     return f'device:{STATUS.get(st, st)}'.encode()
+
+
+def last_device_us():
+    return _load().mip_last_device_us()
 
 
 def close():

@@ -42,6 +42,8 @@ MIP_API int mip_call(const char *op, const uint8_t *args, size_t args_len, uint8
 MIP_API const char *mip_ops(void);
 /* launches of the worker so far (resident mode), to check the relaunch path ran */
 MIP_API uint64_t mip_launches(void);
+/* microseconds the last call spent computing on the device (its own clock), apart from the host round trip */
+MIP_API double mip_last_device_us(void);
 
 #ifdef __cplusplus
 }

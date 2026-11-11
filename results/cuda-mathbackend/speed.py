@@ -30,6 +30,7 @@ def main():
     rows = [r for r in rows if r['op'] in ported]
     py_t, dev_t, bad = defaultdict(list), defaultdict(list), 0
     cpu = defaultdict(float)
+    dev_us = defaultdict(list)   # the device's own time for the work
     for r in rows:
         args_b = r['args'].encode()
         args = tuple(canon.decode(args_b))
@@ -52,17 +53,21 @@ def main():
             t = time.perf_counter()
             cuda_backend.call(r['op'], args_b)
             dev_t[(r['op'], size)].append(time.perf_counter() - t)
+            dev_us[(r['op'], size)].append(cuda_backend.last_device_us())
         cpu['device'] += time.thread_time() - c0
         cpu['calls'] += a.repeat
     print(f'{len(rows)} cases of {sorted(ported)}; {bad} disagreed and were not timed; launches {cuda_backend.launches()}')
-    print('op               digits   cases   Python us (median)   device us (median)   device / Python')
+    print('op               digits   cases   Python us (median)   device us (median)   device / Python   of it on the device us')
     for key in sorted(py_t):
         p, d = statistics.median(py_t[key]) * 1e6, statistics.median(dev_t[key]) * 1e6
-        print(f'{key[0]:16s} {key[1]:6d} {len(py_t[key]) // a.repeat:7d} {p:20.1f} {d:20.1f} {d / p:16.1f}x')
+        k = statistics.median(dev_us[key])
+        print(f'{key[0]:16s} {key[1]:6d} {len(py_t[key]) // a.repeat:7d} {p:20.1f} {d:20.1f} {d / p:16.1f}x {k:20.1f}')
     allp = statistics.median(x for v in py_t.values() for x in v) * 1e6
     alld = statistics.median(x for v in dev_t.values() for x in v) * 1e6
-    print(f'all calls: Python {allp:.1f} us, device {alld:.1f} us median')
+    allk = statistics.median(x for v in dev_us.values() for x in v)
+    print(f'all calls: Python {allp:.1f} us, device {alld:.1f} us median, of which computing on the device {allk:.1f} us')
     n = max(1, cpu['calls'])
+    print('(host CPU below: Windows thread time ticks ~15.6 ms, so a block of calls shorter than that reads 0 or one tick)')
     print(f'host CPU per call (mean over {n} calls): Python {1e6 * cpu["python"] / n:.1f} us, device {1e6 * cpu["device"] / n:.1f} us '
           f'(MIP_SPIN {os.environ.get("MIP_SPIN", "2000")})')
     cuda_backend.close()

@@ -16,6 +16,7 @@
 #include <atomic>
 #include <mutex>
 #include <thread>
+#include <chrono>
 
 // ---- limits --------------------------------------------------------------------------------------------------------------------------
 // MIP_LIMBS caps one integer at 8192 limbs (262,144 bits). Python's add/mul/... are "any size": a bound in bits both sides keep is open
@@ -34,6 +35,7 @@ struct Slot {
     int32_t status;
     uint32_t args_len;
     uint32_t out_len;
+    uint64_t dev_cycles;   // clock cycles serve() took on the device: the work, apart from the round trip
     uint8_t args[MIP_ARGS_MAX];
     uint8_t out[MIP_OUT_MAX];
 };
@@ -881,7 +883,15 @@ __device__ int process(Ctx &c, int op, const uint8_t *s, int len, Out &o) {
     return MIP_OK;
 }
 
+__device__ void serve_inner(Slot *slot, uint32_t *arena);
+
 __device__ void serve(Slot *slot, uint32_t *arena) {
+    long long t = clock64();
+    serve_inner(slot, arena);
+    slot->dev_cycles = (uint64_t)(clock64() - t);
+}
+
+__device__ void serve_inner(Slot *slot, uint32_t *arena) {
     Ctx c;
     c.arena = arena;
     c.used = 0;
@@ -953,6 +963,8 @@ static cudaStream_t g_stream;
 static cudaEvent_t g_done;
 static long long g_budget = 0;
 static int g_running = 0;
+static std::chrono::steady_clock::time_point g_launched;   // when the running worker was launched
+static int g_clock_khz = 1;
 static int g_spin = 2000;   // polls before the host starts yielding the core (MIP_SPIN)
 static std::atomic<uint64_t> g_launches{0};
 
@@ -961,12 +973,17 @@ static int launch_worker() {
     if (cudaGetLastError() != cudaSuccess) return -1;
     cudaEventRecord(g_done, g_stream);
     g_running = 1;
+    g_launched = std::chrono::steady_clock::now();
     g_launches++;
     return 0;
 }
 
+// The worker ends itself after MIP_WORKER_SECONDS of device clock. Before 0.8 of that has passed on the host clock it is alive without
+// asking the driver: a cudaEventQuery per poll costs a driver call under WDDM, which the first speed runs paid on every poll.
 static int worker_alive() {
     if (!g_running) return 0;
+    double age = std::chrono::duration<double>(std::chrono::steady_clock::now() - g_launched).count();
+    if (age < 0.8 * MIP_WORKER_SECONDS) return 1;
     if (cudaEventQuery(g_done) == cudaSuccess) g_running = 0;
     return g_running;
 }
@@ -980,6 +997,7 @@ extern "C" MIP_API int mip_open(int device, int resident) {
     if (const char *e = getenv("MIP_SPIN")) g_spin = atoi(e);
     int clock_khz = 0;
     cudaDeviceGetAttribute(&clock_khz, cudaDevAttrClockRate, device);
+    g_clock_khz = clock_khz ? clock_khz : 1;
     g_budget = (long long)(clock_khz * 1000.0 * MIP_WORKER_SECONDS);
     if (cudaMalloc(&g_arena, sizeof(uint32_t) * ARENA_WORDS) != cudaSuccess) return MIP_HOST_ERROR;
     int lo, hi;
@@ -1029,6 +1047,9 @@ extern "C" MIP_API const char *mip_ops(void) { return "numbers.add\nnumbers.sub\
 
 extern "C" MIP_API uint64_t mip_launches(void) { return g_launches.load(); }
 
+// microseconds the last call spent in serve() on the device (clock64 over the rated clock: an estimate under boost clocks)
+extern "C" MIP_API double mip_last_device_us(void) { return g_host_slot ? g_host_slot->dev_cycles / (g_clock_khz / 1000.0) : 0.0; }
+
 extern "C" MIP_API int mip_call(const char *op, const uint8_t *args, size_t args_len, uint8_t *out, size_t out_cap, size_t *out_len) {
     std::lock_guard<std::mutex> l(g_lock);
     *out_len = 0;
@@ -1061,7 +1082,7 @@ extern "C" MIP_API int mip_call(const char *op, const uint8_t *args, size_t args
         if (cudaMemcpyAsync(g_dev_slot, h, head, cudaMemcpyHostToDevice, g_stream) != cudaSuccess) return MIP_HOST_ERROR;
         once<<<1, 1, 0, g_stream>>>(g_dev_slot, g_arena);
         g_launches++;
-        if (cudaMemcpyAsync(&h->status, &g_dev_slot->status, sizeof(int32_t) * 3, cudaMemcpyDeviceToHost, g_stream) != cudaSuccess)
+        if (cudaMemcpyAsync(&h->status, &g_dev_slot->status, offsetof(Slot, args) - offsetof(Slot, status), cudaMemcpyDeviceToHost, g_stream) != cudaSuccess)
             return MIP_HOST_ERROR;
         if (cudaStreamSynchronize(g_stream) != cudaSuccess) return MIP_DEVICE_FAILED;
         if (h->out_len && cudaMemcpy(h->out, g_dev_slot->out, h->out_len, cudaMemcpyDeviceToHost) != cudaSuccess) return MIP_HOST_ERROR;
