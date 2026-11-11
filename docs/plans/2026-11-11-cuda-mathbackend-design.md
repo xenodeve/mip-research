@@ -408,3 +408,10 @@ out of line (`__noinline__`: 121 -> 114 registers, stack 1,120 -> 720 bytes) cha
 measurement-only build that skips parse and arithmetic and writes a fixed answer: **9.8 us** inside the DLL (device 0.6 us) against 11.2 us
 with the work. So a parse and arithmetic of zero cost would save 1.4 us of the 11.2; a warp-parallel parse, which cannot reach zero, is
 bounded below that. With the empty-kernel floor at 8.7 us, the single call is within 2.5 us of it and at most 1.4 us of that is reachable.
+
+**The work, cut toward that bound:** two integers (the commonest request) read with word compares of the fixed head and byte checks of
+the fixed middle and tail; two integers below 2^31 answered in native 64-bit (a quotient reduced by a 32-bit Euclid) instead of the
+two-word arithmetic. Device 1.9 -> **1.6 us**; single call **10.8 us** inside the DLL (the no-work bound 9.8, the empty kernel 8.7);
+back to back with the linger **6.9 us** on the 5060 Ti and **6.5-6.7 us** on the 4070 SUPER (re-measured with this build; its single
+calls 9.9 us p10, 15 us median while a game used the card). Every corpus in modes 1 and 2, the 4070's fuzz corpus 4,000 / 4,000,
+40,000 racing calls 0 wrong.

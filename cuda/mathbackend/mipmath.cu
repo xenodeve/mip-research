@@ -944,12 +944,65 @@ __device__ __forceinline__ S2 s2_add(S2 x, S2 y) {
 __device__ __forceinline__ int process_fast(int op, const uint8_t *s, int len, Out &o) {
     // ["l",[ <arg> , <arg> ]] exactly, no whitespace (canon.encode's form)
     if (len < 10 || s[0] != '[' || s[1] != '"' || s[2] != 'l' || s[3] != '"' || s[4] != ',' || s[5] != '[') return 0;
-    int i = 6;
     long long an, ad, bn, bd;
-    if (!fast_arg(s, len, i, an, ad)) return 0;
-    if (i >= len || s[i] != ',') return 0;
-    if (!fast_arg(s, len, ++i, bn, bd)) return 0;
-    if (i + 2 != len || s[i] != ']' || s[i + 1] != ']') return 0;
+    int ii = 0;
+    // two integers, the commonest request: ["l",[["i","<A>"],["i","<B>"]]]. The fixed 12-byte head is three word compares (s is the
+    // 4-aligned local copy); then A's digits, the fixed 9 bytes between, B's digits and the fixed tail. Any mismatch falls through to
+    // the general reading below, which accepts the same forms and more.
+    {
+        const uint32_t *w = (const uint32_t *)s;
+        if (len >= 26 && w[1] == 0x225B5B2Cu && w[2] == 0x222C2269u) {   // ',[["'  'i","'
+            int p = 12, ea = p;
+            while (ea < len && s[ea] != '"') ea++;
+            int q = ea + 9;   // '"],["i","'
+            if (q < len && s[ea + 1] == ']' && s[ea + 2] == ',' && s[ea + 3] == '[' && s[ea + 4] == '"' && s[ea + 5] == 'i' &&
+                s[ea + 6] == '"' && s[ea + 7] == ',' && s[ea + 8] == '"') {
+                int eb = q;
+                while (eb < len && s[eb] != '"') eb++;
+                if (eb + 4 == len && s[eb + 1] == ']' && s[eb + 2] == ']' && s[eb + 3] == ']') {
+                    int na = s[p] == '-', nb = s[q] == '-';
+                    long long va, vb;
+                    if (fast_digits(s, p + na, ea, va) && fast_digits(s, q + nb, eb, vb)) {
+                        an = na ? -va : va;
+                        bn = nb ? -vb : vb;
+                        ad = bd = 1;
+                        ii = 1;
+                    }
+                }
+            }
+        }
+    }
+    if (!ii) {
+        int i = 6;
+        if (!fast_arg(s, len, i, an, ad)) return 0;
+        if (i >= len || s[i] != ',') return 0;
+        if (!fast_arg(s, len, ++i, bn, bd)) return 0;
+        if (i + 2 != len || s[i] != ']' || s[i + 1] != ']') return 0;
+    }
+    // two integers below 2^31 in magnitude: the answer in native 64-bit (a sum or product stays below 2^62), a quotient reduced in 32 bits
+    const long long LIM = 0x7FFFFFFFLL;
+    if (ad == 1 && bd == 1 && an <= LIM && an >= -LIM && bn <= LIM && bn >= -LIM && (op != OP_DIV || bn != 0)) {
+        long long num, den = 1;
+        if (op == OP_ADD) num = an + bn;
+        else if (op == OP_SUB) num = an - bn;
+        else if (op == OP_MUL) num = an * bn;
+        else {
+            unsigned x = (unsigned)(an < 0 ? -an : an), y = (unsigned)(bn < 0 ? -bn : bn);
+            unsigned g = y;   // gcd(x, y), Euclid in 32 bits (gcd(0, y) = y)
+            for (unsigned a2 = x, b2 = y; b2;) { unsigned t = a2 % b2; a2 = b2; b2 = t; g = a2; }
+            num = (long long)(x / g) * ((an < 0) != (bn < 0) && x ? -1 : 1);
+            den = y / g;
+        }
+        unsigned long long mag = (unsigned long long)(num < 0 ? -num : num);
+        put(o, den == 1 ? (num < 0 ? "[\"i\",\"-" : "[\"i\",\"") : (num < 0 ? "[\"q\",\"-" : "[\"q\",\""));
+        put_u2(o, u2(mag));
+        if (den != 1) {
+            put(o, "\",\"");
+            put_u32(o, (unsigned)den);
+        }
+        put(o, "\"]");
+        return !o.over;
+    }
     S2 N, D;
     if (op == OP_ADD || op == OP_SUB) {
         S2 t = s2_mul(bn, ad);
