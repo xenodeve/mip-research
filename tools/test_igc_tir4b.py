@@ -1438,5 +1438,74 @@ class ExactAnswer(unittest.TestCase):
         self.assertTrue(r.text().endswith('The final answer is $\\boxed'))
 
 
+
+class ApproxTok(Tok):
+    """Tok with `approx` as one token, as the 4B writes ` \\` + `approx`."""
+    def encode(self, text, add_special_tokens=False):
+        out = []
+        for i, part in enumerate(text.split('approx')):
+            if i:
+                out.append(12)
+            out += super().encode(part)
+        return out
+
+    def decode(self, ids):
+        return ''.join('approx' if i == 12 else super(ApproxTok, self).decode([i]) for i in ids)
+
+
+ATOK = ApproxTok()
+AIDS = tir4b.Ids(ATOK, [6])
+
+
+class Round10Fixes(unittest.TestCase):
+    """The round 9 cases still open, as cases (docs/failures.md P11, P12, P7)."""
+
+    def test_approx_put_writes_the_value_to_ten_digits(self):
+        r = tir4b.Rollout(ROW, 0, [1, 2, 3], tir4b.Arm(inline_calc=True, inline_plain=True, no_digit_join=True, approx_put=True),
+                          AIDS, ATOK, seed=1)
+        most, stops = r.request()
+        self.assertIn(12, stops)
+        r.take(ATOK.encode('So $(1.01)^{30} \\approx'))
+        self.assertTrue(r.text().endswith('\\approx 1.347848915'), r.text()[-40:])
+        act = [e for e in r.events if e['kind'] == 'approx value'][0]
+        self.assertEqual((act['expr'], act['value']), ('(1.01)^{30}', '1.347848915'))
+        self.assertEqual(r.join_guard, 'approx')
+        self.assertEqual(r.request()[0], 1)   # one token under the hold: no `\times 10^{k}` or digit carried onto the value
+
+    def test_approx_put_leaves_a_symbol_alone(self):
+        r = tir4b.Rollout(ROW, 0, [1, 2, 3], tir4b.Arm(inline_calc=True, inline_plain=True, approx_put=True), AIDS, ATOK, seed=1)
+        r.take(ATOK.encode('So $\\pi \\approx'))
+        self.assertEqual([e for e in r.events if e['kind'] == 'approx value'], [])
+        r.take(ATOK.encode('But the word approximately is no stop'))
+        self.assertEqual([e for e in r.events if e['kind'] == 'approx value'], [])
+
+    def test_answer_rewind_cuts_the_loop_out_and_reseeds_before_the_cue(self):
+        r = rollout(answer_close=True, answer_rewind=2)
+        r.take(TOK.encode('x</think>'))
+        r.take(TOK.encode('\n\nso ' + 'ab' * 600))
+        self.assertEqual(kinds(r), ['answer rewind'])
+        self.assertTrue(r.text().endswith('\n\nso '), r.text()[-20:])   # the whole loop is gone, nothing put
+        self.assertNotEqual(r.reseed, 0)
+        r.take(TOK.encode('ab' * 600))
+        r.take(TOK.encode('ab' * 600))
+        self.assertEqual(kinds(r), ['answer rewind', 'answer rewind', 'answer close'])   # after N rewinds, the cue
+
+    def test_answer_rewind_steps_aside_when_the_question_is_one_computation(self):
+        row = dict(id='dm_div_big-1', suite='arith', answer='-3/7', question='Divide -3 by 7.')
+        r = tir4b.Rollout(row, 0, [1, 2, 3], tir4b.Arm(answer_close=True, answer_rewind=2, exact_answer=True), IDS, TOK, seed=1)
+        r.take(TOK.encode('x</think>'))
+        r.take(TOK.encode('\n\nso ' + 'ab' * 600))
+        self.assertEqual(kinds(r)[:1], ['answer close'])
+
+    def test_letter_count_is_put_at_the_start(self):
+        row = dict(id='s-1', suite='arith', answer='1/78',
+                   question='Two letters picked without replacement from vgcgplcggpgvp. Give prob of sequence vv.')
+        r = tir4b.Rollout(row, 0, [1, 2, 3], tir4b.Arm(letter_count=True), IDS, TOK, seed=1)
+        self.assertEqual(r.text(), 'The string vgcgplcggpgvp has 13 letters: v 2, g 5, c 2, p 3, l 1.\n')
+        self.assertEqual(kinds(r), ['letter count'])
+        plain = tir4b.Rollout(dict(row, question='What is 3 + 4?'), 0, [1, 2, 3], tir4b.Arm(letter_count=True), IDS, TOK, seed=1)
+        self.assertEqual(plain.text(), '')
+
+
 if __name__ == '__main__':
     unittest.main()

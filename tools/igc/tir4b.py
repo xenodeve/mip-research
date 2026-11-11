@@ -128,6 +128,12 @@ class Ids:
         # repeating() and line_back() read 198 and 271 as the line ends, the Flash-Next pack's ids: a tokenizer with others would blind them
         self.same_lines = self.lines == {198, 271}
         self.equals = {i for i in range(len(tokenizer)) if tokenizer.decode([i]).strip() == '='}   # the tokens an inline value follows
+        # --approx-put: `\approx` ends in the token `approx` (the 4B writes ` \` + `approx`), or `≈`; ` approx` (a word) is not one
+        self.approx = {i for i in range(len(tokenizer)) if tokenizer.decode([i]) in ('approx', '≈', ' ≈')}
+        # and after that put, one token may not carry the model's planned scale on: `\approx 4.2 \times 10^{6}` or `4.2 million` would read
+        # `4228161 \times 10^{6}` (round 9: 74 scientific values, 1 scale word, after a readable `\approx`)
+        self.approx_hold = {i for i in range(len(tokenizer)) if tokenizer.decode([i]).strip() in
+                            ('\\', '\\times', '\\cdot', '*', '×', '·', 'million', 'billion', 'thousand', 'trillion', 'hundred', '%', '\\%')}
         # --suppress-recheck: the words a re-check starts with (NoWait / CGRS list, the same words the H-trust tests count)
         self.recheck = {i for i in range(len(tokenizer)) if tokenizer.decode([i]).strip().lower().rstrip('.,:!') in RECHECK_WORDS}
         # --no-digit-join: every token whose text starts with a digit, so none can run on a number software put
@@ -139,7 +145,7 @@ class Ids:
         self.digits = frozenset(i for i in range(len(tokenizer)) if tokenizer.decode([i]) in tuple('0123456789'))   # --shape-cap
         self.point = {i for i in range(len(tokenizer)) if tokenizer.decode([i]) == '.'}   # `0` then `.75` read `0.75`: digits held after it
         self.tool_close = tokenizer.convert_tokens_to_ids('</tool_call>')
-        held = len(self.recheck | self.digit_start | self.slash_start)   # the most bias() ever asks for at once
+        held = len(self.recheck | self.digit_start | self.slash_start | self.approx_hold)   # the most bias() ever asks for at once
         if held > BIAS_MAX:
             raise RuntimeError(f'tokenizer: bias() could hold {held} tokens, vLLM refuses more than {BIAS_MAX}')
 
@@ -153,7 +159,10 @@ class Arm:
                  hint_calc=False, loop_hint=False, inline_plain=False, whole_hint=False, check_hand=False, whole_plain=False, hand_off=False, question_value=False,
                  trust='cort', logit_value=0.0, suppress_recheck=0, mathbackend=False, candidate_close=False, inline_style='general',
                  no_digit_join=False, guard_progress=False, answer_close=False, loop_value=False, early_cycle=False, shape_cap=0, cover_cap=0,
-                 exact_answer=False):
+                 exact_answer=False, approx_put=False, answer_rewind=0, letter_count=False):
+        self.approx_put = approx_put   # --approx-put: after `X \approx`, X's value to 10 significant digits (round 9 P11)
+        self.answer_rewind = answer_rewind   # --answer-rewind N: an answer loop is cut out whole and resampled, N times, before the cue (P12)
+        self.letter_count = letter_count   # --letter-count: the letters of a string the question writes out, counted, at the start (P7)
         self.exact_answer = exact_answer   # --exact-answer: the question's own computation, exact, is what the answer's box holds (round 9 form)
         self.cover_cap = cover_cap   # --cover-cap W: 97 % of the last W tokens repeat a 12-gram of the last 2,048: a loop (#307 round 8)
         self.shape_cap = shape_cap   # --shape-cap: a cycle of this many rounds with every number read as one token is a loop, progress or not (#307)
@@ -225,6 +234,20 @@ def loop_start(tokens, longest=4096):
             i -= 1
         if len(tokens) - (i + 1) >= 4 * period:
             return i + 1 + period
+    return None
+
+
+def loop_rewind(tokens, longest=4096):
+    """Where the first round of the cycle that ends `tokens` begins, so a cut there removes the whole loop; None when the tail is no
+    cycle of at least four rounds. loop_start's cycle, one round earlier."""
+    for period in range(1, min(longest, len(tokens) // 2) + 1):
+        if tokens[-1] != tokens[-1 - period]:
+            continue
+        i = len(tokens) - period - 1
+        while i >= 0 and tokens[i] == tokens[i + period]:
+            i -= 1
+        if len(tokens) - (i + 1) >= 4 * period:
+            return i + 1
     return None
 
 
@@ -887,6 +910,14 @@ class Rollout:
         self.moduli = None   # --check-hand: the moduli the question and the answer so far name
         self._custom, self._custom_at = None, 0   # operators the question or the answer defines (`a * b = a - b`), read as the text grows
         self.given = []      # --hand-off: the whole values software put in (Fractions)
+        self.rewinds = 0   # --answer-rewind: answer loops cut out and resampled so far
+        self.reseed = 0    # added to the request seed after a rewind, so the resampled text is not the same draw again
+        if arm.letter_count and row.get('question'):
+            from tools.igc.letters import letter_case, letter_line
+            got = letter_case(row['question'])
+            if got is not None:
+                self.inject(letter_line(*got) + '\n', 'letter count')
+                self.events[-1].update(string=got[0])
         if arm.whole_hint:
             self.inject(WHOLE_HINT_PLAIN if arm.whole_plain else WHOLE_HINT, 'whole hint')
             self.whole_pending = True
@@ -935,6 +966,8 @@ class Rollout:
             bias.update({t: JOIN_BIAS for t in self.ids.digit_start})
             if self.join_guard != 'point':   # right after the put; after its `.` only a digit would make it another number
                 bias.update({t: JOIN_BIAS for t in self.ids.slash_start})
+            if self.join_guard == 'approx':   # --approx-put: no `\times 10^{k}` or scale word carried onto software's decimal
+                bias.update({t: JOIN_BIAS for t in self.ids.approx_hold})
         return bias or None
 
     def open_window(self):
@@ -1013,6 +1046,8 @@ class Rollout:
             return 1, stops   # --logit-value: one token a request, so each carries its own bias
         if (self.arm.inline_calc or self.arm.logit_value) and self.phase in ('think', 'answer') or self.arm.hint_calc and self.phase == 'think':
             stops |= self.ids.equals
+        if self.arm.approx_put and self.phase in ('think', 'answer'):
+            stops |= self.ids.approx
         if self.arm.native_tool and self.phase in ('think', 'answer'):
             stops.add(self.ids.tool_close)
         if self.arm.check_hand and self.phase in ('think', 'answer'):
@@ -1102,6 +1137,15 @@ class Rollout:
             if self.left() <= 0:
                 self.done('length')
             elif len(self.out) - self.checked >= CHUNK:   # a request that ends at `=` skips the checks below: a loop of equations would run on
+                self.checked = len(self.out)
+                if self.looping_now():
+                    self.on_loop()
+            return False
+        if self.arm.approx_put and last in self.ids.approx and self.phase in ('think', 'answer'):
+            self.approx_value()
+            if self.left() <= 0:
+                self.done('length')
+            elif len(self.out) - self.checked >= CHUNK:
                 self.checked = len(self.out)
                 if self.looping_now():
                     self.on_loop()
@@ -1273,9 +1317,36 @@ class Rollout:
             self.inject(LOOP_CLOSE, 'loop close')
             self.phase = 'answer'
         elif self.phase == 'answer' and self.arm.answer_close and self.answer_closed_at is None:
+            if self.rewind_answer():
+                return
             self.close_answer()   # a loop of equations comes here from the `=` path, any other from the answer's own check
         else:
             self.done('stuck')
+
+    def approx_value(self):
+        """--approx-put (round 9 P11): the text ends `X \\approx` (or `≈`) and X is arithmetic: its value to 10 significant digits is put,
+        a true approximation under every reading of `\\approx`. Nothing when X is not read (a symbol, a word, pi)."""
+        text = self.text()
+        bare = text.rstrip()
+        if bare.endswith('\\approx'):
+            before = bare[:-len('\\approx')]
+        elif bare.endswith('≈'):
+            before = bare[:-1]
+        else:
+            return
+        from tools.igc.approx_put import approx_found
+        found = approx_found(before)
+        if found is None:
+            return
+        expr, value = found
+        if self.echoing(re.sub(r'[\s()]', '', expr) + '~'):
+            return
+        self.inject(f' {value}', 'approx value')
+        self.open_window()
+        if self.arm.no_digit_join and self.arm.inline_plain:
+            self.join_guard = 'approx'
+            self.joins_held += 1
+        self.events[-1].update(expr=expr[:200], value=value)
 
     def put_loop_value(self):
         """--loop-value: a loop is being closed. When the question states a computation (tools.igc.question_read: gold on 160 of 160
@@ -1291,6 +1362,27 @@ class Rollout:
         lead = '' if text.endswith('\n') else '\n'
         self.inject(f'{lead}{LOOP_VALUE.format(expr=got[0], value=spelled(got[1]))}\n', 'loop value')
         self.events[-1].update(expr=got[0][:200], value=spelled(got[1]))
+
+    def rewind_answer(self):
+        """--answer-rewind (round 9 P12): forcing the final answer out of a looping answer boxed whatever was on the page (all 3 answers the
+        close hurt in round 9 came after the forced cue; forced extraction fails where free continuation answers, arXiv 2604.06613). So the
+        loop is cut out whole and the model writes on from before it with another seed, at most N times; nothing is put. When the question
+        is one computation (--exact-answer) the cue already carries the exact value, so no rewind. True when it rewound."""
+        if self.rewinds >= self.arm.answer_rewind or self.exact_value() is not None:
+            return False
+        floor = max(self.answer_start(), self.spans[-1][1] if self.spans else 0)
+        start = loop_rewind(self.out[floor:])
+        if start is None:
+            return False
+        taken = len(self.out) - (floor + start)
+        del self.out[floor + start:]
+        self.rewinds += 1
+        self.reseed = 7919 * self.rewinds
+        self.checked = len(self.out)
+        self.join_guard = False
+        self.events.append(dict(kind='answer rewind', at=len(self.out), model_tokens=self.model_tokens(), cut_tokens=taken,
+                                rewind=self.rewinds))
+        return True
 
     def close_answer(self):
         """--answer-close: the answer loops after its thinking was closed. An exact cycle is cut back to one round (so the cue does not land
@@ -1769,7 +1861,7 @@ def drive(llm, rollouts, kernel_factory, live_most=256, workers=32, on_round=Non
         why = vllm_refusal(len(r.prompt) + len(r.out), most, bias)
         if why:
             raise RuntimeError(f'{r.row["id"]}#{r.sample}: {why}')
-        params = SamplingParams(**SAMPLING, max_tokens=most, stop_token_ids=sorted(stops), seed=(r.seed + len(r.out)) % 2**31,
+        params = SamplingParams(**SAMPLING, max_tokens=most, stop_token_ids=sorted(stops), seed=(r.seed + r.reseed + len(r.out)) % 2**31,
                                 skip_special_tokens=False, detokenize=False,
                                 **(dict(logit_bias=bias, **(dict(logprobs=20) if r.plan is not None else {})) if bias else {}))
         rid = str(next(serial))
@@ -1814,6 +1906,8 @@ def stop_words(stops, ids, tok):
     words = set()
     if stops & ids.equals:
         words.add('=')
+    if stops & getattr(ids, 'approx', set()):
+        words.update(('\\approx', '≈'))
     if stops & ids.lines:
         words.add('\n')
     if stops & ids.fence:
@@ -1847,7 +1941,7 @@ def drive_http(post, tok, ids, rollouts, kernel_factory, live_most=16, on_round=
             most, stops = ask
             bias = r.bias()   # --no-digit-join's digit bias: llama-server takes it as [[id, bias], ...], like vLLM's dict
             reply = post(dict(prompt=r.prompt + r.out, n_predict=most, stop=stop_words(stops, ids, tok), cache_prompt=True,
-                              seed=(r.seed + len(r.out)) % 2**31, return_tokens=True, **sampling,
+                              seed=(r.seed + r.reseed + len(r.out)) % 2**31, return_tokens=True, **sampling,
                               **(dict(logit_bias=[[int(t), float(v)] for t, v in bias.items()]) if bias else {})))
             if reply.get('tokens') is not None:
                 # the ids the model generated, its stop token among them: a stop on '\n' inside the token '\n\n' put back as '\n' fed the
@@ -1913,7 +2007,10 @@ def run(args):
               suppress_recheck=args.suppress_recheck, mathbackend=args.mathbackend, candidate_close=args.candidate_close,
               inline_style=args.inline_style, no_digit_join=args.no_digit_join, guard_progress=args.guard_progress, answer_close=args.answer_close,
               loop_value=args.loop_value, early_cycle=args.early_cycle, shape_cap=args.shape_cap, cover_cap=args.cover_cap,
-              exact_answer=args.exact_answer)
+              exact_answer=args.exact_answer, approx_put=args.approx_put, answer_rewind=args.answer_rewind,
+              letter_count=args.letter_count)
+    if args.answer_rewind and not args.answer_close:
+        raise SystemExit('--answer-rewind acts before the answer close: it needs --answer-close')
     if args.no_digit_join and not (args.inline_calc and args.inline_plain):
         raise SystemExit('--no-digit-join holds digits down after a plain inline put: it needs --inline-calc --inline-plain')
     if args.suppress_recheck and (args.server or not (args.inline_calc or args.logit_value)):
@@ -2116,6 +2213,12 @@ def main(argv=None):
     r.add_argument('--loop-close', action='store_true')
     r.add_argument('--exact-answer', action='store_true', help="when the question states one computation, the answer's box holds its exact "
                    'value: the answer-close cue ends with it, and a rounded, cut or integer-part box of it is rewritten')
+    r.add_argument('--approx-put', action='store_true', help='after `X \\approx` (or `≈`) where X is arithmetic, put X to 10 significant '
+                   'digits: a true approximation under every reading (round 9 P11)')
+    r.add_argument('--answer-rewind', type=int, default=0, help='a loop in the answer is cut out whole and resampled with another seed, up to N '
+                   'times, before the final-answer cue (round 9 P12; forced extraction fails, arXiv 2604.06613)')
+    r.add_argument('--letter-count', action='store_true', help='when the question asks about the letters of a string it writes out, the '
+                   'string\'s letter counts are put at the start (round 9 P7)')
     r.add_argument('--loop-value', action='store_true', help="before a loop is closed, put the question's own computation, exact")
     r.add_argument('--shape-cap', type=int, default=0, help='a cycle of this many rounds, every number read as one token, is a loop even '
                                                             'when each round is new (#307: 1024; right answers reached 805 at most)')

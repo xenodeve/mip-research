@@ -98,3 +98,12 @@ Sources: arXiv [2304.02015](https://arxiv.org/abs/2304.02015), [2603.02222](http
 [2406.19228](https://arxiv.org/abs/2406.19228), [2604.06613](https://arxiv.org/abs/2604.06613), [2601.05693](https://arxiv.org/abs/2601.05693),
 [2510.10103](https://arxiv.org/abs/2510.10103), [2509.26522](https://arxiv.org/abs/2509.26522), [2505.14172](https://arxiv.org/abs/2505.14172),
 [2412.18626](https://arxiv.org/abs/2412.18626), [2608.28725](https://arxiv.org/abs/2608.28725), [2512.02304](https://arxiv.org/abs/2512.02304).
+
+## Built for the next live round (2026-11-11)
+
+| Fix | Flag / file | Offline gate | Result |
+|---|---|---|---|
+| P11 | `--approx-put`, `tools/igc/approx_put.py`, `mathexpr.wide()` | `results/exact-answer-r9/approx_gate.py`, every stored `\approx` | round 9: 3,242 read; agrees with the model 2,648, model slip 336, estimate 39, scientific 34, an expression next 167. A100 bf16 (not used to build): 2,037 with a number next, 1,916 agree, 53 slips, 144 an expression next. 34 possible cut pieces read by hand: 0 misreads. After the put one token may not be `\times`, `\cdot`, `*` or a scale word (74 scientific values and 1 `million` would have read `4228161 \times 10^{6}`) |
+| P12 | `--answer-rewind N`, `Rollout.rewind_answer`, `loop_rewind` | round 9 reach | 8 answers (5 questions): 1 the close hurt, 5 wrong in both arms, 2 the close helped. The live round decides; the 2 are watched |
+| P7 | `--letter-count`, `tools/igc/letters.py` | `results/exact-answer-r9/letters_heldout.py` | 8 string wordings 8/8, 6 non-string letter questions 0/6; MATH-500 1 read (ELLIPSE, right), GSM8K 0 of 1,319; stored rows 10 (raw-string draws). The first rule (any word after `in`/`from`) read 6 prose words; fixed by requiring the phrase to end at the string |
+| all | `tools/test_igc_round10_fixes.py`, `tools/test_igc_tir4b.py` `Round10Fixes`; `sim_replay` | 891 tests pass; replay of r9b-gen and r9a-ctrl with the new flags runs, `vllm_refused` 0 |

@@ -9,8 +9,23 @@ evaluate(text) -> Fraction | None            the value of the whole text, or Non
 expression_before(text) -> (expr, value)     the longest arithmetic expression that ends the text (what precedes an `=`), or None
 simple_quotient(expr) -> bool                an integer over an integer and nothing else (a long division's piece)"""
 import re
+from contextlib import contextmanager
+from contextvars import ContextVar
 from fractions import Fraction
 from math import factorial, isqrt
+
+# wide(): the size limits below keep a put at `=` to a value a step can hold; a put after `\approx` is spelled to 10 significant digits,
+# so `(1.01)^{30}` (a 61-digit exact fraction) is read there (round 9 stdmath-45fa3ef2#0: the model wrote 1.3448888 for 1.3478489)
+_WIDE = ContextVar('mathexpr_wide', default=False)
+
+
+@contextmanager
+def wide():
+    token = _WIDE.set(True)
+    try:
+        yield
+    finally:
+        _WIDE.reset(token)
 
 MUL, DIV, POW = '*', '/', '^'
 _SPACE = re.compile(r'\\[,;:! ]|\\q?quad\b|~')
@@ -177,7 +192,7 @@ class _Parser:
                 raise _NotExact('0^0: 1 by one convention, undefined by another')   # `0^3 + 0^0 + 2014 \cdot 0^0 = 2014` (#306, held-out)
             if base == 0 and exponent < 0:
                 raise _NotExact('0 to a negative power')
-            if abs(base.numerator) > 1 and abs(exponent) * max(len(str(abs(base.numerator))), len(str(base.denominator))) > 60:
+            if abs(base.numerator) > 1 and abs(exponent) * max(len(str(abs(base.numerator))), len(str(base.denominator))) > (2000 if _WIDE.get() else 60):
                 raise _NotExact('too large')
             base = base ** int(exponent)
         return self.bound(base)
@@ -285,7 +300,7 @@ class _Parser:
 
     @staticmethod
     def bound(value):
-        if abs(value.numerator) > LIMIT or value.denominator > DENOMINATOR:
+        if not _WIDE.get() and (abs(value.numerator) > LIMIT or value.denominator > DENOMINATOR):
             raise _NotExact('too large to be a step')
         return value
 
