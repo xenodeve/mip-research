@@ -18,6 +18,8 @@ The rules agents miss most, all in full in `AGENTS.md`:
    saves.
 3. **The General Style first, no tuning to the test.** A put is true under every reading of the `=`; rules come from mathematics or
    notation, never from a set's frequencies; development sets find bugs, the frozen set measures. The plain value for every model.
+   **Never report software's answer as the model's** (2026-11-11): nothing writes the final answer for the model; `--exact-answer`
+   is withdrawn (ERRATA MR-35 to MR-37).
    **Fix the case the structure allows, never the test set** (2026-11-11): a test set is only a magnifying glass for cases that can
    occur; state the case without the set's wording, build the detector from that statement, test it on wordings and sets it was not
    written from, count distinct questions, and measure on rows it was not built from ([failures](docs/failures.md)).

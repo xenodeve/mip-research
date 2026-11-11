@@ -113,3 +113,17 @@ Sources: arXiv [2304.02015](https://arxiv.org/abs/2304.02015), [2603.02222](http
 `tir4b.GATE_OPEN`, the engine's `--igc-sandbox-gate` ported; reach `results/exact-answer-r9/gate_reach.py`: MATH-500 11, GSM8K 0), P9 by
 `--loop-hint` (built in #12). Blocks run in the AppContainer box (D1; smoke 2026-11-11: start 2.2 s, sympy runs, `D:/Github` refused).
 P10 (the figure) stays a ceiling.
+
+## Changed 2026-11-11: `--exact-answer` withdrawn
+
+`--exact-answer` wrote the answer for the model (ERRATA MR-35 to MR-37), so it is out of round 10. Its cases get mechanisms that leave
+the answer to the model:
+
+| Case | Replacement | Support |
+|---|---|---|
+| P1 right value, wrong form (6) | none yet: the model chooses the form. **The developer decides**: the prompt asks for the exact value in every arm, or "value right, form not gold's" is reported apart | rule scorers' form strictness changes scores widely (arXiv 2604.22597; Math-Verify) |
+| P2, P3 a hedge or a loop's value boxed (6) | `--answer-rewind 2`, now for every question | detection-extraction gap (arXiv 2604.06613) |
+| P4 a mis-copied question (1) | `--question-quote` (`tools/igc/question_quote.py`): the model's copy holds the question's numbers in order but reads to another value -> the question's words, verbatim | RE2 (arXiv 2309.06275, EMNLP 2024); number-copy errors (GSM-Ranges, arXiv 2502.08680). Stored text: 15 fires in 442 answers, all real mis-copies |
+| P5 a surd loop on brackets (2) | `--question-quote` at the thinking loop's close | settle and close at once, 32 vs 31 of 49 |
+
+Round 10's arm B is now `--question-quote --approx-put --answer-rewind 2 --letter-count`; arm C adds the Sandbox.

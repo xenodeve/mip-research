@@ -1532,5 +1532,35 @@ class VerifyGate(unittest.TestCase):
             self.assertNotIn('verify gate', kinds(r), q)
 
 
+
+class QuestionQuote(unittest.TestCase):
+    """--question-quote (round 9 P4, 1505#0): the model's copy of the question moved a bracket and it worked on the copy. The question's
+    own words are put back; the model decides. Replaces --exact-answer's box rewrite, which wrote the answer for the model (ERRATA)."""
+    Q = 'What is (18/4)/(11/(-264)*6)*1/((-25)/((-3025)/(-44))*1/(-4))?'
+
+    def roll(self, q=None):
+        row = dict(id='dm_mul_div_longer-1505', suite='arith', answer='-198', question=(q or self.Q) + '\n\nGive the final answer as a single number in \\boxed{} at the end.')
+        return tir4b.Rollout(row, 0, [1, 2, 3], tir4b.Arm(question_quote=True), IDS, TOK, seed=1)
+
+    def test_a_copy_with_a_moved_bracket_gets_the_question_back(self):
+        r = self.roll()
+        r.take(TOK.encode('The expression is:\n$$ \\frac{18/4}{(11/(-264) \\cdot 6)} \\cdot \\frac{1}{(-25)/((-3025)/(-44) \\cdot 1/(-4))} $$\nLet us break'))
+        self.assertEqual(kinds(r), ['question quote'])
+        self.assertTrue(r.text().endswith('$$\nThe question writes: $(18/4)/(11/(-264)*6)*1/((-25)/((-3025)/(-44))*1/(-4))$.\n'), r.text()[-120:])
+        r.take(TOK.encode('So the bracket closes after (-44).\n'))
+        self.assertEqual(kinds(r), ['question quote'])   # once
+
+    def test_a_true_copy_or_a_step_puts_nothing(self):
+        r = self.roll()
+        r.take(TOK.encode('The expression is:\n$$ \\frac{18/4}{11/(-264) \\cdot 6} \\cdot \\frac{1}{(-25)/((-3025)/(-44)) \\cdot 1/(-4)} $$\n'))
+        r.take(TOK.encode('Numerator: 18/4 = 4.5\nAnd 3025/44 = 68.75\n'))
+        self.assertEqual(kinds(r), [])
+
+    def test_a_question_with_no_computation_puts_nothing(self):
+        r = self.roll('Tom has 3 apples and 4 pears. How many fruits?')
+        r.take(TOK.encode('3 + 4 + 1\n'))
+        self.assertEqual(kinds(r), [])
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -165,7 +165,8 @@ class Arm:
                  hint_calc=False, loop_hint=False, inline_plain=False, whole_hint=False, check_hand=False, whole_plain=False, hand_off=False, question_value=False,
                  trust='cort', logit_value=0.0, suppress_recheck=0, mathbackend=False, candidate_close=False, inline_style='general',
                  no_digit_join=False, guard_progress=False, answer_close=False, loop_value=False, early_cycle=False, shape_cap=0, cover_cap=0,
-                 exact_answer=False, approx_put=False, answer_rewind=0, letter_count=False, verify_gate=False):
+                 exact_answer=False, approx_put=False, answer_rewind=0, letter_count=False, verify_gate=False, question_quote=False):
+        self.question_quote = question_quote   # --question-quote: the question's words put back when the model's copy differs (P4, P5)
         self.verify_gate = verify_gate   # --verify-gate: an all-solutions question's candidates are checked by a program before the close (P8)
         self.approx_put = approx_put   # --approx-put: after `X \approx`, X's value to 10 significant digits (round 9 P11)
         self.answer_rewind = answer_rewind   # --answer-rewind N: an answer loop is cut out whole and resampled, N times, before the cue (P12)
@@ -918,6 +919,8 @@ class Rollout:
         self._custom, self._custom_at = None, 0   # operators the question or the answer defines (`a * b = a - b`), read as the text grows
         self.given = []      # --hand-off: the whole values software put in (Fractions)
         self.gated = False   # --verify-gate: the check was opened (once per answer)
+        self.quoted = False   # --question-quote: once per answer
+        self.quote_scan = 0   # --question-quote: model text read for copies up to here
         self.rewinds = 0   # --answer-rewind: answer loops cut out and resampled so far
         self.reseed = 0    # added to the request seed after a rewind, so the resampled text is not the same draw again
         if arm.letter_count and row.get('question'):
@@ -1094,6 +1097,10 @@ class Rollout:
         if self.phase != 'answer' and self.phase != 'block':
             self.thought += len(new)
         last = new[-1] if new else None
+        if self.arm.question_quote and not self.quoted and self.phase in ('think', 'answer') and self.copy_cut():
+            if self.left() <= 0:
+                self.done('length')
+            return False
         if self.early_cut(new):
             if self.left() <= 0:
                 self.done('length')
@@ -1328,6 +1335,7 @@ class Rollout:
                     self.loop_floor = len(self.out)
                     return
             self.put_loop_value()
+            self.quote_at_loop()
             self.inject(LOOP_CLOSE, 'loop close')
             self.phase = 'answer'
         elif self.phase == 'answer' and self.arm.answer_close and self.answer_closed_at is None:
@@ -1376,6 +1384,58 @@ class Rollout:
         lead = '' if text.endswith('\n') else '\n'
         self.inject(f'{lead}{LOOP_VALUE.format(expr=got[0], value=spelled(got[1]))}\n', 'loop value')
         self.events[-1].update(expr=got[0][:200], value=spelled(got[1]))
+
+    def question_expr(self):
+        """--question-quote: (expression, value, its numbers) of the question's one computation, or None; read once."""
+        if getattr(self, '_qquote', ()) == ():
+            self._qquote = None
+            if self.row.get('question'):
+                from tools.igc.question_read import read_exact
+                from tools.igc.question_quote import numbers_of
+                got = read_exact(self.row['question'])
+                if got is not None:
+                    self._qquote = (got[0], got[1], numbers_of(got[0]))
+        return self._qquote
+
+    def copy_cut(self):
+        """--question-quote (round 9 P4): a finished line of the model's copies the question's numbers in order but reads to another value
+        (a bracket moved, a sign lost): the text after that line is dropped and the question's own words are put there, once. Lines
+        before the last put are not read (a cut never crosses software's text). True when it acted."""
+        q = self.question_expr()
+        if q is None:
+            return False
+        from tools.igc.question_quote import QUOTE, copy_differs
+        start = max(self.quote_scan, self.spans[-1][1] if self.spans else 0)
+        line_at = start
+        for i in range(start, len(self.out)):
+            if self.out[i] not in self.ids.lines:
+                continue
+            line = self.tok.decode(self.out[line_at:i])
+            line_at = i + 1
+            if copy_differs(line, q[2], q[1]):
+                taken = len(self.out) - (i + 1)
+                del self.out[i + 1:]
+                self.quoted = True
+                self.inject(QUOTE.format(expr=q[0]), 'question quote')
+                self.events[-1].update(copy=line.strip()[:200], cut_tokens=taken)
+                self.quote_scan = len(self.out)
+                return True
+        self.quote_scan = line_at
+        return False
+
+    def quote_at_loop(self):
+        """--question-quote at a thinking loop's close (round 9 P5: `simplify_surd` looped counting the question's brackets): the
+        question's words go before the close, settle and close at once (the settle probe: 32 of 49 against 31 for the close alone)."""
+        if not self.arm.question_quote or self.quoted:
+            return
+        q = self.question_expr()
+        if q is None:
+            return
+        from tools.igc.question_quote import QUOTE
+        self.quoted = True
+        lead = '' if self.text().endswith('\n') else '\n'
+        self.inject(lead + QUOTE.format(expr=q[0]), 'question quote')
+        self.events[-1].update(at_loop=True)
 
     def gate_due(self):
         """--verify-gate: once per answer, when the question gives an equation and asks for all its solutions."""
@@ -2029,7 +2089,7 @@ def run(args):
               inline_style=args.inline_style, no_digit_join=args.no_digit_join, guard_progress=args.guard_progress, answer_close=args.answer_close,
               loop_value=args.loop_value, early_cycle=args.early_cycle, shape_cap=args.shape_cap, cover_cap=args.cover_cap,
               exact_answer=args.exact_answer, approx_put=args.approx_put, answer_rewind=args.answer_rewind,
-              letter_count=args.letter_count, verify_gate=args.verify_gate)
+              letter_count=args.letter_count, verify_gate=args.verify_gate, question_quote=args.question_quote)
     if args.verify_gate and not args.execute:
         raise SystemExit('--verify-gate opens a program: it needs --execute (and --box on this PC)')
     if args.answer_rewind and not args.answer_close:
@@ -2240,6 +2300,8 @@ def main(argv=None):
                    'digits: a true approximation under every reading (round 9 P11)')
     r.add_argument('--answer-rewind', type=int, default=0, help='a loop in the answer is cut out whole and resampled with another seed, up to N '
                    'times, before the final-answer cue (round 9 P12; forced extraction fails, arXiv 2604.06613)')
+    r.add_argument('--question-quote', action='store_true', help="when the model's copy of the question's expression reads to another value, "
+                   "or a thinking loop is closed, the question's own words are put back once (round 9 P4, P5; RE2, arXiv 2309.06275)")
     r.add_argument('--verify-gate', action='store_true', help='when the question asks for all solutions of an equation it gives, the first '
                    'close of the thinking opens a program that checks each candidate in the original equation (round 9 P8; needs --execute)')
     r.add_argument('--letter-count', action='store_true', help='when the question asks about the letters of a string it writes out, the '

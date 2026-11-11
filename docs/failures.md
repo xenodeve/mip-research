@@ -65,11 +65,11 @@ PC layer**, General Style + closers), each read by hand (plan:
 
 | # | Pattern | Seen (answers) | Fix | Tested? | Status |
 |---|---|---|---|---|---|
-| P1 | Right value, wrong form: a rounded decimal or the integer part boxed instead of the exact fraction | round 9: 6 | `--exact-answer` | targeted live run: 6 of 6 right | fixed, live |
-| P2 | Two values offered, or a hedge (`275 or -275`) | round 9: 3 | `--exact-answer` at the answer-close cue | live: 2 of 2 run right (`div_big-9991` x2); `5942#1` replay only | fixed, live (2) / replay (1) |
-| P3 | A wrong value written during a loop, then boxed at the close | round 9: 3 (`9951#0`, `9991#1`, `2783#0` boxed `0`) | `--exact-answer` at the cue | live: all right; `2783#0` with an act, the other 2 with no act (another sample path) | fixed, live (1) / replay (2) |
-| P4 | The question's precedence misread (`(-25)/X*1/(-4)` as `-25/(X/(-4))`) | round 9: 1 | `--exact-answer`, any box value | live: the act put `-198` over `-33` | fixed, live |
-| P5 | `simplify_surd` loops counting parentheses | round 9: 2 (3480 x2; 9937#0 now right by the scorer fix) | `question_read.read_exact` + `--exact-answer` | live: 9937 x2 right with an act; 3480 x2 right with no act and no loop, at 2x the tokens | fixed, replay; live shows no harm |
+| P1 | Right value, wrong form: a rounded decimal or the integer part boxed instead of the exact fraction | round 9: 6 | **open** (the model's own choice of form; `--exact-answer` withdrawn, MR-35): either the prompt asks for the exact value in every arm alike, or the answers are reported apart as "value right, form not gold's" | — | open: the developer decides |
+| P2 | Two values offered, or a hedge (`275 or -275`) | round 9: 3 | `--answer-rewind`: the looping answer is cut out and resampled, the model writes its own value (free continuation, arXiv 2604.06613) | not live yet | built; round 10 |
+| P3 | A wrong value written during a loop, then boxed at the close | round 9: 3 (`9951#0`, `9991#1`, `2783#0` boxed `0`) | `--answer-rewind`, as P2 | not live yet | built; round 10 |
+| P4 | The question's precedence misread (`(-25)/X*1/(-4)` as `-25/(X/(-4))`) | round 9: 1 | `--question-quote`: when the model's copy of the question's expression reads to another value, the question's words are put back (RE2, arXiv 2309.06275; number-copy errors, arXiv 2502.08680) | stored text: fires on 15 of 442 answers, all 15 read by hand as real mis-copies (a moved bracket, `/` as `\cdot`, a term moved) | built; round 10 |
+| P5 | `simplify_surd` loops counting parentheses | round 9: 2 (3480 x2; 9937#0 now right by the scorer fix) | `--question-quote` at the thinking loop's close: the question's words, then the close (settle and close at once: 32 vs 31 of 49) | not live yet | built; round 10 |
 | P6 | Minus lost after the answer-close cue: the cue ended in `{` and Qwen writes `{-` as one token | cue probe (2026-11-09): 22 of 28 gold-negative values | the cue ends before `{` | cue probe: minus on gold-negative values 41 -> 100 of 112 | fixed, live (probe) |
 | P7 | Letters of the question's string miscounted or misquoted | round 9: 2 (`swr_p_sequence`); a general weakness of tokenized models (arXiv 2505.14172) | `--letter-count` (`tools/igc/letters.py`): the string the question makes the object of a letters question, counted, put at the start | offline: 14 of 14 fixed wordings right; MATH-500 1 read (ELLIPSE), GSM8K 0 of 1,319, stored rows 10 (all raw-string letter questions); the first rule read 6 prose words (`in full`), fixed by structure | built, offline; live next round |
 | P8 | A convention chosen wrong, extra roots kept (arccot) | round 9: 2 (`e3263989`) | `--verify-gate` (Sandbox, PC box): an equation given and all its solutions asked, the first close opens a program in which the model checks each candidate; the model chooses the convention | reach: MATH-500 11 questions (all-solutions or sums of all solutions), GSM8K 0 of 1,319; box smoke: sympy runs, the repository path refused | built; live in round 10 arm C |
@@ -91,6 +91,8 @@ PC layer**, General Style + closers), each read by hand (plan:
 | M1-M20 | Measurement errors that made a result look better or worse than it was | see [Measurement](#measurement-and-instrument-errors) | | | fixed or withdrawn |
 
 ## Round 9, one by one
+
+> **2026-11-11:** `--exact-answer`, named below as the fix of P1-P5, is withdrawn as a model fix (it wrote the answer for the model; [ERRATA](ERRATA.md) MR-35 to MR-37). The summary table above gives the replacements; the sections below keep the history.
 
 ### P1. Right value, wrong form
 
@@ -394,11 +396,11 @@ Errors in how a result was measured; each one changed a number that was quoted. 
 
 | # | รูปแบบ | เจอ | วิธีแก้ | ทดสอบแล้ว? | สถานะ |
 |---|---|---|---|---|---|
-| P1 | ค่าถูกแต่ตอบเป็นทศนิยมหรือส่วนจำนวนเต็มแทนเศษส่วนเป๊ะ | รอบ 9: 6 | `--exact-answer` | รันเฉพาะข้อ ถูก 6/6 | แก้แล้ว รันจริงแล้ว |
-| P2 | ตอบสองค่า หรือลังเล | รอบ 9: 3 | `--exact-answer` ตอนปิด | รันจริงถูก 2, replay 1 | แก้แล้ว |
-| P3 | ค่าผิดจาก loop ถูกใส่กล่องตอนปิด | รอบ 9: 3 | `--exact-answer` ตอนปิด | ถูกทั้งหมด แต่ 2 ข้อถูกโดย flag ไม่ได้ทำงาน | แก้แล้ว (ต้องรอจับคู่ยืนยัน) |
-| P4 | อ่านลำดับการคำนวณในโจทย์ผิด | รอบ 9: 1 | `--exact-answer` ทุกค่า | รันจริง: `-33` → `-198` | แก้แล้ว รันจริงแล้ว |
-| P5 | `simplify_surd` วนกับการนับวงเล็บ | รอบ 9: 2 | `read_exact` + `--exact-answer` | replay แล้ว, รันจริงไม่ทำให้ผิด | แก้แล้ว |
+| P1 | ค่าถูกแต่ตอบเป็นทศนิยมหรือส่วนจำนวนเต็มแทนเศษส่วนเป๊ะ | รอบ 9: 6 | **ยังเปิด** (`--exact-answer` ถอนแล้ว) ผู้พัฒนาตัดสิน: ให้ prompt ขอค่าเป๊ะทุกแขน หรือรายงานแยก | — | ยังเปิด |
+| P2 | ตอบสองค่า หรือลังเล | รอบ 9: 3 | `--answer-rewind` ตัด loop แล้วให้โมเดลเขียนเอง | ยังไม่รันจริง | สร้างแล้ว รอบ 10 |
+| P3 | ค่าผิดจาก loop ถูกใส่กล่องตอนปิด | รอบ 9: 3 | `--answer-rewind` | ยังไม่รันจริง | สร้างแล้ว รอบ 10 |
+| P4 | อ่านลำดับการคำนวณในโจทย์ผิด | รอบ 9: 1 | `--question-quote` ยกข้อความในโจทย์มาให้เมื่อสำเนาของโมเดลต่างจากโจทย์ | ทำงาน 15 จาก 442 คำตอบ คัดลอกผิดจริงทั้ง 15 | สร้างแล้ว รอบ 10 |
+| P5 | `simplify_surd` วนกับการนับวงเล็บ | รอบ 9: 2 | `--question-quote` ตอนปิด loop | ยังไม่รันจริง | สร้างแล้ว รอบ 10 |
 | P6 | เครื่องหมายลบหายหลังประโยคปิด (`{-` เป็น token เดียว) | cue probe | ประโยคปิดจบก่อน `{` | 41 → 100 จาก 112 | แก้แล้ว |
 | P7 | นับตัวอักษรในสตริงของโจทย์ผิด | รอบ 9: 2 | `--letter-count` นับจากสตริงที่โจทย์ถามถึง ใส่ตอนเริ่ม | offline ผ่าน 14/14, GSM8K อ่าน 0 | สร้างแล้ว รอรันจริง |
 | P8 | เลือกนิยามผิด เก็บรากเกินมา (arccot) | รอบ 9: 2 | `--verify-gate` เปิดโปรแกรมให้โมเดลตรวจคำตอบแต่ละตัวในสมการเดิมก่อนปิดการคิด | MATH-500 ทำงาน 11 ข้อ, GSM8K 0 | สร้างแล้ว รันในแขน C |

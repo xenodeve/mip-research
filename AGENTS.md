@@ -54,6 +54,10 @@ The developer, 2026-11-06 (#19): develop the General Style first, model profiles
 - **A put must be true under every reading of the `=`** (`16807 ≡ 7`, `6 rem 1`, `144.6666...`). The form is chosen by the
   semantics of the notation, never by which form a model wrote most often in a set.
 - **A new rule is justified by mathematics or notation,** never by "this set's model wrote X 70 % of the time".
+- **Never report software's answer as the model's** (developer, 2026-11-11). A mechanism may compute, quote or check, but the
+  answer is the model's: nothing writes or rewrites the final answer for it. A mechanism that does (`--exact-answer`, withdrawn:
+  ERRATA MR-35 to MR-37) stays off, outside every arm, and any number with it is reported as answers software wrote. Count, for
+  every arm, the answers whose final value was put by software.
 - **Fix the case the structure allows, never the test set** (developer, 2026-11-11). A test set is a magnifying glass that finds
   cases where the model can fail; the fix targets the case as it can arise from the structure of the task, the question or the
   model's output, wherever it occurs, in another set of the same kind or in real use. A fix that moves a set's score because it

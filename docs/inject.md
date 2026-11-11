@@ -20,7 +20,7 @@ decode loop, as token ids, between MTP draft windows.
 | [Refusals](#refusals) | No put where the literal value is not what `=` means there | tir4b; engine has its own | yes | Truth gate 0 false puts on dev and fresh sets | in best config |
 | [Model profiles](#model-profiles) | A family layer that picks among the General Style's true forms | tir4b `--inline-style qwen` | no | Wrong-row rerun: 67 -> 79 of 104 (control 73 -> 71) | built, measured, kept as option |
 | [Arithmetic mode](#arithmetic-mode) | Asks for the whole step as one expression, reads the question's own computation, hands off to the answer | tir4b (llama-server) | no | DeepMind 160, thinking off: 156 / 160 against 118, 0.05x tokens | built, measured, kept as option |
-| [`--exact-answer`](#--exact-answer) | When the question states one computation, the answer's box holds its exact value (at the answer-close cue, and over any other value in the last box) | tir4b | no | Replay on round 9 (4B NVFP4 W4A8 · llama.cpp · PC layer): 24 acts, 16 wrong -> right, 0 right -> wrong. Targeted live run on those 11 rows x 2: 22 of 22 right (round 9: 7 of 22), 13 acts, 13 values right | built, targeted live run done; paired test next |
+| [`--exact-answer`](#--exact-answer) | **Withdrawn as a model fix (2026-11-11, ERRATA MR-35 to MR-37):** writes the question's exact value into the answer's box for the model | tir4b | no | its replay and live numbers count answers software wrote; not a result | off, outside every arm (system-answer mode) |
 | [`--check-hand`](#--check-hand) | Checks each hand value at its line end and writes a correction | tir4b | no | DeepMind 160: 116 against base 121 | built, measured, kept as option |
 | [Soft logit override](#soft-logit-override) | No text put; software's next value token gets +8 logit | tir4b (vLLM) | no | 19/48 against 21/48; re-check 37.6 % against 38.5 % | built, measured, kept as option |
 | [Re-check hold-down](#re-check-hold-down) | Re-check words held at -30 logit for 60 steps after a put | tir4b (vLLM) | no | lb1 48 rows: median tokens 10-15 % lower, right 19/48 | built, measured, kept as option |
@@ -160,6 +160,8 @@ in pc9. [^arithtuned] [^arithscope]
 **What it takes.** `tir4b.py run ... --no-think --greedy --inline-calc --inline-plain --whole-hint --whole-plain --question-value --hand-off`.
 
 ## `--exact-answer`
+
+> **Withdrawn as a model fix (2026-11-11; [ERRATA](ERRATA.md) MR-35 to MR-37).** `--exact-answer` writes the answer for the model: at the answer-close cue the value is software's (the model wrote none), and at the end it rewrites the model's last box with the question's exact value. A right answer it makes is software's, not the model's (the reasoning and its loops are unchanged), and it contradicts "software computes, the model decides". Tool-augmented evaluation work makes the same point: final-answer accuracy cannot tell the tool's share from the model's (TIDE-Bench; arXiv 2510.02837). Replaced by `--question-quote` and `--answer-rewind` ([failures](failures.md), P1-P5). The text below is the history of the flag.
 
 **Why.** Round 9's General arm (**4B NVFP4 W4A8 · llama.cpp · PC layer**) lost `dm_div_big` answers to the form, not the value. The model
 wrote the exact fraction and then boxed something else on purpose: `-73388/36903 \approx -1.9886`, then `I will provide the decimal
