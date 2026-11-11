@@ -9,5 +9,5 @@ set OUT=%HERE%..\..\build-cuda
 if not exist "%OUT%" mkdir "%OUT%"
 %NVCC% -O3 -std=c++17 -shared -o "%OUT%\mipmath.dll" "%HERE%mipmath.cu" ^
   -gencode arch=compute_89,code=sm_89 -gencode arch=compute_120,code=sm_120 -gencode arch=compute_120,code=compute_120 ^
-  -Xcompiler "/MD /W3" -lineinfo || exit /b 1
+  -Xcompiler "/MD /W3" -lineinfo -lcuda || exit /b 1
 echo BUILD OK %OUT%\mipmath.dll

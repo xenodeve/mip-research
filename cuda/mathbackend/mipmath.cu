@@ -1379,6 +1379,52 @@ extern "C" MIP_API void mip_diag(uint64_t *v) {   // polls, poll cycles, wait cy
     v[6] = g_host_slot->path;   // ns: request written -> seen flag back, -> answer back
 }
 
+// ---- the floor of a launch per call --------------------------------------------------------------------------------------------------
+// An empty kernel that only raises the flag, launched n times the way mode 2 launches (launch, then poll the mapped flag), through the
+// runtime API (api 0) or the driver API's cuLaunchKernel on the same function (api 1). The median of n round trips, measured inside the
+// DLL (no Python), is the least a launch per call can cost on this machine; out[0] the median round trip, out[1] the median time of the
+// launch call alone, in microseconds.
+__global__ void flag_only(Slot *slot) {
+    __threadfence_system();
+    slot->state = 2;
+}
+
+#include <cuda.h>
+#include <algorithm>
+#include <vector>
+
+extern "C" MIP_API int mip_floor(int n, int api, double *out) {
+    std::lock_guard<std::mutex> l(g_lock);
+    if (!g_open || g_resident != 2) return MIP_HOST_ERROR;
+    Slot *h = g_host_slot;
+    CUfunction f = nullptr;
+    if (api == 1 && cudaGetFuncBySymbol((cudaFunction_t *)&f, (const void *)flag_only) != cudaSuccess) return MIP_HOST_ERROR;
+    std::vector<double> rt(n), lc(n);
+    for (int i = 0; i < n; i++) {
+        h->state = 1;
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+        auto t0 = std::chrono::steady_clock::now();
+        if (api == 1) {
+            void *args[] = {&g_dev_slot};
+            if (cuLaunchKernel(f, 1, 1, 1, 1, 1, 1, 0, (CUstream)g_stream, args, nullptr) != CUDA_SUCCESS) return MIP_HOST_ERROR;
+        } else {
+            flag_only<<<1, 1, 0, g_stream>>>(g_dev_slot);
+        }
+        auto t1 = std::chrono::steady_clock::now();
+        while (h->state != 2) {
+        }
+        auto t2 = std::chrono::steady_clock::now();
+        lc[i] = std::chrono::duration<double, std::micro>(t1 - t0).count();
+        rt[i] = std::chrono::duration<double, std::micro>(t2 - t0).count();
+        h->state = 0;
+    }
+    std::sort(rt.begin(), rt.end());
+    std::sort(lc.begin(), lc.end());
+    out[0] = rt[n / 2];
+    out[1] = lc[n / 2];
+    return MIP_OK;
+}
+
 extern "C" MIP_API double mip_last_device_us(void) { return g_host_slot ? g_host_slot->dev_cycles / (g_clock_khz / 1000.0) : 0.0; }
 
 extern "C" MIP_API int mip_call(const char *op, const uint8_t *args, size_t args_len, uint8_t *out, size_t out_cap, size_t *out_len) {
