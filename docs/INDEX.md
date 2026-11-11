@@ -19,7 +19,7 @@ Every pattern that made the model wrong, read by hand, with its fix and whether 
 | [Detection](detect.md) | Where a calculation is or is about to be: the `=` stop and reader, the question reader, the engine's token parser and MTP-draft interception, natural-language levels, probes, router, readiness | 13 | 2 | 4 | 5 | 2 | 0 |
 | [Inject](inject.md) | How a value or note gets into the model: the General Style put, refusals, digit-join hold, echo guard, arithmetic mode, check-hand, logit override, hints, the engine's result bridge and inline execution, notes | 17 | 5 | 4 | 6 | 2 | 0 |
 | [Anti-loop](antiloop.md) | Loop detectors and closers: repeat check, counting guard, line-back, A, B, V7, shape cap, cover cap, the engine's own closes | 18 | 9 | 6 | 2 | 1 | 0 |
-| [Compute](compute.md) | What computes the exact value: MathBackend, the inline bridge, the audit, the engine's CUDA executors ABI1-3, Qwenputer, oracles | 11 | 3 | 5 | 2 | 1 | 0 |
+| [Compute](compute.md) | What computes the exact value: MathBackend, CUDAMathBackend (its usage: `cuda/mathbackend/README.md`), the inline bridge, the audit, the engine's CUDA executors ABI1-3, Qwenputer, oracles | 11 | 3 | 5 | 2 | 1 | 0 |
 | [Sandbox and tools](sandbox.md) | Code run inside the reasoning: the C1 interpreter, forced block and close, hypothesis loop, tool route, real-Python box, workspace, MCP adapter, 4B port | 14 | 0 | 2 | 7 | 5 | 0 |
 | [Learned and latent](learned.md) | Heads on the hidden state: observation, input readout, readiness, output mapper, controller, residual read/write, SEAL | 10 | 0 | 0 | 1 | 1 | 8 |
 | [Benchmarks and method](benchmarks.md) | Every set and result with its setup (master table), and the runners, gates, readers and pairing rules | 16 | 5 | 3 | 5 | 3 | 0 |

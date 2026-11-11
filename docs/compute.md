@@ -16,6 +16,7 @@ This page also lists the offline oracles that check both paths, the audit of eve
 | [MathBackend](#mathbackend) | 387 exact operations in 6 modules, each bounded, refusing rather than guessing | tir4b (vLLM/llama-server), CPU Python | Yes, through the inline bridge (`--mathbackend`) | 387 / 387 operations, 31,064 cases, 0 disagreements with SymPy / mpmath / NetworkX / brute force (re-run 2026-11-08: same totals) | in best config |
 | [Inline bridge: mathexpr + exactexpr](#inline-bridge-mathexpr--exactexpr) | Reads the expression before `=` and computes it exactly: rationals, roots kept as roots, exact trig and logs, sums, `a^b mod m`, named number functions | tir4b, CPU Python | Yes | 0.18 ms per `=`; 3,896 new values agree with the model's next value on 6 arms it was not written from | in best config |
 | [Audit of every value put](#audit-of-every-value-put) | Re-computes every put with an independent evaluator after the run | offline tool | Checks the best config | 0 wrong of 39,046 checked puts (A100, best-config arms); 0 false of 41,176 on the frozen H3 set | in best config (as its gate) |
+| [CUDAMathBackend](#cudamathbackend) | The MathBackend's `numbers.add/sub/mul/div` on the GPU behind a C ABI, byte-identical to Python | mip-research `cuda/mathbackend` (branch `cuda-mathbackend`), any process via the DLL | No (development) | fuzz 4,000 / 4,000, paths 220 / 220 on both cards; 10.3 us a call, 5.8-6.5 us back to back; decode beside it -0.1 to -0.2 % (mode 2) | development |
 | [ABI1: integer `+ - ×` on CUDA](#abi1-integer-----on-cuda) | One CUDA thread per request, up to 62-digit signed integers, no float | Strata engine (xeno/mip-sandbox, not in main) | No | 7 tests pass incl. 256 held-out cases; 0.066 / 0.093 / 0.085 ms median per call on 3 tasks | engine only |
 | [ABI2: floor division, mod, gcd, power on CUDA](#abi2-floor-division-mod-gcd-power-on-cuda) | Integer primitives with explicit domain/overflow statuses | Strata engine (xeno/mip-sandbox, not in main) | No | 1,271 / 1,271 records byte-exact (GPU sanitizers clean) | engine only (only power is reached from text) |
 | [ABI3: rationals and decimals on CUDA](#abi3-rationals-and-decimals-on-cuda) | Exact `+ - × ÷` on fractions and `+ - ×` on decimals, reduced result | Strata engine (xeno/mip-sandbox, not in main) | No | 1,403 / 1,403 records byte-exact (GPU sanitizers clean) | engine only |
@@ -108,6 +109,24 @@ H1+H2. [^truth-script]
 
 **Where it lives / to use it:** `../scripts/fail_audit.py ARM...` over a folder `out/<arm>/records.json` (the A100 records are not in this
 repo).
+
+## CUDAMathBackend
+
+**What it is.** The MathBackend's operations on the GPU, behind a C ABI that takes and returns the canonical bytes of
+`../tools/igc/mathbackend/canon.py`, so equality with Python is a byte comparison. Ported: `numbers.add`, `sub`, `mul`, `div`; the other
+383 return `UNKNOWN_OP`. **How to build, call and configure it, with the measured cost of each mode:
+[`../cuda/mathbackend/README.md`](../cuda/mathbackend/README.md).** Design and every measurement:
+[`plans/2026-11-11-cuda-mathbackend-design.md`](plans/2026-11-11-cuda-mathbackend-design.md).
+
+**Measured** (RTX 5060 Ti and RTX 4070 SUPER, CUDA 13.3, Python 3.11.9 as the reference): `numbers-fuzz-s2` 4,000 / 4,000 and
+`numbers-paths-s3` 220 / 220 byte-identical in every mode on both cards (the paths corpus drives Knuth division and its add-back step);
+`numbers-s1` 1,800 / 1,816, the 16 being 20,000-digit cases past the per-call time guard (`DEVICE_FAILED`, no wrong value);
+compute-sanitizer 0 errors. A call costs 10.3 us inside the DLL on an idle card (an empty kernel: 8.7), 5.8-6.5 us back to back with the
+linger; beside llama-server decoding in another process ~175 us (as an empty kernel there), with decode unchanged (-0.1 to -0.2 %).
+
+**Where it lives / to use it:** mode 2 (`MIP_CUDA_RESIDENT=2`) beside an engine in another process; mode 1 only inside the engine's own
+process. Not used by tir4b yet: the model's text reaches these operations about once in 32 answers, while the text readers
+(`mathexpr`) are called tens of thousands of times; moving those is what would take MIP's work off the CPU during decode.
 
 ## ABI1: integer `+ - ×` on CUDA
 
