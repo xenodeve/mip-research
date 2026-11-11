@@ -1128,9 +1128,59 @@ __global__ void once(Slot *slot, uint32_t *arena) {
     serve(slot, arena, sh_arena);
 }
 
+// One launch per call, zero copy (mode 2): the slot is mapped host memory; the kernel reads the request there, answers there and raises
+// the slot's flag itself, so the host needs no copy and no synchronising driver call: it launches, then polls the flag.
+__global__ void once_mapped(Slot *slot, uint32_t *arena) {
+    extern __shared__ uint32_t sh_arena[];
+    serve(slot, arena, sh_arena);
+    __threadfence_system();
+    atomicExch_system((int *)&slot->state, 2);
+}
+
+// Mode 2 with small arguments: they travel in the launch's own parameters (the constant bank), so the register path reads no byte over
+// PCIe; a call the register path does not take falls back to serve(), which reads the copy in the mapped slot.
+struct ParamArgs {
+    int32_t op;
+    int32_t len;
+    uint32_t w[64];   // up to 256 bytes of canonical arguments
+};
+
+__device__ int g_param_smem = 0;   // 1: once_param launches with the shared arena (MIP_PARAM_SMEM); 0: none, a faster start
+
+__global__ void once_param(Slot *slot, uint32_t *arena, ParamArgs pa) {
+    extern __shared__ uint32_t sh_arena[];
+    long long t = clock64();
+    uint32_t loc[64];
+    int words = (pa.len + 3) / 4;
+    for (int k = 0; k < words; k++) loc[k] = pa.w[k];
+    // the answer is built in a local buffer and written to the mapped slot in 4-byte words: one PCIe write a word, not one a byte
+    uint32_t lout[32];
+    Out o;
+    o.p = (uint8_t *)lout;
+    o.n = 0;
+    o.cap = sizeof(lout);
+    o.over = 0;
+    if (process_fast(pa.op, (const uint8_t *)loc, pa.len, o)) {
+        uint32_t *dst = (uint32_t *)slot->out;
+        for (uint32_t k = 0; k < (o.n + 3) / 4; k++) dst[k] = lout[k];
+        slot->status = MIP_OK;
+        slot->out_len = o.n;
+        slot->path = 1;
+        slot->dev_cycles = (uint64_t)(clock64() - t);
+    } else {
+        serve(slot, arena, g_param_smem ? sh_arena : nullptr);   // no shared memory asked: the full path uses the global arena
+    }
+    __threadfence_system();
+    atomicExch_system((int *)&slot->state, 2);
+}
+
 // ---- host ----------------------------------------------------------------------------------------------------------------------------
 static std::mutex g_lock;
-static int g_open = 0, g_resident = 1;
+static int g_open = 0, g_resident = 1;   // the mode: 0 a launch per call with copies, 1 the resident worker, 2 a launch per call, zero copy
+static cudaGraphExec_t g_graph_exec = nullptr;   // mode 2 with MIP_GRAPH=1: the launch captured once as a CUDA graph
+static int g_use_graph = 0;
+static int g_param_args = 1;   // mode 2: small arguments in the launch parameters (MIP_PARAM=0 turns it off)
+static int g_param_smem_host = 0;   // MIP_PARAM_SMEM: the parameter kernel asks for the shared arena too
 static Slot *g_host_slot = nullptr, *g_dev_slot = nullptr;   // resident: mapped pinned memory; per call: device memory
 static uint32_t *g_arena = nullptr;
 static cudaStream_t g_stream;
@@ -1168,8 +1218,14 @@ extern "C" MIP_API int mip_open(int device, int resident) {
     std::lock_guard<std::mutex> l(g_lock);
     if (g_open) return MIP_OK;
     if (cudaSetDevice(device) != cudaSuccess) return MIP_HOST_ERROR;
-    // one launch per call: the host blocks in the driver while the kernel runs instead of spinning
-    cudaSetDeviceFlags(cudaDeviceMapHost | (resident ? cudaDeviceScheduleAuto : cudaDeviceScheduleBlockingSync));
+    // how a synchronising driver call waits (mode 0 only; modes 1 and 2 poll the mapped flag): MIP_SYNC spin | yield | block
+    unsigned sync = cudaDeviceScheduleAuto;
+    if (resident == 0) sync = cudaDeviceScheduleBlockingSync;
+    if (const char *e = getenv("MIP_SYNC")) sync = !strcmp(e, "spin") ? cudaDeviceScheduleSpin : !strcmp(e, "yield") ? cudaDeviceScheduleYield : cudaDeviceScheduleBlockingSync;
+    cudaSetDeviceFlags(cudaDeviceMapHost | sync);
+    if (const char *e = getenv("MIP_GRAPH")) g_use_graph = atoi(e);
+    if (const char *e = getenv("MIP_PARAM")) g_param_args = atoi(e);
+    if (const char *e = getenv("MIP_PARAM_SMEM")) { g_param_smem_host = atoi(e); cudaMemcpyToSymbol(g_param_smem, &g_param_smem_host, sizeof(int)); }
     if (const char *e = getenv("MIP_SPIN")) g_spin = atoi(e);
     if (const char *e = getenv("MIP_NANOSLEEP")) g_sleep_ns = atoi(e);
     if (const char *e = getenv("MIP_POLL")) { int m = atoi(e); cudaMemcpyToSymbol(g_poll_mode, &m, sizeof m); }
@@ -1184,10 +1240,19 @@ extern "C" MIP_API int mip_open(int device, int resident) {
     cudaStreamCreateWithPriority(&g_stream, cudaStreamNonBlocking, lo);   // the lowest priority: the engine's work goes first
     cudaEventCreateWithFlags(&g_done, cudaEventDisableTiming);
     g_resident = resident;
-    if (resident) {
+    if (resident) {   // modes 1 and 2: the slot in mapped host memory
         if (cudaHostAlloc(&g_host_slot, sizeof(Slot), cudaHostAllocMapped) != cudaSuccess) return MIP_HOST_ERROR;
         cudaHostGetDevicePointer(&g_dev_slot, g_host_slot, 0);
         g_host_slot->state = 0;
+        if (resident == 2 && g_use_graph) {   // capture the one launch; every call replays it (same slot, same arena)
+            cudaGraph_t graph;
+            if (cudaStreamBeginCapture(g_stream, cudaStreamCaptureModeThreadLocal) != cudaSuccess) return MIP_HOST_ERROR;
+            once_mapped<<<1, 1, SH_WORDS * sizeof(uint32_t), g_stream>>>(g_dev_slot, g_arena);
+            if (cudaStreamEndCapture(g_stream, &graph) != cudaSuccess) return MIP_HOST_ERROR;
+            if (cudaGraphInstantiate(&g_graph_exec, graph, 0) != cudaSuccess) return MIP_HOST_ERROR;
+            cudaGraphDestroy(graph);
+            cudaGraphUpload(g_graph_exec, g_stream);
+        }
     } else {
         if (cudaHostAlloc(&g_host_slot, sizeof(Slot), 0) != cudaSuccess) return MIP_HOST_ERROR;
         if (cudaMalloc(&g_dev_slot, sizeof(Slot)) != cudaSuccess) return MIP_HOST_ERROR;
@@ -1202,6 +1267,7 @@ extern "C" MIP_API void mip_close(void) {
     if (g_resident) {
         g_host_slot->state = 3;
         cudaStreamSynchronize(g_stream);
+        if (g_graph_exec) { cudaGraphExecDestroy(g_graph_exec); g_graph_exec = nullptr; }
         cudaFreeHost(g_host_slot);
     } else {
         cudaFree(g_dev_slot);
@@ -1246,7 +1312,44 @@ extern "C" MIP_API int mip_call(const char *op, const uint8_t *args, size_t args
     memcpy(h->args, args, args_len);
     h->args_len = (uint32_t)args_len;
     h->op = id;
-    if (g_resident) {
+    if (g_resident == 2) {
+        // launch (or replay the graph), then poll the flag the kernel raises: no copy, no synchronising call
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+        auto t0 = std::chrono::steady_clock::now();
+        h->state = 1;
+        cudaError_t e;
+        if (g_graph_exec) {
+            e = cudaGraphLaunch(g_graph_exec, g_stream);
+        } else if (args_len <= sizeof(((ParamArgs *)0)->w) && g_param_args) {
+            ParamArgs pa;
+            pa.op = id;
+            pa.len = (int32_t)args_len;
+            memcpy(pa.w, args, args_len);
+            once_param<<<1, 1, g_param_smem_host ? SH_WORDS * sizeof(uint32_t) : 0, g_stream>>>(g_dev_slot, g_arena, pa);
+            e = cudaGetLastError();
+        } else {
+            once_mapped<<<1, 1, SH_WORDS * sizeof(uint32_t), g_stream>>>(g_dev_slot, g_arena);
+            e = cudaGetLastError();
+        }
+        if (e != cudaSuccess) return MIP_HOST_ERROR;
+        g_launches++;
+        // diagnostics: the launch call's own time, and the time until the flag came back (host clock)
+        g_us_seen = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
+        int spins = 0;
+        while (h->state != 2) {
+            if (++spins > g_spin) {
+                std::this_thread::yield();
+                // a kernel that ended without raising the flag failed: ask the driver now and then, not on every poll
+                if ((spins & 1023) == 0) {
+                    cudaError_t q = cudaStreamQuery(g_stream);
+                    if (q != cudaErrorNotReady && h->state != 2) return q == cudaSuccess ? MIP_DEVICE_FAILED : MIP_DEVICE_FAILED;
+                }
+            }
+        }
+        g_us_done = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+        h->state = 0;
+    } else if (g_resident) {
         h->seen = 0;
         std::atomic_thread_fence(std::memory_order_seq_cst);
         auto t0 = std::chrono::steady_clock::now();

@@ -31,14 +31,21 @@ def main():
         lib.mip_diag(v)
         seen.append(v[4] / 1000)
         done.append(v[5] / 1000)
+    print('(mode 2: "seen" is the launch call returning)')
     print(f'host clock, median: request written -> seen flag back {statistics.median(seen):.1f} us; -> answer back '
           f'{statistics.median(done):.1f} us')
     khz = v[3] or 1
     print(f'diag (last call): polls {v[0]} over {v[1] / khz * 1000:.0f} us -> {v[1] / max(1, v[0]) / khz * 1000:.2f} us per poll; '
           f'device saw the request {v[2] / khz * 1000:.1f} us after its previous answer')
+    noop = []
+    for _ in range(a.n):
+        t = time.perf_counter()
+        cuda_backend.call('numbers.none', args)
+        noop.append((time.perf_counter() - t) * 1e6)
+    print(f'wrapper alone (an op the DLL refuses before any launch): median {statistics.median(noop):.1f} us')
     wall.sort()
     q = lambda xs, f: xs[int(f * (len(xs) - 1))]
-    env = {k: os.environ.get(k, '-') for k in ('MIP_CUDA_RESIDENT', 'MIP_SPIN', 'MIP_NANOSLEEP')}
+    env = {k: os.environ.get(k, '-') for k in ('MIP_CUDA_RESIDENT', 'MIP_SPIN', 'MIP_NANOSLEEP', 'MIP_GRAPH', 'MIP_SYNC')}
     print(f'{env} wall us median {statistics.median(wall):.1f} p10 {q(wall, .1):.1f} p90 {q(wall, .9):.1f}; '
           f'device us median {statistics.median(dev):.1f}; launches {cuda_backend.launches()}')
     cuda_backend.close()

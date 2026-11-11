@@ -1,0 +1,7 @@
+none    242.0 tok/s  MIP calls 0
+keep    223.0 tok/s  MIP calls 120
+busy    204.8 tok/s  MIP calls 305679
+busy    223.4 tok/s  MIP calls 318858
+keep    241.6 tok/s  MIP calls 120
+none    223.4 tok/s  MIP calls 0
+MIP_NANOSLEEP 500: none 232.7, keep 232.3 (-0.2 %), busy 214.1 (-8.0 %); launches 624778

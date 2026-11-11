@@ -235,3 +235,24 @@ Counted on about a tenth of round 9's General traces (32 answers, General flags,
 (`numbers.falling_factorial`), `mathexpr.evaluate` **32,335** calls. The counts are calls in tir4b on the PC layer, not time in Strata's
 C++ decode loop: that half of the measure is the `STRATA_TIMELINE` run, still to do. By the decision rule above, the text readers (phase
 3) come before the rest of phase 1: open question 1 (text input) is now the one that decides the port's order, not question 3.
+
+### Latency, launch per call without a resident kernel (2026-11-11)
+
+Mode 2 (`MIP_CUDA_RESIDENT=2`): the slot is mapped host memory, each call is one launch, and the kernel raises the slot's flag itself,
+so the host makes no copy and no synchronising driver call; arguments of up to 256 bytes travel in the launch parameters
+(`once_param`), so the register path reads nothing over PCIe. `results/cuda-mathbackend/ping.py`, `numbers.add 1 + 1`, RTX 5060 Ti:
+
+| Mode | Median per call | Device's own time |
+|---|---|---|
+| launch per call with copies, blocking sync (mode 0, before) | 240 us | 3.0 us |
+| mode 0, spinning sync | 114 us | 3.0 us |
+| mode 2 | 19-21 us | 5.2 us |
+| mode 2 as a CUDA graph | 20.6 us | 5.2 us |
+| **mode 2, arguments in the launch parameters** | **15.2-16.0 us** | **2.5 us** |
+| resident worker (mode 1), for reference | 12 us | 4.7 us |
+
+Where mode 2's 15.5 us goes (DLL clock): the Python wrapper 1.1 us, the launch call 5 us (the WDDM driver), launch to flag 8 us
+(the GPU starting the kernel, 2.5 us of work, the flag over PCIe). Neither shared memory nor word-wise output writes moved it.
+Correct in mode 2 on every corpus (`numbers-fuzz-s2` 4,000 / 4,000, `numbers-paths-s3` 220 / 220, `numbers-s1` 1,800 / 1,816 with the
+16 time-guard cases). Beside llama-server (`impact-mode2.txt`): none 232.7 tok/s, keep -0.2 %, busy -8.0 % at ~5,200 calls/s.
+Mode 2 is the PC layer's mode: the latency of the resident worker within 4 us, at no cost to decode while idle.
