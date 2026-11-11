@@ -952,22 +952,33 @@ __device__ __forceinline__ int process_fast(int op, const uint8_t *s, int len, O
     {
         const uint32_t *w = (const uint32_t *)s;
         if (len >= 26 && w[1] == 0x225B5B2Cu && w[2] == 0x222C2269u) {   // ',[["'  'i","'
-            int p = 12, ea = p;
-            while (ea < len && s[ea] != '"') ea++;
+            // each integer read in one pass: its value accumulates while its end is found (1 to 18 digits, an optional '-')
+            int p = 12, na = s[p] == '-', ea = p + na;
+            unsigned long long va = 0;
+            while (ea < len && ea - p - na < 19) {
+                unsigned d = (unsigned)s[ea] - '0';
+                if (d > 9) break;
+                va = va * 10 + d;
+                ea++;
+            }
+            int da = ea - p - na;
             int q = ea + 9;   // '"],["i","'
-            if (q < len && s[ea + 1] == ']' && s[ea + 2] == ',' && s[ea + 3] == '[' && s[ea + 4] == '"' && s[ea + 5] == 'i' &&
-                s[ea + 6] == '"' && s[ea + 7] == ',' && s[ea + 8] == '"') {
-                int eb = q;
-                while (eb < len && s[eb] != '"') eb++;
-                if (eb + 4 == len && s[eb + 1] == ']' && s[eb + 2] == ']' && s[eb + 3] == ']') {
-                    int na = s[p] == '-', nb = s[q] == '-';
-                    long long va, vb;
-                    if (fast_digits(s, p + na, ea, va) && fast_digits(s, q + nb, eb, vb)) {
-                        an = na ? -va : va;
-                        bn = nb ? -vb : vb;
-                        ad = bd = 1;
-                        ii = 1;
-                    }
+            if (da >= 1 && da <= 18 && q < len && s[ea] == '"' && s[ea + 1] == ']' && s[ea + 2] == ',' && s[ea + 3] == '[' &&
+                s[ea + 4] == '"' && s[ea + 5] == 'i' && s[ea + 6] == '"' && s[ea + 7] == ',' && s[ea + 8] == '"') {
+                int nb = s[q] == '-', eb = q + nb;
+                unsigned long long vb = 0;
+                while (eb < len && eb - q - nb < 19) {
+                    unsigned d = (unsigned)s[eb] - '0';
+                    if (d > 9) break;
+                    vb = vb * 10 + d;
+                    eb++;
+                }
+                int db = eb - q - nb;
+                if (db >= 1 && db <= 18 && eb + 4 == len && s[eb] == '"' && s[eb + 1] == ']' && s[eb + 2] == ']' && s[eb + 3] == ']') {
+                    an = na ? -(long long)va : (long long)va;
+                    bn = nb ? -(long long)vb : (long long)vb;
+                    ad = bd = 1;
+                    ii = 1;
                 }
             }
         }
@@ -994,14 +1005,34 @@ __device__ __forceinline__ int process_fast(int op, const uint8_t *s, int len, O
             den = y / g;
         }
         unsigned long long mag = (unsigned long long)(num < 0 ? -num : num);
-        put(o, den == 1 ? (num < 0 ? "[\"i\",\"-" : "[\"i\",\"") : (num < 0 ? "[\"q\",\"-" : "[\"q\",\""));
-        put_u2(o, u2(mag));
-        if (den != 1) {
-            put(o, "\",\"");
-            put_u32(o, (unsigned)den);
+        // one pass straight into the output: the fixed parts as known bytes, each number's digits written from its last one back
+        // (its length counted first), with one bound check for the whole answer instead of one per byte
+        int lm = 1, ld = 1;
+        for (unsigned long long t = mag; t >= 10; t /= 10) lm++;
+        for (unsigned t = (unsigned)den; t >= 10; t /= 10) ld++;
+        int need = 6 + (num < 0) + lm + (den != 1 ? 3 + ld : 0) + 2;
+        if (o.n + need > o.cap) { o.over = 1; return 0; }
+        uint8_t *w = o.p + o.n;
+        w[0] = '['; w[1] = '"'; w[2] = den == 1 ? 'i' : 'q'; w[3] = '"'; w[4] = ','; w[5] = '"';
+        int k = 6;
+        if (num < 0) w[k++] = '-';
+        if (mag <= 0xFFFFFFFFull) {   // 32-bit digits where they fit (no 64-bit divide on the GPU)
+            unsigned v = (unsigned)mag;
+            for (int z = k + lm - 1; z >= k; z--) { w[z] = (uint8_t)('0' + v % 10u); v /= 10u; }
+        } else {
+            unsigned long long v = mag;
+            for (int z = k + lm - 1; z >= k; z--) { w[z] = (uint8_t)('0' + v % 10ull); v /= 10ull; }
         }
-        put(o, "\"]");
-        return !o.over;
+        k += lm;
+        if (den != 1) {
+            w[k++] = '"'; w[k++] = ','; w[k++] = '"';
+            unsigned v = (unsigned)den;
+            for (int z = k + ld - 1; z >= k; z--) { w[z] = (uint8_t)('0' + v % 10u); v /= 10u; }
+            k += ld;
+        }
+        w[k++] = '"'; w[k++] = ']';
+        o.n += k;
+        return 1;
     }
     S2 N, D;
     if (op == OP_ADD || op == OP_SUB) {

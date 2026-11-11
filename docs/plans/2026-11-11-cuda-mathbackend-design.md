@@ -421,3 +421,10 @@ calls 9.9 us p10, 15 us median while a game used the card). Every corpus in mode
 1.1 us (+0.5); after the arithmetic 1.3 us (+0.2); the full call 1.7 us (+0.4 printing). Inside the DLL: 10.3-10.4, 10.6, 11.0-11.1 us.
 So of the single call's 10.8-11.1 us, 8.7 us is the empty kernel's launch and flag, ~0.6 us the call's fixed device part, and ~1.1 us
 the parse, arithmetic and printing on one GPU thread; a warp-parallel parse could reach at most the parse's 0.5 us.
+
+**The last microsecond, taken:** the small-integer answer is written in one pass straight into the output (its digits counted, then
+written from the last back; one bound check for the whole answer) instead of three passes through local buffers, and each integer is
+read in one pass (its value accumulated while its end is found) instead of a scan and a re-read. Device time 1.6-1.7 -> **1.1 us**
+(the no-work build: 0.6); a single call **10.3 us** inside the DLL (no-work bound 9.8, empty kernel 8.7); back to back with the linger
+**6.4-6.5 us** on the 5060 Ti and **5.8-5.9 us** on the 4070 SUPER. Every corpus in modes 1 and 2, memcheck 0, 40,000 racing calls
+0 wrong. What the code still adds over the no-work bound: ~0.5 us.
