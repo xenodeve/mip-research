@@ -82,7 +82,7 @@ status in the arm being run: [detection coverage plan](plans/2026-11-10-detectio
 - **Measured** offline on the 160 DeepMind rows: **160 / 160 equal gold's exact value, 0 wrong**, including the 4 rows the model copied
   wrong (Strata-xeno#298). In run pc9 it fired on 4 of 4 copy errors (Strata-xeno#298). [^qread]
 - To use it: pass `--question-value` (arithmetic mode in the README); it acts only where the question states one computation.
-- `question_read.read_exact(question)` (2026-11-10, for `--exact-answer`): as `read`, and also a question whose one computation has
+- `question_read.read_exact(question)` (2026-11-10, first for `--exact-answer`, withdrawn as a model fix, ERRATA MR-35; now the trigger of `--question-quote`): as `read`, and also a question whose one computation has
   square roots (`Simplify (6*(-3*(3 + (sqrt(108) + ...)*-5 + 4) + 5))**2.`), computed exactly by `exactexpr` as `a + b\sqrt{n}`. Any
   letter beyond `sqrt` and the lead word, and it reads nothing. Round 9 read none of the 10 `simplify_surd` questions, and 3 General
   answers there were lost to loops on the parentheses ([plan](plans/2026-11-10-round9-fixes.md)). **Checked** offline against gold
