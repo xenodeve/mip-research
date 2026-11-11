@@ -163,7 +163,12 @@ How it runs (scripts in `scripts/pc/`, data in `WORK`, outside the repository):
   5. **expected time in minutes**, with how it was estimated (the same rows' tokens and seconds in an earlier run, and the
      measured tok/s of that card and engine); say what could make it longer (another program on the PC, long answers in flight);
   6. **which graphics cards** (RTX 5060 Ti, RTX 4070 SUPER, A100) and what runs on each;
-  7. **which inference engine and build** (llama.cpp sm_89 W4A8 + model file, vLLM on the A100, the Strata engine + exe).
+  7. **which inference engine and build** (llama.cpp sm_89 W4A8 + model file, vLLM on the A100, the Strata engine + exe);
+  8. **what is tested and why:** the methods or mechanisms under test, the main purpose (the question the run answers, and what
+     result would mean what), and the arms compared;
+  9. **every flag of every arm, each with one line on what it does** (`--loop-close`: puts `</think>` on a thinking loop so the
+     model answers; `--exact-answer`: when the question is one computation, the answer's box holds its exact value; ...), so the
+     developer can see the full configuration, not only the new flag.
 
   Example: "22 answers = 11 rows x 2 seeds x 1 arm; DeepMind `div_big` 6 rows, `mixed_longer` 1, `mul_div_longer` 2,
   `simplify_surd` 2 (arithmetic, exact fractions and surds; the rows round 9 got wrong); about 90 min (round 9 spent 443k tokens on

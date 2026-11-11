@@ -27,7 +27,8 @@ The rules agents miss most, all in full in `AGENTS.md`:
 6. **Test with the smallest run that answers the question:** first pass, then only the misses the feature can reach, then the
    trade-off on a sample of right answers.
 6b. **Report every test before starting it** (2026-11-11): how many questions and answers, from which sets, difficulty, kind,
-   expected minutes (and how estimated), which graphics cards, which inference engine and build. Then start. Full rule and an
+   expected minutes (and how estimated), which graphics cards, which inference engine and build, the methods under test and the
+   main purpose, and every flag of every arm with one line on what each does. Then start. Full rule and an
    example in `AGENTS.md` "How a test is run".
 7. **Every written-answer test also goes through the API reader** (`tools/igc/answer_check.py`), on this PC only; report the rule's,
    the reader's and the corrected score.
