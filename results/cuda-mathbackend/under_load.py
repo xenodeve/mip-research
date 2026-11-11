@@ -20,6 +20,7 @@ ap = argparse.ArgumentParser()
 ap.add_argument('--server', default='http://127.0.0.1:8099')
 ap.add_argument('--n', type=int, default=300)
 ap.add_argument('--gap-ms', type=float, default=1)
+ap.add_argument('--empty', action='store_true', help='time an empty flag-only kernel (mip_floor) instead of a call: the bare floor')
 a = ap.parse_args()
 import ctypes, os  # noqa: E402
 if os.environ.get('MIP_GPU_PRIORITY'):   # Windows' GPU scheduling class for this process: 2 normal, 3 above normal, 4 high, 5 realtime
@@ -38,13 +39,24 @@ for t in ts:
 time.sleep(15)
 b = canon.encode([1, 1])
 cuda_backend.call('numbers.add', b)
+lib = cuda_backend._load()
+lib.mip_floor.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.POINTER(ctypes.c_double)]
+fo = (ctypes.c_double * 2)()
+dv = (ctypes.c_uint64 * 8)()
+inside = []
 t_calls = time.monotonic()
 dev, py = [], []
 for _ in range(a.n):
     time.sleep(a.gap_ms / 1000)
-    t = time.perf_counter()
-    cuda_backend.call('numbers.add', b)
-    dev.append((time.perf_counter() - t) * 1e6)
+    if a.empty:
+        lib.mip_floor(1, 0, fo)
+        dev.append(fo[0])   # measured inside the DLL
+    else:
+        t = time.perf_counter()
+        cuda_backend.call('numbers.add', b)
+        dev.append((time.perf_counter() - t) * 1e6)
+        lib.mip_diag(dv)
+        inside.append(dv[5] / 1000)   # mode 2: from the request to the flag back, inside the DLL
     time.sleep(a.gap_ms / 1000)
     t = time.perf_counter()
     run('numbers.add', 1, 1)
@@ -53,6 +65,8 @@ toks = sum(n for t, n in impact.DONE if t >= t_calls)
 rate = toks / (time.monotonic() - t_calls)
 impact.STOP.set()
 q = lambda xs, f: sorted(xs)[int(f * (len(xs) - 1))]
-print(f'under decode load, gap {a.gap_ms} ms, {a.n} calls: device median {statistics.median(dev):.1f} us (p10 {q(dev, .1):.1f}, '
+print(f'{"EMPTY kernel" if a.empty else "numbers.add"} under decode load, gap {a.gap_ms} ms, {a.n} calls: device median {statistics.median(dev):.1f} us (p10 {q(dev, .1):.1f}, '
       f'p90 {q(dev, .9):.1f}, max {max(dev):.0f}); Python median {statistics.median(py):.1f} us; decode {rate:.0f} tok/s meanwhile')
+if inside:
+    print(f'   inside the DLL: median {statistics.median(inside):.1f} us (p10 {q(inside, .1):.1f})')
 cuda_backend.close()

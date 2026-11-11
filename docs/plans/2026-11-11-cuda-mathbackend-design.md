@@ -390,3 +390,10 @@ and the off case is not a lever.
 | beside an engine in another process | ~200-215 us | the cross-process context switch: resident, linger, stream priority, Windows GPU priority (median unchanged, decode -15 to -25 %), clock lock (no gain) all measured |
 
 Levers measured and dropped are listed in the sections above; the clock lock gave nothing; HAGS off is excluded by requirement.
+
+**The floor, tested against an empty kernel** (`under_load.py --empty`, RTX 5060 Ti, llama-server decoding in another process, a call
+every 5 ms, both timed inside the DLL): `numbers.add 1 + 1` **175.4 us** median (p10 142.6-142.8, two runs) against an empty flag-only
+kernel **174.8 us** (p10 140.0): the call costs what a kernel that does nothing costs there, so the ~175 us is the platform's
+cross-process switch, not this code. The 29 us between that and the 204 us seen from Python is the calling thread waking from its
+sleep (Python's own MathBackend: 47-49 us on that rhythm). On an idle card a single call is 11.2 us inside the DLL against the empty
+kernel's 8.7 us: the 2.5 us between them is the call's work (2.1 us on the device) and its parameters; the wrapper adds ~1.5 us.
