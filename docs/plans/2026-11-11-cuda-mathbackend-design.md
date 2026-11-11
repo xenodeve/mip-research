@@ -206,3 +206,32 @@ register spills to local memory, the parsing).
 
 Next: the full path for 19-200 digits (profile it first), a warp per call for big integers, several calls per pass, then the other
 `numbers` ops; then the measure the design fixed, host time per decode round beside llama-server.
+
+### The acceptance measure, first half: decode beside the worker (2026-11-11)
+
+`results/cuda-mathbackend/impact.py`: one llama-server session on the RTX 5060 Ti (4B NVFP4 W4A8 · llama.cpp, `-np 4`, 4 constant
+256-token decodes, no `--prio`), and in another process the MathBackend DLL on the same card, in 60 s windows ordered
+none / keep / busy / busy / keep / none (keep: one call every 0.5 s; busy: calls back to back). `impact-ns500.txt`, `impact-ns0.txt`,
+`impact-perlaunch.txt`:
+
+| Mode | none | keep | busy |
+|---|---|---|---|
+| resident worker, `MIP_NANOSLEEP` 500 | 233 tok/s | 130 (**-44 %**) | 112 (-52 %) |
+| resident worker, `MIP_NANOSLEEP` 0 | 237 | 121 (**-49 %**) | 116 (-51 %) |
+| one launch per call | 223 | 223 (**-0.1 %**) | 205 (-8.3 %, at ~1,230 calls/s) |
+
+A resident worker in another process halves the engine's decode even while it only polls: Windows time-shares the GPU between the two
+processes' contexts (no MPS under WDDM), and a polling kernel always wants its share; sleeping between polls does not change that.
+A launch per call costs nothing while idle and 8 % under a flood of calls, at 248 us a call. So, beside an engine in another process
+(the PC layer, tir4b over llama-server), the launch-per-call mode is the one to use; the resident worker belongs inside the engine's
+own context, on a low-priority stream, where it shares the card without time-slicing. The developer's choice of the resident worker
+(2026-11-11) was made before this measurement and is the developer's to revisit.
+
+### What the model's text reaches (2026-11-11)
+
+Read in the code: tir4b's inline values evaluate arithmetic in `mathexpr` (Python `Fraction`) and call `mathbackend.run()` only when the
+text names a function (`\gcd`, `\lcm`, `totient`, `comb`, `modinv`, `mat_det`, ...): `numbers.add` and the like are not on that path.
+Counted on about a tenth of round 9's General traces (32 answers, General flags, `sim_replay --recorded`): `run()` **1** call
+(`numbers.falling_factorial`), `mathexpr.evaluate` **32,335** calls. The counts are calls in tir4b on the PC layer, not time in Strata's
+C++ decode loop: that half of the measure is the `STRATA_TIMELINE` run, still to do. By the decision rule above, the text readers (phase
+3) come before the rest of phase 1: open question 1 (text input) is now the one that decides the port's order, not question 3.
