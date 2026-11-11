@@ -291,3 +291,12 @@ mapped memory do not stall the thread; the local buffer's round trip does.
 
 After them: a single call **13.8 us** (the launch call ~5 us and the kernel's start ~5 us are WDDM's), back to back with the linger
 **8.7-9.1 us**. `linger_stress.py` 60,000 racing calls: 0 wrong; every corpus as before, linger on and off.
+
+**compute-sanitizer** (CUDA 13.3, RTX 5060 Ti, `numbers-paths-s3`, 220 cases through Knuth D and its add-back): the first memcheck run
+found **`Invalid __global__ system-scoped atomic`** in modes 1 and 2: the flags were written with `atomicExch_system` to mapped host
+memory, and this card reports `HostNativeAtomicSupported 0` (no device atomics on host memory over PCIe); it had worked by accident.
+The flags are now plain volatile stores after `__threadfence_system()` (the answer is visible before the flag). After the fix:
+memcheck 0 errors in modes 0, 1 and 2 (linger off and on); initcheck 0, racecheck 0 hazards, synccheck 0 in mode 2 with the linger;
+every corpus in every mode as before (fuzz 4,000 / 4,000, paths 220 / 220, s1 1,800 / 1,816 with the 16 time-guard cases);
+`linger_stress.py` 60,000 racing calls 0 wrong. The stores were also faster than the atomics: **single call 12.9 us, back to back with
+the linger 7.6 us** (from 13.8 and 8.7). Not run yet: the RTX 4070 SUPER (sm_89), which is the developer's display and game card.

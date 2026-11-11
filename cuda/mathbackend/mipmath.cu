@@ -1112,7 +1112,7 @@ __global__ void worker(Slot *slot, uint32_t *arena, long long budget, int sleep_
         int st = g_poll_mode ? __ldcv((const int *)&slot->state) : slot->state;
         polls++;
         if (st == 1) {
-            atomicExch_system((int *)&slot->seen, 1);
+            slot->seen = 1;   // a volatile store: system atomics on mapped host memory are not supported here (HostNativeAtomicSupported 0)
             long long seen = clock64();
             slot->polls = polls;
             slot->poll_cycles = (uint64_t)(seen - t0);
@@ -1122,7 +1122,7 @@ __global__ void worker(Slot *slot, uint32_t *arena, long long budget, int sleep_
             last = clock64();
             __threadfence_system();
             // a call does not reset the budget: the worker still ends on time
-            if (g_poll_mode) atomicExch_system((int *)&slot->state, 2);
+            if (g_poll_mode) slot->state = 2;   // volatile store after the system fence (no host-memory atomics on this card)
             else slot->state = 2;
         } else if (st == 3) {
             return;
@@ -1150,7 +1150,7 @@ __device__ void serve_flag(Slot *slot, uint32_t *arena, uint32_t *sh) {
     __threadfence_system();
     serve(slot, arena, sh);
     __threadfence_system();
-    atomicExch_system((int *)&slot->state, 2);
+    slot->state = 2;   // volatile store after __threadfence_system(): the answer is visible before the flag
 }
 
 __device__ void linger(Slot *slot, uint32_t *arena, uint32_t *sh) {
@@ -1166,7 +1166,7 @@ __device__ void linger(Slot *slot, uint32_t *arena, uint32_t *sh) {
             __threadfence_system();
             serve_req(slot, arena, sh, (int)(ol & 0xFF), ol >> 8);
             __threadfence_system();
-            atomicExch_system((int *)&slot->state, 2);
+            slot->state = 2;
             end = clock64() + g_linger_cycles;
             continue;
         }
@@ -1238,7 +1238,7 @@ __global__ void once_param(Slot *slot, uint32_t *arena, ParamArgsT<W> pa) {
         serve(slot, arena, sh);   // no shared memory asked: the full path uses the global arena
     }
     __threadfence_system();
-    atomicExch_system((int *)&slot->state, 2);
+    slot->state = 2;   // volatile store after __threadfence_system(): the answer is visible before the flag
     linger(slot, arena, sh);
 }
 
