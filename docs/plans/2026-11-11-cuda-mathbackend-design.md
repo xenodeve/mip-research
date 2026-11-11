@@ -70,8 +70,15 @@ copied; **linking a library as a dependency needs a conversation with the develo
   returns a status (`OK`, `NOT_COVERED`, `BAD_INPUT`) and the result in the same canonical encoding. Python defines the encoding for every
   value type it returns (int, Fraction, Decimal with its exponent, Surd, lists, tuples, matrices, strings, dicts), so equality is a byte
   comparison of the two encodings.
-- **CUDA Graph:** the work of an operation is issued as a captured graph replayed with new parameters; data-dependent loops and branches
-  use graph conditional nodes (CUDA 12.4+), so the host does not drive iterations.
+- **CUDA Graph:** the work of an operation is issued as a captured graph replayed with new parameters. The rule is that the host never
+  drives an iteration, not that every loop is a graph node: a data-dependent loop may be a graph conditional node (CUDA 12.4+) or one
+  kernel that loops on the device (recursion, memoisation, DPLL and Pollard rho are not practical as conditional nodes).
+- **Values cross the ABI as digits, not limbs.** Turning a decimal string into limbs is bignum arithmetic, so it runs on the device
+  (goal 3); the canonical encoding carries integers as sign + decimal digits, and the device parses and prints them.
+- **A fourth status, `DEVICE_FAILED`,** for what is not the op's answer: out of device memory, a kernel fault, or a device loop that
+  reached its step cap. The step cap is a function of the input (a count of iterations fixed per op), never a clock, so it is the same
+  on both cards. The caller treats `DEVICE_FAILED` as "no value": nothing is put, the event is logged, and there is no silent host
+  fallback (anti-goal). The harness counts it as a disagreement unless Python refuses the same case.
 - **Exact arithmetic on the device:** multi-limb integers, fractions as reduced pairs, decimals with Python's `decimal` semantics for the
   context each op sets (precision, rounding), and `Surd`.
 - **Verification harness:** Python generates the cases (the 31,064 existing ones, plus new cases at and past each op's bound), runs both
@@ -88,8 +95,6 @@ copied; **linking a library as a dependency needs a conversation with the develo
 
 ## Calls made after the builder check (mine; the developer can overrule)
 
-- **Graph shape:** an operation may be one kernel inside a graph that loops on the device (recursion, memoisation, DPLL and Pollard rho
-  are not practical as conditional nodes). The rule is that the host never drives an iteration, not that every loop is a graph node.
 - **Corpus:** the cases are generated once from the `sim_*.py` seeds and frozen with Python's canonical outputs as a versioned corpus
   file; a seed change makes a new corpus, never a silent one.
 - **Reference Python:** pinned to the version on this PC (3.11), recorded in the corpus; an exception other than `NotCovered` /
@@ -103,7 +108,9 @@ copied; **linking a library as a dependency needs a conversation with the develo
 1. **The harness comes before any kernel, and is proven with a null backend.** First: the frozen corpus (cases, Python's canonical
    outputs, refusal class), a canonical byte encoding for every return type, a comparator with per-op coverage. Then Python itself is
    run through the C ABI's encode -> decode path as a "null backend" and must read 100%; this shakes out encoding and normalisation
-   faults before any CUDA exists.
+   faults before any CUDA exists. **The harness must also be shown to fail:** deliberately wrong backends (a value off by one, the
+   wrong refusal class, an unreduced `Fraction`, a reordered list, a `Decimal` with another exponent, a refusal where Python answers)
+   each run through it and must read below 100 % on the ops they touch. A harness that only ever passed has not been tested.
 2. **What 100% covers, in writing:** identity on the frozen corpus **plus an adversarial boundary set**, not a proof over all inputs;
    differential fuzzing (new random cases, Python against CUDA) stays on as a standing gate. The boundary set is built on purpose, since
    seeded generators under-sample it: each op's bound and bound ± 1; zero, negatives and sign edges; carries across limb boundaries
@@ -117,7 +124,28 @@ copied; **linking a library as a dependency needs a conversation with the develo
    text reaches. Phase 1's order follows those numbers. **The acceptance measure for the developer's goal is fixed now:** host time per
    decode round that MIP causes (target: the graph launch alone) and tokens per second with MIP on against off, ABBA on the served
    profile, beside the 100% gate. Phase 1 can be 100% correct and change nothing the developer asked for unless this is measured.
+   **The decision rule, fixed before the measurement:** the timeline splits MIP's host time per decode round into MathBackend calls
+   and the rest (the text readers, the loop checks). If MathBackend calls are a small part of it, porting them first does not reach
+   the developer's goal, and phase 3's text readers move ahead of phase 1's tail; the share that decides it is the developer's to set
+   (proposed: under a third of MIP's host time). The measure also counts the two costs a GPU path adds: decode slowed by MIP's kernels
+   on the same card, and the sync that reads a value back before it is put into the stream. One served run answers this, so it is
+   proposed **before** the design is approved.
+6. **A change to Python is a change to the reference live rounds use.** Making the float pre-filters exact and adding bounds (open
+   question 3) changes Python's own outputs and refusals, so it passes its own gate first: the 31,064 oracle cases again, and a replay
+   of the stored traces showing no put is lost or changed (`sim_replay`), before the corpus is frozen from it.
 
 ## Open, for the developer
 
-- *(the three questions below, answered in the conversation)*
+1. **Ops that take text** (`symbolic` 18, and the ops whose argument is an expression or a callable). Proposal: phase 1 ports the ops
+   whose arguments are numbers only, with the excluded ops named in a list in the repository; the text ops move to phase 3 with the
+   text readers. **If taken,** goal 1 and phases 1-2 read "every op whose arguments are numbers (N of 387, list in
+   `cuda/mathbackend/EXCLUDED`)", "complete" in phase 2 means that set at 100 %, and the excluded ops stay host-only and are labelled
+   so, as the standing decision "the host only where the GPU cannot yet, and says which" requires; goal 3 applies to the ported set.
+2. **Ops with more than one right answer** (SAT, CSP, shortest path, LP, about a third of `search`). Proposal A: two harness modes,
+   identity (same bytes) where Python's answer is unique, and validity (the answer checked against the problem by Python) where it is
+   not. Proposal B: identity everywhere, by porting the same algorithm single-threaded, so the device returns the answer Python does.
+   B keeps "100 % the same as Python" literal; A allows parallel search.
+3. **Ops "of any size"** (55). Proposal: give each a bound in Python first, written as a function of the input (bits, digits, a count
+   of values or of search steps), never as time or memory, since a clock or a memory limit refuses differently on each card and on
+   Python and breaks refusal identity. The sizes are the developer's to set; the device's memory then follows from the largest input
+   the bounds allow. The new bounds pass the gate in point 6 above.

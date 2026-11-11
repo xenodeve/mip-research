@@ -1,5 +1,9 @@
 # Round 9's failures and the fixes for them (2026-11-10)
 
+> **Current state (2026-11-11):** `--exact-answer` is withdrawn (ERRATA MR-35 to MR-37); where the tables below name it as a fix
+> (failures 1-3, "Queued" item 1, step 4a), read [Changed: `--exact-answer` withdrawn](#changed-2026-11-11---exact-answer-withdrawn).
+> What round 10 runs, and what blocks its launch, is in [Round 10 as it runs](#round-10-as-it-runs-2026-11-11) at the end.
+
 **Build:** 4B NVFP4 W4A8 · llama.cpp · PC layer, round 9 (half A `c093b2f`, half B `255ec4e`), General arm, 232 of 240 pairs.
 Every wrong answer of the General arm was read by hand: 23 wrong by both the rule and the API reader, and 6 more where the two
 readers disagree. The control arm's 75 wrong answers are almost all loops that ran out (`stuck`), which the closers already answer.
@@ -171,3 +175,76 @@ quotient."* The line makes the model doubt the form, and part of the class-C loo
 - **What may be claimed:** "DeepMind Mathematics questions with our answer-format line, scored by our rule and the API reader". Rounds
   1-9 used our own line; no DeepMind number here is a leaderboard number, and the DeepMind numbers before and after frozen10 are not
   compared directly.
+
+## Round 10 as it runs (2026-11-11)
+
+**What it is.** A development run, not a measurement: the rows include the ones the fixes were built from, so a gain here says the
+mechanisms work as built and the model uses them, and nothing about a fresh set. The measurement is frozen10 (both arms, PC layer and
+A100). Build: **4B NVFP4 W4A8 · llama.cpp · PC layer**, `build-w4a8` (sm_89, `c9f3203a`), `qwen35-4b-nvfp4-axion.gguf`,
+`-c 262144 -kvu -fa on -ctk q8_0 -ctv q8_0 --no-cache-idle-slots`, T 0.6, top-p 0.95, top-k 20, seeds 1-2, full context.
+
+| | Rows (`mip-work/a100`) | Answers |
+|---|---|---|
+| A: round 9's General flags | `r10a-rows` 37 (5060 Ti) + `r10b-rows` 36 (4070 SUPER): DeepMind `div_big`, `mixed_longer`, `mul_div_longer`, `simplify_surd`, `swr_p_sequence` 10 each; MATH-500 L1-L5 23 (L5 10) | 146 |
+| B: A + `--question-quote --approx-put --answer-rewind 2 --letter-count` | the same | 146 |
+| C: B + `--execute --box --loop-hint --verify-gate` | `r10a-math-rows` 12 + `r10b-math-rows` 11 | 46 |
+
+Flags: `--inline-calc --mathbackend --inline-plain --inline-style general` put software's value at `=` as a plain number;
+`--no-digit-join` keeps the model from gluing digits to a put; `--guard-progress` puts nothing on a line already looping;
+`--loop-close` closes a looping thinking with `</think>`; `--answer-close` cuts a looping answer and asks for the final answer;
+`--early-cycle` catches an exact cycle early; `--shape-cap 1024 --cover-cap 32768` bound the loop-shape detectors; `--question-quote`
+puts the question's own expression when the model's copy of it reads to another value, and at a thinking loop's close;
+`--approx-put` puts the value to 10 significant digits after `\approx`; `--answer-rewind 2` cuts a looping answer out and lets the
+model write on with another seed, at most twice, before the forced cue; `--letter-count` puts the letter counts of a string the
+question writes out; `--execute --box` runs the model's code blocks in the AppContainer box; `--loop-hint` invites a program at a
+thinking loop; `--verify-gate` opens a block to check every candidate against the original equation, once, when the question asks
+for all solutions.
+
+**What counts, decided before the run.** The fixes go to frozen10 when, on the 146 pairs A vs B: (1) B is right more often than A,
+one-sided sign test p < 0.05 on the rule score and on the API-corrected score both; (2) no value put by B's mechanisms is wrong
+(each checked again by `analyze.py`); (3) B loses no answer A got right that the touch caused (a pair that parts before the first
+touch is path noise; one that parts at a touch and goes right -> wrong is read by hand and must be understood). Arm C reaches 3
+distinct questions (`e3263989`, `97b18f58`, `370853d3`, 6 answers) inside its 46: it is a working check of the Sandbox on the PC,
+read answer by answer, not a score.
+
+**The simulation gate** (`results/round10/replay_gate.py`, round 9's 240 General traces replayed under arm B, each mechanism alone
+and all four together; the replay stops at the first new act):
+
+| Mechanism | First acts (alone) | On answers that finished right / wrong | Values wrong | `vllm_refused` |
+|---|---|---|---|---|
+| `--question-quote` | 42 | 31 / 11 | 0 | 0 |
+| `--approx-put` | 138 | 119 / 19 | 0 (each re-evaluated exactly, within half a unit of its last place) | 0 |
+| `--letter-count` | 10 | 8 / 2 | 0 (counted again with `str.count`) | 0 |
+| `--answer-rewind 2` | 0: not measurable by replay | 28 answers had an answer close in round 9: 10 / 18 | puts no value | 0 |
+
+The rewind cannot be replayed: when round 9's answer close acted it cut the loop out of the text (`cut_tokens` 400-5,600), so the stored
+traces hold no loop for `loop_rewind` to find (0 of the 28 at the close's position). Its reach is the 28 answers whose answer close
+acted, 10 of them right, and whether the rewind acts there in place of the close is a question only the live run answers; the 10 right
+ones are read one by one in round 10's paired split.
+
+Acts on right answers put true text (the question's words, a value to the places it gives, a count) and decide nothing; whether they
+cost a right answer is what the live run's paired split (3) answers.
+
+**Speed: llama-server's idle-slot cache, found in the smoke.** The smoke on the 5060 Ti fell from ~60 to 2-4 tok/s per slot (6-9 tok/s
+total), GPU at 3-4 %, the server on one CPU core. Cause, read in `tools/server/server-context.cpp` (llama.cpp `1deefcca3`):
+`--cache-idle-slots` is on by default, and under `-kvu` every new task saves each idle slot to the RAM prompt cache and clears it
+(`TAG_IDLE_SLOT_CLEAR`). tir4b sends a request every ~18 tokens, so an answer's slot is often idle when another answer's request
+arrives; its next request finds its cache gone, takes a slot by LRU (2,068 of 2,293 selections) and reloads its state over PCIe,
+2 s median and growing with the context, with the server's main loop blocked meanwhile (4,250 s of an 88-minute run). Five answers
+in flight on `-np 4` made it worse. Fixed: `--no-cache-idle-slots` on every PC launcher, and `pc_round10.sh` starts `N/2*2 + 1`
+slots so every answer in flight keeps its own (slots cost no VRAM under `-kvu`). The same smoke resumed on a fresh server with the
+flag: 153 tok/s total, 1,008 of 1,012 selections by LCP, GPU 63 %. Round 9 had it milder, with four answers on four slots: LRU on
+7 % of selections in r9b, 17 % in r9a2 (whose per-slot speed fell from 12 to 4 tok/s); its timing is not comparable to round 10's.
+With `-c 524288 -np 5` the 5060 Ti uses 14.8 of 16.3 GB (measured); not adopted, since the two cards keep one config.
+
+**Expected time:** about 4-6 h with both cards, from round 9's tokens on these rows (~1.7M per arm on the DeepMind and repeated MATH
+rows, ~0.5M for the 17 new MATH rows, C ~0.7M) at ~150 tok/s per card, arm C one answer at a time on each card beside A and B; the
+longest answers (60-70k tokens in round 9) set the tail.
+
+**The smoke** (`a100/pc/r10smoke-*`, `r10smoke4070-c`): A and B answered `dm_swr_p_sequence-3480` with no error, `--letter-count` put
+the counts, `--approx-put` put 3 values (all right). Arm C on the 4070 SUPER answered `stdmath-e3263989` twice: the gate opened
+(`verify gate`), the box ran the checks (`output` by the gate, 1.1-3.0 s), both answers boxed four solutions and are wrong (gold
+`3\pm2\sqrt{2}`). In seed 0 the gate's own check printed `sin = -0.333` for the two negative candidates, and the model still kept them;
+in seed 1 the model's check used an arccot branch under which the negatives pass. Seed 0 also opened two blocks that started
+indented (`IndentationError`). This is round 9's P8 as written: the branch convention is the model's to decide, and the output
+showed it the answer it did not take.

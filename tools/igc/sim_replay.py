@@ -169,7 +169,8 @@ def replay(rec, ids, arm_kw, tok, IDS, recorded=False):
         r.take(new)
         s.pos -= r.early_dropped - dropped   # --early-cycle cut the tokens after a line end: the trace goes on from there
         for e in r.events[seen:]:
-            ev = dict(kind=e['kind'], at=s.pos, expr=e.get('expr'), value=e.get('value'))
+            ev = dict(kind=e['kind'], at=s.pos, expr=e.get('expr'), value=e.get('value'),
+                      **{k: e[k] for k in ('string', 'copy', 'at_loop', 'cut_tokens', 'rewind') if k in e})
             # recorded: any text the runner put (a value, a loop close) whose tokens are the trace's own is what happened there, and is
             # followed; only a put the trace does not hold is where the mechanism under test acts (#307: an answer close comes after a loop close)
             span = r.spans[-1] if e['kind'] == 'inline value' else next((sp for sp in reversed(r.spans) if sp[0] == e.get('at')), None)
