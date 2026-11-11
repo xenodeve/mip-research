@@ -48,7 +48,7 @@ the measurement. Measured on lists fixed before the run and not used to write it
 | stored rows (370) | 81 read (80 DeepMind + 1 MATH), all equal to gold |
 | round 9 replay of `--exact-answer` | unchanged: 24 acts, 16 wrong -> right, 0 right -> wrong |
 
-Not yet: a live run of `--exact-answer` on questions outside DeepMind's wording.
+Not yet: a live run of `--exact-answer` on questions outside DeepMind's wording. **Queued** with the 6 MATH-500 questions it reads, inside the next live round ([plan](plans/2026-11-10-round9-fixes.md#queued-for-the-next-live-round-2026-11-11)).
 
 **Status words:**
 - **fixed, live** = the fix ran with the model and the pattern's answers came out right.

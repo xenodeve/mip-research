@@ -47,7 +47,7 @@ If 1-4 and 8 hold, up to about 17 of the 23 can move; replay has to show it.
 | 1. a3 (done 2026-11-10) | done on the 4070 | General 8 of 8, control 4 of 8 (4 `stuck`). Round 9, 240 pairs: **215 vs 161** by the rule (API **216 vs 161**), General alone 59, control alone 5, p = 9e-13 |
 | scorer: set braces | done, `2fcfbb9` | `\{-2, 1-\sqrt{5}, 1+\sqrt{5}\}` for `\{1\pm\sqrt{5},-2\}` (a3 `stdmath-bf7ece2b` x2) was scored wrong |
 | 4a. targeted live run (2026-11-11) | done, `6c9331e` | the 11 rows the replay moved x 2 seeds, round 9's flags + `--exact-answer`: **22 of 22 right** (round 9: 7 of 22); 13 acts, 13 values right; all 9 `div_big` answers wrong in round 9 right with an act; 4 others right with no act (sample path). Loops as long as before. [inject.md](../inject.md#--exact-answer), #19 |
-| 4. paired live test | next | 40 rows x 2 seeds, both arms; the 5060 Ti ran ~12 tok/s with ~30k-token answers in flight against 60-80 on the 4070 with short ones (hypothesis: each request resends the whole answer for ~18 tokens), to be measured first |
+| 4. paired live test | **queued: runs inside the next round, not on its own** (developer 2026-11-11: test live together with another round so no time is lost) | 40 rows x 2 seeds (`div_big`, `mixed_longer`, `mul_div_longer`, `simplify_surd`), both arms, rule + API reader. **Add the 6 MATH-500 questions the widened reader reads** (D19: `Simplify $\sqrt{242}$.`, `What is the value of $513^2 - 487^2$?`, ... list from `results/exact-answer-r9/outside_reach.py`): the first live run of `--exact-answer` outside DeepMind's wording. Before it: measure why the 5060 Ti ran ~12 tok/s with ~30k-token answers in flight (hypothesis: each request resends the whole answer for ~18 tokens) |
 
 **`\approx`: what the gate showed** (`results/exact-answer-r9/approx_scan.py`, `approx_scan_put.py`, round 9 stored text). General wrote
 3,391 `\approx` with a decimal after it; the `=` reader reads the computation before 1,952 of them, and the model's value is off by more
@@ -70,3 +70,12 @@ The developer paused this work after the summary. Where it stands:
   ~4.5-5 h); `swr_p_sequence` by Sandbox or a sentence reader.
 - Pick-up order: finish a3 -> round 9's final totals (rule + API) to #19 and the profile README 232 -> 240 (PR xenodeve/xenodeve#7)
   -> the paired live test (step 4) -> frozen10.
+
+
+## Queued for the next live round (2026-11-11)
+
+The developer: write it down now, and test live together with the next round so no time is lost. Everything below rides one round, both arms, rule + API reader, the three questions per touch:
+
+1. `--exact-answer` with the widened reader (D19) on the 40 development rows x 2 seeds **and** the 6 MATH-500 questions it reads (never used here: the first live run outside DeepMind's wording).
+2. Whatever of P11 (`pprox` put) and P12 (close on a step of the asked quantity) passes its offline gate by then, each designed from the case's statement ([failures](../failures.md#how-a-pattern-is-fixed-the-situation-not-the-test-set)).
+3. P7 and P8 stay out: their evidence is one module / one question.
