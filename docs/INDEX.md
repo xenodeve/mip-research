@@ -8,6 +8,8 @@ Protocol) is, how it differs from MCP, and why every result so far comes from th
 
 Claims in the issues that were later withdrawn, corrected or never confirmed: [ERRATA](ERRATA.md). Check it before quoting an issue.
 
+Every pattern that made the model wrong, read by hand, with its fix and whether the fix was tested: [failure patterns](failures.md).
+
 [ภาษาไทย](#ภาษาไทย)
 
 ## Categories
