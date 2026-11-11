@@ -271,3 +271,7 @@ kernel from answering with an older launch's parameters).
 `linger_stress.py`: 60,000 calls `add(i, 1)` with gaps drawn from 0-30, 0-120 and 0-400 us around the window's end: **0 wrong answers**;
 a lingering kernel served 91 %, 19 % and 4 % of them. All three corpora as before with the linger on. The window costs nothing while
 calls are sparse and, during a dense burst, holds the GPU like the resident worker; it is a knob for bursty callers, off by default.
+
+Tried and dropped (same session, the committed build re-measured beside each): the lingering kernel reading small arguments in 16-byte
+vectors and writing the answer through a local buffer in 4-byte words: 10.1 -> 11.2 us (device 5.2 -> 6.5 us). Posted byte writes to
+mapped memory do not stall the thread; the local buffer's round trip does.
