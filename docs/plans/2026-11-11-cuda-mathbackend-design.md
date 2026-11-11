@@ -371,4 +371,10 @@ flag-only kernel every 1 ms keeps the GPU out of its idle state: median **291-29
 does not help (282 us); 0.2-0.5 ms is no better than 1 ms. What remains is the calling thread waking (Python's own MathBackend: 47-53 us
 on that rhythm) and the launch. A heartbeat only matters on a card nothing else keeps busy: beside an engine the card is awake already,
 and from another process the heartbeat would itself take time slices. Not adopted as a default; a knob for an idle-card deployment.
-The clock lock (`nvidia-smi -lgc`) and the HAGS toggle need administrator rights and wait on the developer.
+
+**Clock lock** (the developer ran `nvidia-smi -i 1 -lgc 3090,3090` as administrator; the card then idled at ~2,780 MHz in P5, not P8):
+linger back to back 7.4-8.1 us (unlocked 7.3), single 14.3-15.0 us (12.8), empty-kernel floor 8.5-8.7 us (8.3-8.6), a call every 1 ms
+69 us (58), every 50 ms 329 us (291-295), every 50 ms with the 1 ms heartbeat 100 us (102-107). No gain: the lock holds the core clock
+but the card still leaves P0 and its link still sleeps between sparse calls, which is what those calls pay; the heartbeat remains the
+lever that works. Unlocked again (`-rgc`). HAGS is on (the developer, 2026-11-11): every figure here is with HAGS on; the off case needs
+a reboot and is the developer's call.
