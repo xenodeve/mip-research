@@ -154,6 +154,20 @@ How it runs (scripts in `scripts/pc/`, data in `WORK`, outside the repository):
 
 ## How a test is run
 
+- **Report the test before starting it, every time** (developer, 2026-11-11). Before any live run (a round, a probe, a targeted
+  run, a smoke run), tell the developer, and start only after:
+  1. **how many** questions and answers (rows x seeds x arms);
+  2. **from which sets** (DeepMind modules, MATH-500, LiveBench, ... with the row file);
+  3. **difficulty** (MATH level, module, or "hard / loop rows", as the set states it);
+  4. **kind** (arithmetic, algebra, word problem, string, code, ...);
+  5. **expected time in minutes**, with how it was estimated (the same rows' tokens and seconds in an earlier run, and the
+     measured tok/s of that card and engine); say what could make it longer (another program on the PC, long answers in flight);
+  6. **which graphics cards** (RTX 5060 Ti, RTX 4070 SUPER, A100) and what runs on each;
+  7. **which inference engine and build** (llama.cpp sm_89 W4A8 + model file, vLLM on the A100, the Strata engine + exe).
+
+  Example: "22 answers = 11 rows x 2 seeds x 1 arm; DeepMind `div_big` 6 rows, `mixed_longer` 1, `mul_div_longer` 2,
+  `simplify_surd` 2 (arithmetic, exact fractions and surds; the rows round 9 got wrong); about 90 min (round 9 spent 443k tokens on
+  them, ~80 tok/s at np 4); RTX 5060 Ti; llama.cpp `build-w4a8` (sm_89), 4B NVFP4 W4A8."
 - **Full context, every round** (2026-11-06). Never `--max-tokens`; 262,144 tokens for the 4B. A cap turns "would have answered at
   90k" and "loops forever" into the same `length` finish. Report finishes by kind (stop, loop close, stuck, length). Keep the model
   from filling the window with loop closes, not with a cap.

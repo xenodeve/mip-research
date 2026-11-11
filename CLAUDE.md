@@ -26,6 +26,9 @@ The rules agents miss most, all in full in `AGENTS.md`:
    repeat (49/49) was measured greedy only.
 6. **Test with the smallest run that answers the question:** first pass, then only the misses the feature can reach, then the
    trade-off on a sample of right answers.
+6b. **Report every test before starting it** (2026-11-11): how many questions and answers, from which sets, difficulty, kind,
+   expected minutes (and how estimated), which graphics cards, which inference engine and build. Then start. Full rule and an
+   example in `AGENTS.md` "How a test is run".
 7. **Every written-answer test also goes through the API reader** (`tools/igc/answer_check.py`), on this PC only; report the rule's,
    the reader's and the corrected score.
 8. **Caught / should have caught,** with the denominator; check every case before stating a cause. **Every touch a mechanism made:
