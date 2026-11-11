@@ -320,3 +320,13 @@ arguments gained ~5 %; a parse in 8-byte SWAR steps would help long numbers, not
 So, on this PC: next to an engine in another process a call costs ~200 us of context switching whatever the kernel does, and Python
 answers in ~50 us. The device path pays only where it shares the engine's own context (one process: no switch, the resident worker on a
 low-priority stream), which is the module's end shape; there the in-process floor is the 7.6-8.6 us above.
+
+**Under decode load, the other paths** (`under_load.py`, a call every 5 ms while llama-server decodes on the card, 1,000 calls):
+mode 2 215 us median (p10 180, p90 270), decode 272-274 tok/s; mode 2 on the highest-priority stream 216 us (stream priority does not
+reach across processes); the resident worker 170 us median but p10 43 / p90 1,320 us and decode **112 tok/s** (-59 %), 277 us and
+89 tok/s without its poll sleep. Mode 2 stays the best of them beside an engine in another process.
+
+**Register path, leaner:** canon.encode writes no whitespace, so the register path no longer skips any (a request with whitespace goes to
+the full path, which reads JSON), and digits accumulate in two 32-bit runs of at most 9 joined once. Device time 2.5 -> 2.0 us (single),
+3.8 -> 3.4 us (linger); 10-18 digits ~12.6 -> 8.7 us. Back to back with the linger **7.3-7.4 us**; a single call 12.8-13.7 us. Every
+corpus in modes 1 and 2 as before, 40,000 racing calls 0 wrong, memcheck 0 errors.

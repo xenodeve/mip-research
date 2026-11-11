@@ -718,12 +718,20 @@ __device__ int read_rat(Ctx &c, Rat &r, const uint8_t *s, int len, int &i) {
 
 __device__ int fast_digits(const uint8_t *s, int a, int b, long long &v) {   // s[a..b): 1 to FAST_DIGITS ASCII digits
     if (b - a < 1 || b - a > FAST_DIGITS) return 0;
-    long long x = 0;
-    for (int k = a; k < b; k++) {
-        if (s[k] < '0' || s[k] > '9') return 0;
-        x = x * 10 + (s[k] - '0');
+    // two 32-bit runs of at most 9 digits each (a 64-bit multiply per digit costs several instructions here), joined once
+    int mid = b - a > 9 ? b - 9 : a;
+    unsigned hi = 0, lo = 0;
+    for (int k = a; k < mid; k++) {
+        unsigned d = (unsigned)s[k] - '0';
+        if (d > 9) return 0;
+        hi = hi * 10 + d;
     }
-    v = x;
+    for (int k = mid; k < b; k++) {
+        unsigned d = (unsigned)s[k] - '0';
+        if (d > 9) return 0;
+        lo = lo * 10 + d;
+    }
+    v = (long long)hi * 1000000000LL + lo;
     return 1;
 }
 
@@ -735,8 +743,8 @@ __device__ int fast_string_end(const uint8_t *s, int len, int p) {
 }
 
 // one argument item at s[i] as n / d, d > 0 (not reduced); i moves past the item. 0: not a fast argument.
+// canon.encode writes no whitespace, so the register path reads none: a request with any goes to the full path, which reads JSON
 __device__ int fast_arg(const uint8_t *s, int len, int &i, long long &n, long long &d) {
-    i = skip_ws(s, len, i);
     if (i + 6 > len || s[i] != '[' || s[i + 1] != '"' || s[i + 3] != '"' || s[i + 4] != ',' || s[i + 5] != '"') return 0;
     uint8_t tag = s[i + 2];
     int p = i + 6;
@@ -785,7 +793,7 @@ __device__ int fast_arg(const uint8_t *s, int len, int &i, long long &n, long lo
     } else {
         return 0;
     }
-    int e = skip_ws(s, len, q + 1);
+    int e = q + 1;
     if (e >= len || s[e] != ']') return 0;
     i = e + 1;
     return 1;
@@ -910,22 +918,14 @@ __device__ S2 s2_add(S2 x, S2 y) {
 
 // 1: answered into o; 0: not a fast call (o untouched)
 __device__ int process_fast(int op, const uint8_t *s, int len, Out &o) {
-    int i = skip_ws(s, len, 0);
-    if (i + 4 > len || s[i] != '[' || s[i + 1] != '"' || s[i + 2] != 'l' || s[i + 3] != '"') return 0;
-    i = skip_ws(s, len, i + 4);
-    if (i >= len || s[i] != ',') return 0;
-    i = skip_ws(s, len, i + 1);
-    if (i >= len || s[i] != '[') return 0;
-    i++;
+    // ["l",[ <arg> , <arg> ]] exactly, no whitespace (canon.encode's form)
+    if (len < 10 || s[0] != '[' || s[1] != '"' || s[2] != 'l' || s[3] != '"' || s[4] != ',' || s[5] != '[') return 0;
+    int i = 6;
     long long an, ad, bn, bd;
     if (!fast_arg(s, len, i, an, ad)) return 0;
-    i = skip_ws(s, len, i);
     if (i >= len || s[i] != ',') return 0;
     if (!fast_arg(s, len, ++i, bn, bd)) return 0;
-    i = skip_ws(s, len, i);
-    if (i >= len || s[i] != ']') return 0;
-    i = skip_ws(s, len, i + 1);
-    if (i >= len || s[i] != ']' || skip_ws(s, len, i + 1) != len) return 0;
+    if (i + 2 != len || s[i] != ']' || s[i + 1] != ']') return 0;
     S2 N, D;
     if (op == OP_ADD || op == OP_SUB) {
         S2 t = s2_mul(bn, ad);
@@ -1314,7 +1314,7 @@ extern "C" MIP_API int mip_open(int device, int resident) {
     if (cudaMalloc(&g_arena, sizeof(uint32_t) * ARENA_WORDS) != cudaSuccess) return MIP_HOST_ERROR;
     int lo, hi;
     cudaDeviceGetStreamPriorityRange(&lo, &hi);
-    cudaStreamCreateWithPriority(&g_stream, cudaStreamNonBlocking, lo);   // the lowest priority: the engine's work goes first
+    { const char *e = getenv("MIP_STREAM_HIGH"); cudaStreamCreateWithPriority(&g_stream, cudaStreamNonBlocking, e && atoi(e) ? hi : lo); }   // lowest by default: an engine in this process goes first
     cudaEventCreateWithFlags(&g_done, cudaEventDisableTiming);
     g_resident = resident;
     if (resident) {   // modes 1 and 2: the slot in mapped host memory
