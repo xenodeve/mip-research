@@ -376,5 +376,17 @@ and from another process the heartbeat would itself take time slices. Not adopte
 linger back to back 7.4-8.1 us (unlocked 7.3), single 14.3-15.0 us (12.8), empty-kernel floor 8.5-8.7 us (8.3-8.6), a call every 1 ms
 69 us (58), every 50 ms 329 us (291-295), every 50 ms with the 1 ms heartbeat 100 us (102-107). No gain: the lock holds the core clock
 but the card still leaves P0 and its link still sleeps between sparse calls, which is what those calls pay; the heartbeat remains the
-lever that works. Unlocked again (`-rgc`). HAGS is on (the developer, 2026-11-11): every figure here is with HAGS on; the off case needs
-a reboot and is the developer's call.
+lever that works. Unlocked again (`-rgc`). HAGS stays on (the developer, 2026-11-11: hardware-accelerated GPU scheduling is required), so every figure here is with it on
+and the off case is not a lever.
+
+### Latency, final state (2026-11-11, HAGS on, every lever within the PC's constraints measured)
+
+| Condition | Lowest measured | Floor beside it |
+|---|---|---|
+| back to back, linger 50 us | **6.6 us** (4070 SUPER, x16) / 7.3 us (5060 Ti, x4) | the flag over PCIe, one read of the arguments, ~2 us of work |
+| a single call | **10.7 us** (4070 SUPER) / 12.8 us (5060 Ti) | an empty flag-only kernel: 8.3-8.8 us |
+| in the engine's own process, a call every 5 ms | 7.5 us inside the DLL (35-38 us with the caller's own wake-up, as Python pays) | |
+| idle card, a call every 50 ms | 100-107 us with a 1 ms heartbeat (291-295 without) | the caller waking (Python: 47-53 us) |
+| beside an engine in another process | ~200-215 us | the cross-process context switch: resident, linger, stream priority, Windows GPU priority (median unchanged, decode -15 to -25 %), clock lock (no gain) all measured |
+
+Levers measured and dropped are listed in the sections above; the clock lock gave nothing; HAGS off is excluded by requirement.
