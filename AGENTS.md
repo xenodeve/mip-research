@@ -54,6 +54,20 @@ The developer, 2026-11-06 (#19): develop the General Style first, model profiles
 - **A put must be true under every reading of the `=`** (`16807 ≡ 7`, `6 rem 1`, `144.6666...`). The form is chosen by the
   semantics of the notation, never by which form a model wrote most often in a set.
 - **A new rule is justified by mathematics or notation,** never by "this set's model wrote X 70 % of the time".
+- **Fix the case the structure allows, never the test set** (developer, 2026-11-11). A test set is a magnifying glass that finds
+  cases where the model can fail; the fix targets the case as it can arise from the structure of the task, the question or the
+  model's output, wherever it occurs, in another set of the same kind or in real use. A fix that moves a set's score because it
+  matches that set's wording, module or gold format is tuning, not a fix. For every failure pattern
+  ([`docs/failures.md`](docs/failures.md), "How a pattern is fixed"):
+  1. state the case in words with no module name, set wording or row id;
+  2. build the detector from that statement, not from the rows that showed it;
+  3. test it on wordings or sets it was not written from (a list fixed before the run), and report its reach per family;
+  4. count evidence by distinct questions, not answers;
+  5. measure the gain on rows it was not built from, with 0 right -> wrong.
+
+  The first check (D19): `--exact-answer`'s reader saw "one computation" in 80 of 80 DeepMind questions and in 0 of 80 asked
+  `{e} = ?` or `Can you calculate {e} for me?`; widened from the case's statement, it read 8 new wordings and LaTeX 80 of 80,
+  10 meaning-changing wordings 0 of 80, MATH-500 6 reads all gold, GSM8K 0 of 1,319.
 - **Development sets find bugs and gaps; they do not set thresholds.** Measure on a frozen fresh set (H3), read only after the
   run; never change rules by fitting H3.
 - **Every new put form is judged by agreement with the value the model writes next,** on traces it was not written from (in and

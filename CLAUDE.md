@@ -18,6 +18,9 @@ The rules agents miss most, all in full in `AGENTS.md`:
    saves.
 3. **The General Style first, no tuning to the test.** A put is true under every reading of the `=`; rules come from mathematics or
    notation, never from a set's frequencies; development sets find bugs, the frozen set measures. The plain value for every model.
+   **Fix the case the structure allows, never the test set** (2026-11-11): a test set is only a magnifying glass for cases that can
+   occur; state the case without the set's wording, build the detector from that statement, test it on wordings and sets it was not
+   written from, count distinct questions, and measure on rows it was not built from ([failures](docs/failures.md)).
 4. **Qwen3.5-4B first,** until the system is settled, then other models.
 5. **Full context, sampled.** Never `--max-tokens`; T 0.6 with two or more seeds; vLLM runs are not paired across runs (#21), and the engine's
    repeat (49/49) was measured greedy only.
