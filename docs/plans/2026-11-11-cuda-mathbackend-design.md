@@ -349,3 +349,19 @@ being the calling thread waking from its 5 ms sleep (Python's own MathBackend pa
 warm). Stream priority and the engine's step length did not move mode 2, whose cost is the launch queued behind the engine thread's
 driver calls. So in the end shape the resident worker on a low-priority stream is the mode: sparse calls at the caller's own wake-up
 cost, the engine within 2 %. Across processes (today's PC layer) it is the opposite (resident -44 to -59 % decode), and mode 2 is used.
+
+### RTX 4070 SUPER (sm_89, PCIe gen4 x16), 2026-11-11 (the developer's go-ahead; a game was using the card, ~46 %)
+
+Correct as on the 5060 Ti: `numbers-fuzz-s2` 4,000 / 4,000 and `numbers-paths-s3` 220 / 220 in modes 0, 1, 2 and 2 with the linger;
+`numbers-s1` 1,800 / 1,816 (the same time-guard cases). memcheck 0 errors in mode 2 with the linger and in mode 1.
+
+| | RTX 5060 Ti (x4, idle) | **RTX 4070 SUPER (x16, a game running)** |
+|---|---|---|
+| back to back, linger 50 us | 7.3 us | **6.6 us** |
+| back to back, resident worker | (12 us, before the doorbell and the stores) | **6.7 us** |
+| a single launch | 12.8 us | **10.7 us** (one run 15.6: the game) |
+| empty kernel floor (`floor.py`) | 8.3-8.6 us | 8.8 us |
+| a call every 1 / 50 ms | 58 / 390 us (idle card waking) | 185 / 232 us (switching from the game's context) |
+
+The wider link takes ~10-15 % off the round trip. Sparse calls on a card another process is using pay the cross-process switch, as beside
+llama-server on the 5060 Ti.
