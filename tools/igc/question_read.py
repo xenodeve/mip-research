@@ -57,21 +57,80 @@ def read(question):
     return (body, value) if value is not None and re.search(r'[-+*/×÷^]', body.lstrip('-')) else None
 
 
+# The situation (developer 2026-11-11): the question asks for one expression's value and holds nothing else that carries content.
+# What may stand around the expression is a request and nothing more: these words are the grammar of asking (courtesy, the asking
+# verb, "the value/result of", "equals"). A word not here (round, decimal, binary, remainder, percent, a unit, a variable, `and`)
+# could change what is asked, so it reads nothing. Written from English request grammar, not from any test's wording.
+REQUEST_PHRASES = [r'the (?:value|result|answer) (?:of|to|for)', r'what do (?:you|i|we) get (?:when|if) (?:you|i|we) (?:compute|calculate|evaluate|work out|simplify)',
+                   r'work out', r'figure out', r'how much is', r'how much does', r'thank you', r'let\'?s']
+REQUEST_WORDS = {
+    'please', 'pls', 'kindly', 'can', 'could', 'would', 'will', 'you', 'u', 'me', 'us', 'i', 'we', 'need', 'want', 'to', 'know', 'tell',
+    'help', 'show', 'for', 'just', 'quick', 'quickly', 'one', 'now', 'hi', 'hey', 'hello', 'thanks', 'ok', 'okay', 'so', 'the', 'what', "what's",
+    'whats', 'is', 'are', 'does', 'do', 'get', 'equal', 'equals', 'compute', 'calculate', 'evaluate', 'find', 'determine', 'give',
+    'simplify', 'solve', 'result', 'value', 'answer', 'exact', 'exactly', 'expression', 'this', 'following', 'it',
+}
+_LATEX = [(r'\\(?:times|cdot|ast)\b', '*'), (r'\\div\b', '/'), (r'\\(?:left|right)\b', ''), (r'\\[,;!: ]', ''), (r'\$', ''),
+          (r'\\[dt]?frac\b', r'\\frac')]
+
+
+def _plain(expr):
+    """LaTeX arithmetic to the plain notation the evaluators read: `\\times` `\\cdot` -> `*`, `\\div` -> `/`, `\\frac{a}{b}` -> `((a)/(b))`;
+    `\\sqrt{n}` and `^{k}` stay (exactexpr reads them)."""
+    for pattern, rep in _LATEX:
+        expr = re.sub(pattern, rep, expr)
+    frac = re.compile(r'\\frac\{([^{}]*)\}\{([^{}]*)\}')
+    while frac.search(expr):
+        expr = frac.sub(r'((\1)/(\2))', expr)
+    return expr.strip()
+
+
+def _one_expression(question):
+    """The expression when the question is a request around one expression and nothing else, else None."""
+    q = _clean(question)
+    q = re.sub(r'\s*=\s*\?*\s*[.!]*\s*$', '', q)                      # `... = ?`
+    q = re.sub(r'(?:\s*[?.!:,]+)+\s*$', '', q)                          # closing punctuation
+    words = r'(?<![\\A-Za-z])(?:{})(?![A-Za-z])'
+    for phrase in REQUEST_PHRASES:
+        q = re.sub(words.format(phrase), ' ', q, flags=re.I)
+    # request words only at the edges: in front of the expression and after it, never inside it
+    edge = r"[A-Za-z']+"
+    head = re.match(rf'^(?:\s*(?:{edge})\s*[,:!]?)*', q)
+    lead, rest = q[:head.end()], q[head.end():]
+    # the first token of the expression may be a LaTeX command or `sqrt`: give back a word glued to `(` or `{`
+    m = re.search(r"([A-Za-z']+)\s*$", lead)
+    if m and m.group(1).lower() == 'sqrt':
+        lead, rest = lead[:m.start()], lead[m.start():] + rest
+    tail = re.search(rf'(?:\s+(?:{edge}))*\s*$', rest)
+    expr, after = rest[:tail.start()], rest[tail.start():]
+    for w in re.findall(edge, lead + ' ' + after):
+        if w.lower() not in REQUEST_WORDS:
+            return None
+    expr = _plain(expr.strip(' ,:'))
+    if not expr or re.search(r'[A-Za-z]', re.sub(r'\\?sqrt|\\frac', '', expr)):
+        return None
+    if not re.search(r'[-+*/^×÷]|sqrt', expr.lstrip('-')):
+        return None
+    return expr
+
+
 def read_exact(question):
-    """As read, and also a question whose one computation has square roots (`Simplify (6*(-3*(3 + sqrt(108)*-5 + 4) + 5))**2.`),
-    computed exactly by exactexpr: (expression, Fraction or exactexpr.Value) or None. A Value only when the result is not rational;
-    any letter left beyond `sqrt` and the lead word, and it reads nothing."""
+    """As read, and also any question that asks for one expression's value in any request wording, LaTeX included (the situation,
+    not DeepMind's `What is`/`Simplify`; round 9's reader saw 0 of 80 questions re-asked as `{e} = ?` or `Can you calculate {e} for
+    me?`). Computed exactly by mathexpr, else exactexpr (square roots): (expression, Fraction or exactexpr.Value) or None. A Value only
+    when the result is not rational; pi, a variable, or any word that is not a request reads nothing."""
     got = read(question)
     if got is not None:
         return got
-    q = _clean(question)
-    body = re.sub(rf'^(?:{LEAD}|simplify)\s*', '', q, flags=re.I).rstrip(' ?.')
-    if 'sqrt(' not in body or re.search(r'[A-Za-z]', body.replace('sqrt', '')):
+    body = _one_expression(question)
+    if body is None:
         return None
+    value = evaluate(body)
+    if value is not None:
+        return (body, Fraction(value))
     from tools.igc.exactexpr import NotExact, evaluate as exact
     try:
         value = exact(body)
-    except (NotExact, ArithmeticError, ValueError, OverflowError, RecursionError):
+    except (NotExact, ArithmeticError, ValueError, OverflowError, RecursionError, KeyError, IndexError, TypeError):
         return None
     if value is None or value.has_pi():
         return None

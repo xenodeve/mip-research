@@ -60,5 +60,42 @@ class ReadExact(unittest.TestCase):
             self.assertIsNone(read_exact(q), q)
 
 
+class TheSituation(unittest.TestCase):
+    """The situation, not the test's wording (developer 2026-11-11): a question that asks for one expression's value and holds nothing
+    else that carries content is read in any request wording, LaTeX included; a word that could change what is asked (rounding, a base,
+    a remainder, a percent, a unit, a variable) reads nothing. The 80 DeepMind questions re-asked in 4 other wordings were read 0 of 80."""
+
+    def test_request_wordings_around_one_expression(self):
+        from tools.igc.question_read import read_exact
+        e = '(-25)/(-10)*1/(-4)'
+        for q in (f'{e} = ?', f'Can you calculate {e} for me?', f'Please simplify {e}.', f'Could you tell me what {e} equals?',
+                  f'I need the result of {e}', f'hey, how much is {e}?', f'{e}=?', f'Quick one: {e}'):
+            got = read_exact(q)
+            self.assertIsNotNone(got, q)
+            self.assertEqual(got[1], Fraction(-5, 8), q)
+
+    def test_latex_expressions(self):
+        from tools.igc.question_read import read_exact
+        cases = (('Compute $3 \\times 4 - 2$.', Fraction(10)), ('What is $\\frac{3}{4} + \\frac{1}{6}$?', Fraction(11, 12)),
+                 ('Evaluate $\\left(3+4\\right) \\cdot 2 \\div 7$.', Fraction(2)), ('Find $\\dfrac{-12}{18}$.', Fraction(-2, 3)),
+                 ('Calculate $2^{10} - 1$.', Fraction(1023)))
+        for q, want in cases:
+            got = read_exact(q)
+            self.assertIsNotNone(got, q)
+            self.assertEqual(got[1], want, q)
+        from tools.igc.exactexpr import spell
+        got = read_exact('Simplify $\\sqrt{8} + \\sqrt{2}$.')
+        self.assertEqual(spell(got[1], latex=False), '3*sqrt(2)')
+
+    def test_a_word_that_changes_the_question_reads_nothing(self):
+        from tools.igc.question_read import read_exact
+        e = '3/7 + 1/2'
+        for q in (f'Round {e} to 2 decimal places.', f'What is {e} rounded to the nearest integer?', f'What is {e} in binary?',
+                  f'What is the remainder when {e} is divided by 7?', f'Is {e} positive?', f'What is 10% of {e}?',
+                  f'Approximately what is {e}?', f'What is {e} meters in feet?', f'What is {e} + x?', f'Solve {e} = y for y.',
+                  'What is 3 + 4 and 5 + 6?', 'What is the sum of the digits of 123 + 456?', f'Write {e} as a decimal.'):
+            self.assertIsNone(read_exact(q), q)
+
+
 if __name__ == '__main__':
     unittest.main()

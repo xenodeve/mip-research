@@ -31,9 +31,24 @@ wording. On the 80 questions it reads, re-asked in 10 wordings fixed before the 
 
 Across all 370 stored rows it fires on 4 DeepMind modules only (80 of 80 gold) and on 0 of MATH (162), LiveBench (32) and contest (16)
 rows; those families hold few one-computation questions, so silence there is expected, but the wording table shows the detector would
-miss the same situation asked another way. Next (D19): widen the reader from the situation's statement (a request phrase, then one
-expression and nothing else that carries content; LaTeX forms too), then test it on a **new** wording list and on LaTeX-written
-expressions, not on the 10 above.
+miss the same situation asked another way. **Fixed (D19, 2026-11-11):** `read_exact` was widened from the situation's statement: around one expression may stand only the
+grammar of asking (courtesy, the asking verb, "the value/result of", "equals", `= ?`), a word list written from English request
+grammar; any other word (round, decimal, binary, remainder, percent, squared, a unit, a variable, `and`) reads nothing; LaTeX
+(`	imes`, `\cdot`, `\div`, `rac`, `\sqrt`, `$`) is read. Tests in `tools/test_igc_question_read.py` (`TheSituation`), written before
+the measurement. Measured on lists fixed before the run and not used to write it (`results/exact-answer-r9/heldout_wordings.py`,
+`outside_reach.py`):
+
+| Check | Result |
+|---|---|
+| 8 new request wordings (`Would you work out {e} please?`, `Solve: {e}`, ...) | 80 / 80 each, same value |
+| the same expressions in LaTeX (`Compute $... 	imes rac{a}{b}$.`) | 80 / 80, same value |
+| 10 wordings that change what is asked (`to three significant figures`, `in hexadecimal`, `squared`, `modulo 3`, `Estimate`, ...) | **0 / 80** each |
+| MATH-500 (500, never used here) | 6 read, **6 equal to gold** (`Simplify $\sqrt{242}$.`, `What is the value of $513^2 - 487^2$?`, ...) |
+| GSM8K test (1,319 word problems) | 0 read |
+| stored rows (370) | 81 read (80 DeepMind + 1 MATH), all equal to gold |
+| round 9 replay of `--exact-answer` | unchanged: 24 acts, 16 wrong -> right, 0 right -> wrong |
+
+Not yet: a live run of `--exact-answer` on questions outside DeepMind's wording.
 
 **Status words:**
 - **fixed, live** = the fix ran with the model and the pattern's answers came out right.
@@ -231,7 +246,7 @@ Detail: [Detection](detect.md), [detection coverage plan](plans/2026-11-10-detec
 | D16 | `--check-hand` false flags still open | 12 of 64 sampled flags not errors: 7 long-multiplication carry (`$8 \times 3 = 24 + 2 = 26$`), 5 chain splits; precision 51/64; 270 unread | carry and chain-split rules, a gate before it runs | no | fix planned |
 | D17 | Latent signals see wrong values, loops and doomed traces badly | wrong value AUROC 0.705 (4B) / 0.668 (Qwen3.6); loops: 24 onsets, router 11/24 at k=2; on a MIP arm probe onsets fall to 80 / 59 / 50 % at k = 2/8/32 | none | — | open |
 | D18 | Offline precision did not predict live firing (sidecar, `UnifiedDetector`) | sidecar fired 3 times live, one before a wrong answer; "0 destructive false alarms" contradicted by #14 | sidecar off; fusion acts only with the exact parse | — | withdrawn |
-| D19 | The question reader sees "one computation" only in the test's wording | 0 / 80 for `{e} = ?`, `Can you calculate {e} for me?`, `Please simplify {e}.`, `What do you get when you compute {e}?` (80 / 80 for 6 other wordings) | widen from the situation's statement; test on a new wording list and LaTeX forms | wording table above | **open** |
+| D19 | The question reader saw "one computation" only in the test's wording | 0 / 80 for `{e} = ?`, `Can you calculate {e} for me?`, `Please simplify {e}.`, `What do you get when you compute {e}?` (80 / 80 for 6 other wordings) | `read_exact` widened from the situation's statement: request grammar around one expression, LaTeX read, any other word reads nothing | held out: 8 new wordings 80/80, LaTeX 80/80, 10 meaning-changing wordings 0/80; MATH-500 6 reads, 6 gold; GSM8K 0 reads of 1,319; round 9 replay unchanged (16 / 0) | fixed, offline |
 
 ## Inject
 
