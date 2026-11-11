@@ -6,6 +6,35 @@ or round can be checked against it. The developer's rule (2026-11-10): a pattern
 
 [ภาษาไทย](#ภาษาไทย)
 
+## How a pattern is fixed: the situation, not the test set
+
+The developer (2026-11-11): a test set is a probe that **finds a situation in which the model fails**; the fix targets that situation,
+which can occur in any set of the same kind or in real use. A fix that moves the test set's answers but is shaped to the set's wording,
+module or gold format is tuning, not a fix. So, for every pattern:
+
+1. **State the situation in words** with no module name, set wording or row id ("the whole question is one computation", "the model
+   closes on a value that is a step of the asked quantity"). If it cannot be written that way, it is not a pattern yet.
+2. **Build the detector from that statement**, not from the rows that showed it.
+3. **Test the detector where it was not written from:** a list of wordings or sets fixed before the run, reported as reach per family
+   (read / should read, and right when read). A detector that sees the situation only in the test's wording is a test-set fix.
+4. **Count evidence by distinct questions,** not answers: one question x 2 seeds is one piece of evidence ("one question" is said).
+5. **Measure the gain on rows the fix was not built from** (frozen10 and another family), with 0 right -> wrong.
+
+**First check by this rule (2026-11-11), `--exact-answer`'s detector** (`question_read.read_exact`; script
+`results/exact-answer-r9/phrasing.py`): the fix's logic states the situation generally, but its detector was bound to the test's
+wording. On the 80 questions it reads, re-asked in 10 wordings fixed before the run:
+
+| Wording | Read |
+|---|---|
+| `What is {e}?`, `Compute {e}.`, `Evaluate {e}.`, `Work out {e}.`, `Find the value of {e}.`, `{e}` | 80 / 80 each, same value |
+| `{e} = ?`, `Can you calculate {e} for me?`, `Please simplify {e}.`, `What do you get when you compute {e}?` | **0 / 80 each** |
+
+Across all 370 stored rows it fires on 4 DeepMind modules only (80 of 80 gold) and on 0 of MATH (162), LiveBench (32) and contest (16)
+rows; those families hold few one-computation questions, so silence there is expected, but the wording table shows the detector would
+miss the same situation asked another way. Next (D19): widen the reader from the situation's statement (a request phrase, then one
+expression and nothing else that carries content; LaTeX forms too), then test it on a **new** wording list and on LaTeX-written
+expressions, not on the 10 above.
+
 **Status words:**
 - **fixed, live** = the fix ran with the model and the pattern's answers came out right.
 - **fixed, replay** = the fix acts correctly on stored text; no live run yet.
@@ -39,7 +68,7 @@ PC layer**, General Style + closers), each read by hand (plan:
 | P16 | The rule scorer read a right answer as wrong (or a hedge as right) | round 9: 6 | the scorer rules | re-score of round 9 | fixed |
 | L1-L8 | Loops, by the shape the detectors see | A100 rounds, round 9 | [Anti-loop](antiloop.md) detectors + closes | see [Loops](#loops) | mostly in best config |
 | LA-LF | Loops, by what the model repeats (round 9's 69 closes) | round 9 | decide layer: one pairing per kind | simulation + settle probe | fix planned |
-| D1-D18 | Detection: a calculation missed, misread, or a false call | see [Detection](#detection) | | | mixed |
+| D1-D19 | Detection: a calculation missed, misread, or a false call | see [Detection](#detection) | | | mixed |
 | I1-I17 | Inject: a put form, note or closer that misled the model or was ignored | see [Inject](#inject) | | | mixed |
 | C1-C5 | Compute: a wrong or slow value from the software | see [Compute](#compute) | | | mixed |
 | S1-S17 | Sandbox and tools: blocks not opened, programs that mislead, box faults | see [Sandbox and tools](#sandbox-and-tools) | | | mixed |
@@ -202,6 +231,7 @@ Detail: [Detection](detect.md), [detection coverage plan](plans/2026-11-10-detec
 | D16 | `--check-hand` false flags still open | 12 of 64 sampled flags not errors: 7 long-multiplication carry (`$8 \times 3 = 24 + 2 = 26$`), 5 chain splits; precision 51/64; 270 unread | carry and chain-split rules, a gate before it runs | no | fix planned |
 | D17 | Latent signals see wrong values, loops and doomed traces badly | wrong value AUROC 0.705 (4B) / 0.668 (Qwen3.6); loops: 24 onsets, router 11/24 at k=2; on a MIP arm probe onsets fall to 80 / 59 / 50 % at k = 2/8/32 | none | — | open |
 | D18 | Offline precision did not predict live firing (sidecar, `UnifiedDetector`) | sidecar fired 3 times live, one before a wrong answer; "0 destructive false alarms" contradicted by #14 | sidecar off; fusion acts only with the exact parse | — | withdrawn |
+| D19 | The question reader sees "one computation" only in the test's wording | 0 / 80 for `{e} = ?`, `Can you calculate {e} for me?`, `Please simplify {e}.`, `What do you get when you compute {e}?` (80 / 80 for 6 other wordings) | widen from the situation's statement; test on a new wording list and LaTeX forms | wording table above | **open** |
 
 ## Inject
 
@@ -328,6 +358,21 @@ Errors in how a result was measured; each one changed a number that was quoted. 
 | `dm_simplify_surd-3480#0` | the API reader counted `9216 if the sum is 0` right | an API reader error; the rule is right |
 
 ## ภาษาไทย
+
+### หลักการแก้: แก้ที่สถานการณ์ ไม่ใช่แก้เข้าหาชุดทดสอบ
+
+ผู้พัฒนา (2026-11-11): ชุดทดสอบเป็นเครื่องมือหาว่า**สถานการณ์ไหนที่โมเดลพลาด** การแก้ต้องตั้งเป้าที่สถานการณ์นั้น ซึ่งเกิดได้กับชุดอื่นที่เป็นแบบเดียวกันหรือตอนใช้งานจริง
+ถ้าแก้แล้วคะแนนชุดทดสอบขึ้นเพราะไปจับถ้อยคำ, module หรือรูปเฉลยของชุดนั้น ถือว่าเป็นการ tune ไม่ใช่การแก้
+
+1. เขียนสถานการณ์เป็นคำพูดโดยไม่อ้างชื่อ module ถ้อยคำของชุด หรือชื่อข้อ ถ้าเขียนแบบนี้ไม่ได้ ก็ยังไม่ใช่รูปแบบความผิด
+2. สร้างตัวตรวจจากคำอธิบายสถานการณ์นั้น ไม่ใช่จากข้อที่เจอ
+3. ทดสอบตัวตรวจกับถ้อยคำหรือชุดที่ไม่ได้ใช้ตอนสร้าง (กำหนดรายการไว้ก่อนรัน) แล้วรายงานแยกตามตระกูล
+4. นับหลักฐานเป็นจำนวนโจทย์ ไม่ใช่จำนวนคำตอบ โจทย์ข้อเดียว × 2 seed นับเป็นหลักฐานชิ้นเดียว
+5. วัดผลกับข้อที่ไม่ได้ใช้ตอนสร้าง (frozen10 และอีกตระกูลหนึ่ง) ต้องไม่มีข้อที่ถูกแล้วกลายเป็นผิด
+
+**ตรวจครั้งแรกตามหลักนี้:** ตรรกะของ `--exact-answer` เป็นระดับสถานการณ์ แต่ตัวอ่านโจทย์ที่ใช้เริ่มการทำงานผูกกับถ้อยคำของชุดทดสอบ
+ลองถาม 80 ข้อเดิมด้วย 10 ถ้อยคำ อ่านได้ 6 แบบ (80/80) แต่อ่านไม่ได้เลย (0/80) 4 แบบ คือ `{e} = ?`, `Can you calculate {e} for me?`, `Please simplify {e}.`, `What do you get when you compute {e}?`
+ขั้นต่อไป (D19): ขยายตัวอ่านจากคำอธิบายสถานการณ์ แล้วทดสอบกับรายการถ้อยคำชุดใหม่และนิพจน์แบบ LaTeX ไม่ใช่กับ 10 แบบนี้
 
 หน้านี้บันทึกทุกรูปแบบที่ทำให้โมเดลตอบผิดซึ่งอ่านด้วยมือแล้ว ว่าเกิดอะไร เจอที่ไหน แก้ยังไง หรือคาดว่าวิธีไหนจะช่วย และทดสอบแล้วหรือยัง
 รูปแบบที่แก้แล้วยังอยู่ในหน้านี้ เพื่อใช้ตรวจโมเดลหรือรอบถัดไป ตามกฎของผู้พัฒนา: รูปแบบที่เกิดขึ้นได้ต้องแก้ทุกแบบ ไม่ว่าจะเจอน้อยแค่ไหน
