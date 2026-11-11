@@ -71,13 +71,13 @@ PC layer**, General Style + closers), each read by hand (plan:
 | P4 | The question's precedence misread (`(-25)/X*1/(-4)` as `-25/(X/(-4))`) | round 9: 1 | `--exact-answer`, any box value | live: the act put `-198` over `-33` | fixed, live |
 | P5 | `simplify_surd` loops counting parentheses | round 9: 2 (3480 x2; 9937#0 now right by the scorer fix) | `question_read.read_exact` + `--exact-answer` | live: 9937 x2 right with an act; 3480 x2 right with no act and no loop, at 2x the tokens | fixed, replay; live shows no harm |
 | P6 | Minus lost after the answer-close cue: the cue ended in `{` and Qwen writes `{-` as one token | cue probe (2026-11-09): 22 of 28 gold-negative values | the cue ends before `{` | cue probe: minus on gold-negative values 41 -> 100 of 112 | fixed, live (probe) |
-| P7 | Letters of the question's string miscounted or misquoted | round 9: 2 (`swr_p_sequence`) | Sandbox counting, with the string taken **from the question**, not from the model's copy | not tried | fix planned |
-| P8 | A convention chosen wrong, extra roots kept (arccot) | round 9: 2 (`e3263989`) | Sandbox verify: substitute each candidate numerically | not tried on math | fix planned |
+| P7 | Letters of the question's string miscounted or misquoted | round 9: 2 (`swr_p_sequence`); a general weakness of tokenized models (arXiv 2505.14172) | software reads the quoted string from the question in any wording and puts the count when the model counts | not tried | fix planned (next round) |
+| P8 | A convention chosen wrong, extra roots kept (arccot) | round 9: 2 (`e3263989`) | a Sandbox check by the model; not a put: the branch has two conventions | not tried on math | fix planned (A100) |
 | P9 | A hard maximum guessed after a very long search (71k tokens) | round 9: 2 (`97b18f58`) | brute-force oracle from the statement (numeric search) | `--igc-sandbox-brute` never measured; not in tir4b | fix planned |
 | P10 | The question refers to a figure the model cannot see | round 9: 2 (`370853d3`) | none | — | ceiling |
-| P11 | The model's own value after `\approx` is wrong (`(1.01)^{30} \approx 1.3448888`) | round 9: 1; scan: 316 of 1,952 readable `\approx` values off | a put at `\approx` (needs its own design) | scan only | fix planned (design open) |
-| P12 | The answer close boxes an unfinished step (`72 - 14 = 58`, a cross-product component) | round 9: 1 (`fbf10ed4#1`) | decide layer v1 gives a confirm then the close: likely still 58 | settle probe: 32 vs 31 of 49 (all loops) | **no fix yet** |
-| P13 | The loop runs as long as before even when the closing value is fixed | targeted run: `2783#0` 70,772 tokens, `5070#1` 67,665 | decide layer: settle line with the close | settle probe: fewer tokens, no clear gain | fix planned |
+| P11 | The model's own value after `\approx` is wrong (`(1.01)^{30} \approx 1.3448888`) | round 9: 1; scan: 316 of 1,952 readable `\approx` values off; general (MATH 401, MedCalc audit) | stop at `\approx`, put 10 significant digits (true for every reading, estimates included); reader for decimal powers first | scan only | fix planned (next round) |
+| P12 | The answer close boxes an unfinished step (`72 - 14 = 58`, a cross-product component) | round 9: 1 (`fbf10ed4#1`); the 3 hurt L7 answers all after a forced cue | do not force the answer cue in an answer loop: cut the loop, let the model continue (forced extraction fails, arXiv 2604.06613) | settle probe: free writing ran to the cap (16 vs 31) | fix planned (probe first) |
+| P13 | The loop runs as long as before even when the closing value is fixed | targeted run: `2783#0` 70,772 tokens, `5070#1` 67,665 | earlier loop signals exist (arXiv 2601.05693, 2510.10103, 2509.26522) | not measured | measure where the tokens go first |
 | P14 | A put value read and not adopted: the model restarts the long division | A100 round 5 (`--loop-value`): 2 of 2 division rows | the box rule (`--exact-answer`) instead of a line before the close | P1 live run | replaced by P1's fix |
 | P15 | Patterns MIP caused itself (put forms that started loops) | see the section below | each fixed in the put | replay gates | fixed |
 | P16 | The rule scorer read a right answer as wrong (or a hedge as right) | round 9: 6 | the scorer rules | re-score of round 9 | fixed |
@@ -400,13 +400,13 @@ Errors in how a result was measured; each one changed a number that was quoted. 
 | P4 | อ่านลำดับการคำนวณในโจทย์ผิด | รอบ 9: 1 | `--exact-answer` ทุกค่า | รันจริง: `-33` → `-198` | แก้แล้ว รันจริงแล้ว |
 | P5 | `simplify_surd` วนกับการนับวงเล็บ | รอบ 9: 2 | `read_exact` + `--exact-answer` | replay แล้ว, รันจริงไม่ทำให้ผิด | แก้แล้ว |
 | P6 | เครื่องหมายลบหายหลังประโยคปิด (`{-` เป็น token เดียว) | cue probe | ประโยคปิดจบก่อน `{` | 41 → 100 จาก 112 | แก้แล้ว |
-| P7 | นับตัวอักษรในสตริงของโจทย์ผิด | รอบ 9: 2 | Sandbox นับจากสตริงในโจทย์เอง | ยัง | วางแผนไว้ |
-| P8 | เลือกนิยามผิด เก็บรากเกินมา (arccot) | รอบ 9: 2 | Sandbox แทนค่าตรวจทีละค่า | ยัง | วางแผนไว้ |
+| P7 | นับตัวอักษรในสตริงของโจทย์ผิด | รอบ 9: 2; เป็นจุดอ่อนทั่วไปของโมเดล (Strawberry Problem) | software อ่านสตริงจากโจทย์ทุกถ้อยคำแล้วใส่จำนวนตอนโมเดลนับ | ยัง | วางแผน (รอบถัดไป) |
+| P8 | เลือกนิยามผิด เก็บรากเกินมา (arccot) | รอบ 9: 2 | Sandbox ให้โมเดลตรวจเอง ใส่ค่าไม่ได้เพราะนิยามมีสองแบบ | ยัง | วางแผน (A100) |
 | P9 | เดาค่าสูงสุดหลังค้นนานมาก | รอบ 9: 2 | brute-force oracle | ยัง (ยังไม่เคยวัด) | วางแผนไว้ |
 | P10 | โจทย์อ้างถึงรูปที่โมเดลมองไม่เห็น | รอบ 9: 2 | ไม่มี | — | เพดานของโมเดล |
-| P11 | ค่าที่โมเดลเขียนหลัง `\approx` ผิด | รอบ 9: 1, สแกนพบ 316 จาก 1,952 | ใส่ค่าหลัง `\approx` (ต้องออกแบบใหม่) | สแกนอย่างเดียว | วางแผนไว้ |
-| P12 | ตัวปิดเอาค่ากลางทางของงานที่ยังไม่เสร็จไปตอบ | รอบ 9: 1 | decide layer v1 น่าจะยังไม่พอ | settle probe 32 ต่อ 31 | **ยังไม่มีวิธีแก้** |
-| P13 | loop ยังยาวเท่าเดิมแม้ค่าตอนปิดถูก | รอบรันเฉพาะข้อ: 70k token | decide layer (settle พร้อมปิด) | probe: token ลดลง ผลยังไม่ชัด | วางแผนไว้ |
+| P11 | ค่าที่โมเดลเขียนหลัง `\approx` ผิด | รอบ 9: 1, สแกนพบ 316 จาก 1,952 | หยุดที่ `\approx` แล้วใส่ค่า 10 หลักนัยสำคัญ (จริงทุกกรณี รวมการประมาณ) ต้องขยายตัวอ่านก่อน | สแกนอย่างเดียว | วางแผน (รอบถัดไป) |
+| P12 | ตัวปิดเอาค่ากลางทางของงานที่ยังไม่เสร็จไปตอบ | รอบ 9: 1; ทั้ง 3 ข้อที่เสียเกิดหลังประโยคบังคับคำตอบ | ไม่บังคับคำตอบตอนวนในคำตอบ ตัด loop แล้วให้เขียนต่อ (งานวิจัย: การบังคับคำตอบล้มเหลว 42%) | probe เดิม: ปล่อยเขียนแล้วไปจนเพดาน | วางแผน (probe ก่อน) |
+| P13 | loop ยังยาวเท่าเดิมแม้ค่าตอนปิดถูก | รอบรันเฉพาะข้อ: 70k token | มีสัญญาณจับ loop เร็วขึ้นในงานวิจัย | ยังไม่ได้วัด | วัดก่อนว่า token หายไปช่วงไหน |
 | P14 | โมเดลอ่านค่าที่ใส่ให้แต่ไม่ใช้ เริ่มหารยาวใหม่ | A100 รอบ 5 | ใช้กฎแก้กล่องแทน | ผลรันจริงของ P1 | ถูกแทนด้วย P1 |
 | P15 | รูปแบบที่ MIP ทำให้เกิดเอง | ดูตาราง | แก้ที่วิธีใส่ค่า | replay | แก้แล้ว |
 | P16 | ตัวตรวจคะแนนด้วยกฎตัดผิด | รอบ 9: 6 | แก้กฎ | ตรวจรอบ 9 ใหม่ | แก้แล้ว |
