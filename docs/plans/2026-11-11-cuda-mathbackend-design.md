@@ -365,3 +365,10 @@ Correct as on the 5060 Ti: `numbers-fuzz-s2` 4,000 / 4,000 and `numbers-paths-s3
 
 The wider link takes ~10-15 % off the round trip. Sparse calls on a card another process is using pay the cross-process switch, as beside
 llama-server on the 5060 Ti.
+
+**Keeping an idle card awake without a clock lock** (`sparse.py --heartbeat-ms`, RTX 5060 Ti idle, a call every 50 ms): an empty
+flag-only kernel every 1 ms keeps the GPU out of its idle state: median **291-295 -> 102-109 us** (p90 455-462 -> 131-174); every 5 ms
+does not help (282 us); 0.2-0.5 ms is no better than 1 ms. What remains is the calling thread waking (Python's own MathBackend: 47-53 us
+on that rhythm) and the launch. A heartbeat only matters on a card nothing else keeps busy: beside an engine the card is awake already,
+and from another process the heartbeat would itself take time slices. Not adopted as a default; a knob for an idle-card deployment.
+The clock lock (`nvidia-smi -lgc`) and the HAGS toggle need administrator rights and wait on the developer.

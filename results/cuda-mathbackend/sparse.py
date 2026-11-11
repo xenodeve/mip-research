@@ -15,9 +15,22 @@ from tools.igc.mathbackend import canon, cuda_backend, run  # noqa: E402
 ap = argparse.ArgumentParser()
 ap.add_argument('--n', type=int, default=200)
 ap.add_argument('--gap-ms', type=float, default=50)
+ap.add_argument('--heartbeat-ms', type=float, default=0, help='an empty kernel this often, to keep the GPU out of its idle state')
 a = ap.parse_args()
 b = canon.encode([1, 1])
 cuda_backend.call('numbers.add', b)
+import ctypes, threading  # noqa: E402
+stop = threading.Event()
+if a.heartbeat_ms:
+    lib = cuda_backend._load()
+    lib.mip_floor.argtypes = [ctypes.c_int, ctypes.c_int, ctypes.POINTER(ctypes.c_double)]
+    def beat():
+        o = (ctypes.c_double * 2)()
+        while not stop.is_set():
+            lib.mip_floor(1, 0, o)   # one empty flag-only kernel (it takes the DLL's lock, so it never overlaps a call)
+            time.sleep(a.heartbeat_ms / 1000)
+    threading.Thread(target=beat, daemon=True).start()
+    time.sleep(0.5)
 dev, py, devt = [], [], []
 for _ in range(a.n):
     time.sleep(a.gap_ms / 1000)
@@ -29,7 +42,8 @@ for _ in range(a.n):
     t = time.perf_counter()
     run('numbers.add', 1, 1)
     py.append((time.perf_counter() - t) * 1e6)
+stop.set()
 q = lambda xs, f: sorted(xs)[int(f * (len(xs) - 1))]
-print(f'gap {a.gap_ms} ms, {a.n} calls: device median {statistics.median(dev):.1f} us (p10 {q(dev, .1):.1f}, p90 {q(dev, .9):.1f}), '
+print(f'heartbeat {a.heartbeat_ms} ms, gap {a.gap_ms} ms, {a.n} calls: device median {statistics.median(dev):.1f} us (p10 {q(dev, .1):.1f}, p90 {q(dev, .9):.1f}), '
       f'its own work {statistics.median(devt):.1f} us; Python median {statistics.median(py):.1f} us')
 cuda_backend.close()
