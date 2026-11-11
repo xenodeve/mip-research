@@ -94,6 +94,25 @@ class Math(unittest.TestCase):
         self.assertFalse(math_right('</think>\n\n\\boxed{\\{-2, 1+\\sqrt{5}\\}}', gold))           # one value missing
         self.assertFalse(math_right('</think>\n\n\\boxed{\\{2, 1-\\sqrt{5}, 1+\\sqrt{5}\\}}', gold))  # a wrong value
 
+    def test_a_decimal_of_a_value_with_no_finite_decimal_is_right_with_a_form_note(self):
+        """The developer (2026-11-11): a correctly rounded or cut decimal of a gold that has no finite decimal counts as right, with a
+        note that the form is not gold's (round 9 1395#0 boxed `-1.9886` for `-73388/36903`). The integer part, `0`, or a decimal whose
+        digits are wrong is a wrong value, not a form."""
+        from tools.igc.standard_score import form_note, math_right
+        gold = '-73388/36903'   # -1.98867300...
+        for box in ('-1.9886', '-1.9887', '-1.98867', '-1.988673008', '-1.9886730...'):
+            text = '</think>\n\n\\boxed{' + box + '}'
+            self.assertTrue(math_right(text, gold), box)
+            self.assertEqual(form_note(text, gold), f'decimal for an exact value: answered {box}, gold {gold}', box)
+        for box in ('-1', '-2', '0', '-2.0', '-1.9885', '1.9886', '-1.9868'):   # integer part, too few digits, wrong digits, wrong sign
+            self.assertFalse(math_right('</think>\n\n\\boxed{' + box + '}', gold), box)
+        self.assertTrue(math_right('</think>\n\n\\boxed{0.3333}', '1/3'))
+        self.assertFalse(math_right('</think>\n\n\\boxed{1347.85}', '24000*(101/100)**30/24'))   # a finite decimal exists (2^a 5^b)
+        self.assertTrue(math_right('</think>\n\n\\boxed{1.7320508}', '\\sqrt{3}'))
+        self.assertFalse(math_right('</think>\n\n\\boxed{0.13}', '1/8'))     # 1/8 has the finite decimal 0.125: rounding it is another value
+        self.assertIsNone(form_note('</think>\n\n\\boxed{-73388/36903}', gold))   # the exact form: no note
+        self.assertFalse(math_right('</think>\n\n\\boxed{-10710884}', '-139241497/13'))   # the integer part
+
     def test_a_box_asked_about_and_rejected_is_not_the_answer(self):
         """#24, round 9 (4B NVFP4 W4A8, llama.cpp, PC layer) dm_div_big-9977#0 and dm_simplify_surd-9937#0: the last box was written
         as a question and rejected on its line."""

@@ -65,7 +65,7 @@ PC layer**, General Style + closers), each read by hand (plan:
 
 | # | Pattern | Seen (answers) | Fix | Tested? | Status |
 |---|---|---|---|---|---|
-| P1 | Right value, wrong form: a rounded decimal or the integer part boxed instead of the exact fraction | round 9: 6 | **open** (the model's own choice of form; `--exact-answer` withdrawn, MR-35): either the prompt asks for the exact value in every arm alike, or the answers are reported apart as "value right, form not gold's" | — | open: the developer decides |
+| P1 | Right value, wrong form: a rounded decimal or the integer part boxed instead of the exact fraction | round 9: 6 | **the developer, 2026-11-11: counted right with a note that the form is not gold's, the answer and the gold written in the note** (`standard_score.form_note`): a decimal rounded or cut at its own places, 3 or more significant digits, of a gold with no finite decimal. The integer part, `0`, a lost sign or wrong digits stay wrong (values, not forms) | round 9 re-scored (`results/exact-answer-r9/rescore_forms.py`): General 215 -> 218, control 161 (0 noted); the 3 noted: 1395#0 `-1.9886`, 1395#1 `-1.9887` for `-73388/36903`, 5070#1 `0.00456226` for `5647/1237763`; still wrong: 4138#0 (`-10710884`, integer part), 4138#1 (sign lost), 5070#0 (`0.004562376`, wrong digits) | fixed in the scorer, both arms alike |
 | P2 | Two values offered, or a hedge (`275 or -275`) | round 9: 3 | `--answer-rewind`: the looping answer is cut out and resampled, the model writes its own value (free continuation, arXiv 2604.06613) | not live yet | built; round 10 |
 | P3 | A wrong value written during a loop, then boxed at the close | round 9: 3 (`9951#0`, `9991#1`, `2783#0` boxed `0`) | `--answer-rewind`, as P2 | not live yet | built; round 10 |
 | P4 | The question's precedence misread (`(-25)/X*1/(-4)` as `-25/(X/(-4))`) | round 9: 1 | `--question-quote`: when the model's copy of the question's expression reads to another value, the question's words are put back (RE2, arXiv 2309.06275; number-copy errors, arXiv 2502.08680) | stored text: fires on 15 of 442 answers, all 15 read by hand as real mis-copies (a moved bracket, `/` as `\cdot`, a term moved) | built; round 10 |
@@ -396,7 +396,7 @@ Errors in how a result was measured; each one changed a number that was quoted. 
 
 | # | รูปแบบ | เจอ | วิธีแก้ | ทดสอบแล้ว? | สถานะ |
 |---|---|---|---|---|---|
-| P1 | ค่าถูกแต่ตอบเป็นทศนิยมหรือส่วนจำนวนเต็มแทนเศษส่วนเป๊ะ | รอบ 9: 6 | **ยังเปิด** (`--exact-answer` ถอนแล้ว) ผู้พัฒนาตัดสิน: ให้ prompt ขอค่าเป๊ะทุกแขน หรือรายงานแยก | — | ยังเปิด |
+| P1 | ค่าถูกแต่ตอบเป็นทศนิยมหรือส่วนจำนวนเต็มแทนเศษส่วนเป๊ะ | รอบ 9: 6 | ผู้พัฒนา (2026-11-11): นับถูกพร้อมหมายเหตุว่ารูปไม่ตรง โดยเขียนคำตอบกับเฉลยไว้ในหมายเหตุ ใช้กับทศนิยมที่ปัดหรือตัดถูกของเฉลยที่เป็นทศนิยมจบไม่ได้ ส่วนจำนวนเต็ม เครื่องหมายหาย หรือหลักผิดยังนับผิด | รอบ 9: General 215 -> 218 (หมายเหตุ 3), control 161 | แก้ในตัวตรวจคะแนน ทุกแขนเท่ากัน |
 | P2 | ตอบสองค่า หรือลังเล | รอบ 9: 3 | `--answer-rewind` ตัด loop แล้วให้โมเดลเขียนเอง | ยังไม่รันจริง | สร้างแล้ว รอบ 10 |
 | P3 | ค่าผิดจาก loop ถูกใส่กล่องตอนปิด | รอบ 9: 3 | `--answer-rewind` | ยังไม่รันจริง | สร้างแล้ว รอบ 10 |
 | P4 | อ่านลำดับการคำนวณในโจทย์ผิด | รอบ 9: 1 | `--question-quote` ยกข้อความในโจทย์มาให้เมื่อสำเนาของโมเดลต่างจากโจทย์ | ทำงาน 15 จาก 442 คำตอบ คัดลอกผิดจริงทั้ง 15 | สร้างแล้ว รอบ 10 |

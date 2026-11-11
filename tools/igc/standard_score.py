@@ -145,7 +145,78 @@ def evaluate_any(text):
         return None
 
 
+_DECIMAL = re.compile(r'(-?)(\d+)\.(\d+)(?:\s*(?:\.\.\.|\\ldots|\\dots|…))?')
+FORM_NOTE = 'decimal for an exact value'
+
+
+def _gold_decimal(gold):
+    """Gold's value as a 60-digit Decimal when it has no finite decimal (a fraction whose denominator is not 2^a 5^b, or a surd), else
+    None: a gold with a finite decimal is written exactly as one, so a rounding of it is another value."""
+    from decimal import Decimal, localcontext
+    from fractions import Fraction as F
+    value = math_value(normalize_math(gold))
+    if value is None:
+        from tools.igc.mathexpr import evaluate, wide
+        with wide():
+            try:
+                value = evaluate(gold.replace(' ', '').replace('**', '^'))
+            except Exception:
+                value = None
+    with localcontext() as ctx:
+        ctx.prec = 60
+        if value is not None:
+            d = F(value).denominator
+            while d % 2 == 0:
+                d //= 2
+            while d % 5 == 0:
+                d //= 5
+            return None if d == 1 else Decimal(F(value).numerator) / Decimal(F(value).denominator)
+        from tools.igc.exactexpr import NotExact, evaluate as exact
+        for s in (gold, normalize_math(gold)):
+            try:
+                v = exact(s)
+            except (NotExact, ArithmeticError, ValueError, OverflowError, RecursionError):
+                v = None
+            if v is not None and not v.has_pi() and v.rational() is None:
+                return sum(Decimal(c.numerator) / Decimal(c.denominator) * Decimal(r).sqrt() for (r, _), c in v.t.items())
+    return None
+
+
+def _decimal_of(answer, gold):
+    """True when `answer` is a decimal of gold's value rounded or cut at its own places, with at least 3 significant digits, and gold
+    has no finite decimal (the developer, 2026-11-11: right, with a note that the form is not gold's)."""
+    from decimal import ROUND_DOWN, ROUND_HALF_EVEN, ROUND_HALF_UP, Decimal, localcontext
+    m = _DECIMAL.fullmatch(answer.strip().strip('$').replace(',', '').replace(' ', ''))
+    if not m or len((m.group(2) + m.group(3)).lstrip('0')) < 3:
+        return False
+    g = _gold_decimal(gold)
+    if g is None:
+        return False
+    with localcontext() as ctx:
+        ctx.prec = 60
+        w = Decimal(m.group(1) + m.group(2) + '.' + m.group(3))
+        unit = Decimal(1).scaleb(-len(m.group(3)))
+        return any(g.quantize(unit, rounding=r) == w for r in (ROUND_HALF_UP, ROUND_HALF_EVEN, ROUND_DOWN))
+
+
+def form_note(text, gold):
+    """`decimal for an exact value: answered <the model's box>, gold <gold>` when the answer is right only as a decimal of a gold with no
+    finite decimal, else None: the answer and the gold are kept so a reader sees what was written."""
+    answer = math_answer(text)
+    if answer is None or _math_right_exact(text, gold) or not _decimal_of(answer, gold):
+        return None
+    return f'{FORM_NOTE}: answered {answer.strip()}, gold {gold}'
+
+
 def math_right(text, gold):
+    """Right by value: the exact rules below, or a correctly rounded or cut decimal of a gold with no finite decimal (form_note says so)."""
+    if _math_right_exact(text, gold):
+        return True
+    answer = math_answer(text)
+    return answer is not None and _decimal_of(answer, gold)
+
+
+def _math_right_exact(text, gold):
     answer = math_answer(text)
     if answer is None:
         return False
