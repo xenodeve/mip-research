@@ -89,6 +89,22 @@ card fell to 6-14 tok/s over a run (llama-server cleared idle slots on every new
 Round 9's timings ran with that default (2,068 of 2,293 slot picks by LRU in the smoke, 7-17 % in round 9's own logs), so they are
 not a guide to a round's length now.[^np4cpu]
 
+**Server flags** (2026-11-11, `scripts/pc/flag_test.sh`, `-np 4`, same rows and arms, 8 minutes each, both cards run at once):
+
+| Config (on top of `--no-cache-idle-slots`) | RTX 4070 SUPER | RTX 5060 Ti |
+|---|---|---|
+| base | 111 tok/s total, 33.7 per slot | 129, 39.1 |
+| `-cram 0 --prio 2` | **139, 40.8** | **146, 42.4** |
+| + `--backend-sampling` | 85, 27.0 | 85, 29.2 |
+| + `--spec-type draft-mtp --spec-draft-n-max 2` | 92, 32.6 | 90, 32.6 |
+| + `--spec-type draft-mtp,ngram-mod` | 88, 31.1 | 88, 30.3 |
+
+`-cram 0 --prio 2` is faster on both cards and frees the RAM prompt cache (8 GB per server by default); it is in the launchers.
+The MTP drafter (Qwen3.5's own head) passes `scripts/pc/spec_probe.py` (24 stopped requests, 0 tokens past a stop) and its drafts are
+accepted 77-84 %, yet it is a third slower here: tir4b stops the server every ~18 tokens, so each request drafts only a few tokens
+(4-8 accepted per request), while every step of a hybrid model pays the recurrent-state checkpoint, and four slots leave the GPU
+little idle time to fill. Untested: one answer at a time, or a run that stops less often.
+
 [^np4cpu]: The `-np 4` points ran partly while an 8-process replay used the CPU (llama-server raised to AboveNormal a few minutes in);
     they may be a little low.
 

@@ -18,11 +18,11 @@ export PATH="/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.3/bin/x64:/c
 # Every answer in flight needs a slot of its own: A and B run N/2 each, C one, so the server gets N/2*2 + 1 slots. With fewer, and with
 # --cache-idle-slots on (llama-server's default under -kvu: on every new task each idle slot is saved to RAM and cleared), an answer
 # comes back to a cleared slot every ~18 tokens and the state is reloaded over PCIe: the 2026-11-11 smoke fell to 6-9 tok/s on the
-# 5060 Ti, 153 tok/s once fixed (docs/plans/2026-11-10-round9-fixes.md, "Round 10 as it runs"). -kvu shares one KV pool, so slots cost no VRAM.
+# 5060 Ti, 107 tok/s once fixed (docs/plans/2026-11-10-round9-fixes.md, "Round 10 as it runs"). -kvu shares one KV pool, so slots cost no VRAM.
 NP=$((N / 2 * 2 + 1))
-echo "server $SRV $(sha256sum $SRV | cut -c1-16) gguf $GGUF gpu $GPU np $NP args --no-cache-idle-slots $*" > $W/pc/r10$TAG.setup
+echo "server $SRV $(sha256sum $SRV | cut -c1-16) gguf $GGUF gpu $GPU np $NP args --no-cache-idle-slots -cram 0 --prio 2 $*" > $W/pc/r10$TAG.setup
 CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=$GPU $SRV -m $GGUF -ngl 999 \
-  -c 262144 -np $NP -kvu -fa on --no-cache-idle-slots --host 127.0.0.1 --port $PORT --no-webui "$@" > $G/llama-r10$TAG.log 2>&1 &
+  -c 262144 -np $NP -kvu -fa on --no-cache-idle-slots -cram 0 --prio 2 --host 127.0.0.1 --port $PORT --no-webui "$@" > $G/llama-r10$TAG.log 2>&1 &
 SP=$!
 for i in $(seq 1 90); do curl -s -m 2 http://127.0.0.1:$PORT/health | grep -q ok && break; sleep 2; done
 curl -s -m 2 http://127.0.0.1:$PORT/health | grep -q ok || { echo "server did not start"; kill $SP; exit 2; }

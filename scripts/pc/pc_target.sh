@@ -15,7 +15,7 @@ SRV=${SRV:-/c/AI/llama.cpp/build-w4a8/bin/llama-server.exe}
 export PATH="/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.3/bin/x64:/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.3/bin:$PATH"
 echo "server $SRV $(sha256sum $SRV | cut -c1-16) gguf $GGUF gpu $GPU np $N args $* extra $EXTRA" > $W/pc/$TAG.setup
 CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=$GPU $SRV -m $GGUF -ngl 999 \
-  -c 262144 -np $N -kvu -fa on --no-cache-idle-slots --host 127.0.0.1 --port $PORT --no-webui "$@" > $G/llama-$TAG.log 2>&1 &
+  -c 262144 -np $N -kvu -fa on --no-cache-idle-slots -cram 0 --prio 2 --host 127.0.0.1 --port $PORT --no-webui "$@" > $G/llama-$TAG.log 2>&1 &
 SP=$!
 for i in $(seq 1 90); do curl -s -m 2 http://127.0.0.1:$PORT/health | grep -q ok && break; sleep 2; done
 curl -s -m 2 http://127.0.0.1:$PORT/health | grep -q ok || { echo "server did not start"; kill $SP; exit 2; }

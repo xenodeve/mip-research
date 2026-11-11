@@ -36,7 +36,8 @@ def main():
     for i in range(args.n):
         row = rows[i % len(rows)]
         msgs = [{'role': 'user', 'content': prompt_text(row)}]
-        prompt = tok.apply_chat_template(msgs, tokenize=True, add_generation_prompt=True)
+        # text first, then ids: this transformers returns a BatchEncoding from tokenize=True, which json cannot send
+        prompt = tok.encode(tok.apply_chat_template(msgs, tokenize=False, add_generation_prompt=True), add_special_tokens=False)
         # a long thinking prefix first, so the probe sees the speculative path inside a long context too
         warm = post(args.server, dict(prompt=prompt, n_predict=400 + 50 * i, temperature=0.6, top_p=0.95, top_k=20, seed=i,
                                       cache_prompt=True, return_tokens=True))
