@@ -300,3 +300,23 @@ memcheck 0 errors in modes 0, 1 and 2 (linger off and on); initcheck 0, racechec
 every corpus in every mode as before (fuzz 4,000 / 4,000, paths 220 / 220, s1 1,800 / 1,816 with the 16 time-guard cases);
 `linger_stress.py` 60,000 racing calls 0 wrong. The stores were also faster than the atomics: **single call 12.9 us, back to back with
 the linger 7.6 us** (from 13.8 and 8.7). Not run yet: the RTX 4070 SUPER (sm_89), which is the developer's display and game card.
+
+### Where the floor is, measured (2026-11-11, RTX 5060 Ti, mode 2)
+
+| Condition | CUDAMathBackend per call | What it is | Python MathBackend |
+|---|---|---|---|
+| back to back, card idle, linger 50 us | **7.6 us** | the flag over PCIe, one read of the arguments, ~2.5 us of work | 7-12 us |
+| back to back, card idle, a launch each | **12.9 us** | `floor.py`: an empty flag-only kernel is **8.3-8.6 us** inside the DLL (runtime and driver API alike, the launch call 3.4-3.8 us); the rest is the wrapper (0.8) and the work | |
+| one call every 1 ms, card idle | 58 us | the GPU and its PCIe link waking from idle (the 5060 Ti idles at P8, 195 MHz; work still 2.5 us) | 25 us |
+| one call every 50 ms, card idle | 390 us (p90 512) | the same, deeper | 48 us |
+| one call every 1-50 ms **while llama-server decodes on the card** | **180-210 us** (p10 ~170) | the wait for Windows to switch the GPU from the engine's context to ours (two processes, no MPS) | 33-51 us |
+
+Levers tried on the last two rows: the linger does not help (the gaps are longer than its window); locking the clock (`nvidia-smi -lgc`)
+needs administrator rights (not taken); Windows' GPU scheduling class for the process (`D3DKMTSetProcessSchedulingPriorityClass`,
+`under_load.py`): HIGH and REALTIME left the median at ~200 us and cut the tail (max 12-24 ms -> 2-3 ms) while the engine's decode fell
+15 % and 25 %, so not adopted. The fast path's work was profiled (parse 1.2-4.0 us of 2.6-8.5): shared instead of local memory for the
+arguments gained ~5 %; a parse in 8-byte SWAR steps would help long numbers, not the common small ones.
+
+So, on this PC: next to an engine in another process a call costs ~200 us of context switching whatever the kernel does, and Python
+answers in ~50 us. The device path pays only where it shares the engine's own context (one process: no switch, the resident worker on a
+low-priority stream), which is the module's end shape; there the in-process floor is the 7.6-8.6 us above.
