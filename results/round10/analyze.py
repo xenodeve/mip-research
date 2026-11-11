@@ -31,6 +31,7 @@ ROUND9_WRONG = ['dm_div_big-1395#0', 'dm_div_big-1395#1', 'dm_div_big-5070#0', '
                 'dm_simplify_surd-3480#1', 'dm_swr_p_sequence-3480#0', 'dm_swr_p_sequence-9951#1', 'stdmath-45fa3ef2#0',
                 'stdmath-fbf10ed4#1', 'stdmath-e3263989#0', 'stdmath-e3263989#1', 'stdmath-97b18f58#0', 'stdmath-97b18f58#1',
                 'stdmath-370853d3#0', 'stdmath-370853d3#1']
+HAND = {}   # filled from --hand
 ROWS = ('r10a-rows.jsonl', 'r10b-rows.jsonl', 'r10a-math-rows.jsonl', 'r10b-math-rows.jsonl')
 
 
@@ -62,8 +63,9 @@ def load(pc, halves, arm, rows, unknown):
             note = form_note(rec['text'], row['answer']) if row['suite'] in ('stdmath', 'arith') else None
             ok = right(row, rec['text'])
             api = (verdicts.get(key) or {}).get('verdict')
-            # the corrected score: the API reader's verdict where it gave one, the rule's elsewhere
-            fixed = ok if api is None else api == 'same'
+            # the corrected score: a hand verdict (--hand) where one was read, else the API reader's, else the rule's; the reader
+            # is wrong too at times (round 9 dm_simplify_surd-3480#0: `9216 if the sum is 0` read as right)
+            fixed = HAND[key] if key in HAND else ok if api is None else api == 'same'
             out[key] = dict(right=ok, note=note, api=api, fixed=fixed, events=rec.get('events', []), tokens=rec['tokens'],
                             finish=rec['finish'], text=rec['text'], row=row, out_ids=ids.get(key))
     return out
@@ -107,15 +109,26 @@ def letter_count_right(event, text, question):
 _QUOTE_LINE = re.compile(r'The question writes: \$(.*?)\$\.\n')
 
 
-def question_quote_right(text, question):
-    """The quoted expression checked again: every quote in the text holds the question's numbers in the question's order, and
-    evaluates to the value of the question's expression read anew (mathexpr on the question's own words)."""
-    from tools.igc.question_quote import numbers_of
-    quotes = _QUOTE_LINE.findall(text)
-    if not quotes:
+def quote_value_right(expr, gold):
+    """A quote is the question's computation, so its value is the gold answer: evaluated exactly here and compared with gold as a
+    number. A moved bracket or a lost sign changes the value, which a check of the digits in order does not see. None when either side
+    cannot be read as a number (a surd quote, a gold that is not a number)."""
+    from tools.igc.mathexpr import evaluate
+    from tools.igc.question_read import _plain
+    try:
+        v = evaluate(_plain(expr))
+        g = Fraction(str(gold).replace(' ', ''))
+    except (ValueError, ZeroDivisionError, TypeError):
         return None
-    q = question.split('\n')[0]
-    return all(numbers_of(x) == numbers_of(q)[:len(numbers_of(x))] and numbers_of(x) for x in quotes)
+    return None if v is None else Fraction(v) == g
+
+
+def question_quote_right(text, gold):
+    """Every quote in the text checked again by its value against gold (quote_value_right); None when no quote can be read."""
+    verdicts = [quote_value_right(x, gold) for x in _QUOTE_LINE.findall(text)]
+    if not verdicts or all(v is None for v in verdicts):
+        return None
+    return all(v is not False for v in verdicts)
 
 
 def first_part(a, b):
@@ -133,6 +146,7 @@ def main():
     ap.add_argument('--pc', default=str(W / 'pc'))
     ap.add_argument('--halves', default='a,b', help='the TAGs the halves ran under (pc_round10.sh TAG), e.g. a,b or smoke')
     ap.add_argument('--rows', nargs='*', default=[str(W / r) for r in ROWS])
+    ap.add_argument('--hand', default='', help='JSON {"<id>#<sample>": true|false}: verdicts read by hand where rule and reader differ')
     args = ap.parse_args()
     pc = Path(args.pc)
     halves = args.halves.split(',')
@@ -143,6 +157,8 @@ def main():
                 r = json.loads(line)
                 rows[r['id']] = r
     unknown = []
+    if args.hand:
+        HAND.update(json.loads(Path(args.hand).read_text(encoding='utf-8')))
     arms = {a: load(pc, halves, a, rows, unknown) for a in ('a', 'b', 'c')}
     if unknown:
         print(f'!! {len(unknown)} records whose row is in none of the row files (left out): {unknown[:10]}')
@@ -208,7 +224,7 @@ def main():
                 elif e['kind'] == 'letter count':
                     verdict = letter_count_right(e, v['text'], v['row']['question'])
                 elif e['kind'] == 'question quote':
-                    verdict = question_quote_right(v['text'], v['row']['question'])
+                    verdict = question_quote_right(v['text'], v['row']['answer'])
                 else:
                     continue
                 checked[e['kind']][({True: 'value right', False: 'VALUE WRONG', None: 'not checkable'}[verdict], final)] += 1

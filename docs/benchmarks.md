@@ -73,8 +73,24 @@ Only the latest state of each line of work. Arms are compared within one round o
 
 **4B NVFP4 W4A8 · llama.cpp · PC layer** only: AxionML/Qwen3.5-4B-NVFP4 as GGUF, llama.cpp `1deefcca3` built for sm_89 so both cards multiply
 with q8_1 activations (greedy tokens identical on both cards, 3 questions x 400 tokens), `-c 262144 -np 4 -kvu -fa on`, KV q8_0,
-T 0.6, seed 1, 2 samples. Each card runs both arms on its own half of the rows, so a pair is always one card. Runner
+T 0.6, seed 1, 2 samples (round 9; from round 10 `--no-cache-idle-slots` and a slot for every answer in flight, see the speed note below). Each card runs both arms on its own half of the rows, so a pair is always one card. Runner
 `scripts/pc/pc_round9.sh`; the API reader follows each arm. Not comparable with the A100 tables above: NVFP4 loops more.
+
+**Speed of the PC layer** (2026-11-11, `scripts/pc/np_sweep.sh`, 9 DeepMind dev rows x 4 samples, General + control, 10 minutes per
+point, tok/s from the server log): with `--no-cache-idle-slots`, total decode grows with the slots while each answer slows.
+
+| Card | `-np 4` | `-np 6` | `-np 8` |
+|---|---|---|---|
+| RTX 4070 SUPER | 132 tok/s total, 38.5 per slot | 159, 31.3 | not run |
+| RTX 5060 Ti | 124, 37.4 | 144, 28.8 | 154, 22.6 |
+
+A run whose length is set by a few long answers wants fewer slots; one of many short answers wants more. Before the fix the same
+card fell to 6-14 tok/s over a run (llama-server cleared idle slots on every new task under `-kvu`; [round 10 plan](plans/2026-11-10-round9-fixes.md#round-10-as-it-runs-2026-11-11)).
+Round 9's timings ran with that default (2,068 of 2,293 slot picks by LRU in the smoke, 7-17 % in round 9's own logs), so they are
+not a guide to a round's length now.[^np4cpu]
+
+[^np4cpu]: The `-np 4` points ran partly while an 8-process replay used the CPU (llama-server raised to AboveNormal a few minutes in);
+    they may be a little low.
 
 | Set | n | Arms | Result | Source |
 |---|---|---|---|---|

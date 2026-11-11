@@ -73,12 +73,13 @@ copied; **linking a library as a dependency needs a conversation with the develo
 - **CUDA Graph:** the work of an operation is issued as a captured graph replayed with new parameters. The rule is that the host never
   drives an iteration, not that every loop is a graph node: a data-dependent loop may be a graph conditional node (CUDA 12.4+) or one
   kernel that loops on the device (recursion, memoisation, DPLL and Pollard rho are not practical as conditional nodes).
-- **Values cross the ABI as digits, not limbs.** Turning a decimal string into limbs is bignum arithmetic, so it runs on the device
+- **Values cross the ABI as digits, not limbs** (proposed 2026-11-11, for the developer). Turning a decimal string into limbs is bignum arithmetic, so it runs on the device
   (goal 3); the canonical encoding carries integers as sign + decimal digits, and the device parses and prints them.
-- **A fourth status, `DEVICE_FAILED`,** for what is not the op's answer: out of device memory, a kernel fault, or a device loop that
+- **A fourth status, `DEVICE_FAILED`** (proposed 2026-11-11, for the developer), for what is not the op's answer: out of device memory, a kernel fault, or a device loop that
   reached its step cap. The step cap is a function of the input (a count of iterations fixed per op), never a clock, so it is the same
   on both cards. The caller treats `DEVICE_FAILED` as "no value": nothing is put, the event is logged, and there is no silent host
-  fallback (anti-goal). The harness counts it as a disagreement unless Python refuses the same case.
+  fallback (anti-goal). The harness always counts it as a disagreement: Python has no such status, so identity of refusals means a
+  `DEVICE_FAILED` on any corpus case fails the gate.
 - **Exact arithmetic on the device:** multi-limb integers, fractions as reduced pairs, decimals with Python's `decimal` semantics for the
   context each op sets (precision, rounding), and `Surd`.
 - **Verification harness:** Python generates the cases (the 31,064 existing ones, plus new cases at and past each op's bound), runs both

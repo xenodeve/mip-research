@@ -146,13 +146,20 @@ How it runs (scripts in `scripts/pc/`, data in `WORK`, outside the repository):
 
 - **One config, locked, on both cards.** llama.cpp `1deefcca3` built for **sm_89 only** (`build-w4a8.cmd`): NVFP4 then multiplies
   with q8_1 activations on both cards. A build that includes sm_120 uses FP4 activations (W4A4) on the 5060 Ti and would make the
-  two cards two different models. Same GGUF, KV `q8_0`, `-c 262144 -np 4 -kvu -fa on`, same flags and seed. Checked: greedy tokens
-  identical on the two cards (3 questions x 400 tokens, 2026-11-08). Each run writes the server's sha256 and arguments
-  (`r9<half>.setup`).
+  two cards two different models. Same GGUF, KV `q8_0`, `-c 262144 -kvu -fa on --no-cache-idle-slots`, same flags and seed.
+  Checked: greedy tokens identical on the two cards (3 questions x 400 tokens, 2026-11-08). Each run writes the server's sha256 and
+  arguments (`r9<half>.setup`).
 - **Both arms on the same card.** The rows are split in two halves balanced by group; each card runs General and control on its
   half, so a comparison never crosses cards.
-- **`-np 4` is the fastest** (sweep 2026-11-08, Q8_0: np 4 76 tok/s total, np 8 64; each answer decodes about 4x slower at np 8).
-  The 4070 Super is the display card: the server must leave the desktop its headroom (server about 7.9 GB, measured).
+- **Every answer in flight has a slot of its own, and idle slots are never cleared** (2026-11-11). Under `-kvu`, llama-server's
+  default `--cache-idle-slots` saves and clears every idle slot on each new task; tir4b asks every ~18 tokens, so answers came back
+  to cleared slots and reloaded their state over PCIe: the round 10 smoke fell to 6-9 tok/s (2,068 of 2,293 slot picks by LRU),
+  107 tok/s once fixed. So `--no-cache-idle-slots`, and `-np` at least the answers in flight of all arms on that server (slots cost
+  no VRAM under `-kvu`). The 2026-11-08 sweep (np 4 76 tok/s, np 8 64) ran with the bug; the 2026-11-11 sweep with the fix gives
+  more total for more slots and less per answer (5060 Ti: np 4 124 tok/s, 37 per slot; np 8 154, 23; `docs/benchmarks.md`), so pick
+  `-np` by the run: few long answers set the length, fewer slots; many short ones, more.
+  The 4070 Super is the display card: the server must leave the desktop its headroom (server about 9.2 GB measured on 2026-11-11,
+  with ~2.6 GB taken by the desktop: about 0.5 GB left; nothing else heavy on that card while it runs).
 - **A round on frozen rows changes no rule while it runs.** Once it is read, the set becomes development rows (above); a rule
   written from it is measured on the next frozen set, here and on the A100.
 

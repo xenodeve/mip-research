@@ -200,7 +200,7 @@ question writes out; `--execute --box` runs the model's code blocks in the AppCo
 thinking loop; `--verify-gate` opens a block to check every candidate against the original equation, once, when the question asks
 for all solutions.
 
-**What counts, decided before the run.** The fixes go to frozen10 when, on the 146 pairs A vs B: (1) B is right more often than A,
+**What counts (proposed 2026-11-11, for the developer to set before the run).** The fixes go to frozen10 when, on the 146 pairs A vs B: (1) B is right more often than A,
 one-sided sign test p < 0.05 on the rule score and on the API-corrected score both; (2) no value put by B's mechanisms is wrong
 (each checked again by `analyze.py`); (3) B loses no answer A got right that the touch caused (a pair that parts before the first
 touch is path noise; one that parts at a touch and goes right -> wrong is read by hand and must be understood). Arm C reaches 3
@@ -212,7 +212,7 @@ and all four together; the replay stops at the first new act):
 
 | Mechanism | First acts (alone) | On answers that finished right / wrong | Values wrong | `vllm_refused` |
 |---|---|---|---|---|
-| `--question-quote` | 42 | 31 / 11 | 0 | 0 |
+| `--question-quote` | 42 | 31 / 11 | 0 (28 quotes evaluated to gold; 14 not checkable: a surd quote or a gold that is not a number) | 0 |
 | `--approx-put` | 138 | 119 / 19 | 0 (each re-evaluated exactly, within half a unit of its last place) | 0 |
 | `--letter-count` | 10 | 8 / 2 | 0 (counted again with `str.count`) | 0 |
 | `--answer-rewind 2` | 0: not measurable by replay | 28 answers had an answer close in round 9: 10 / 18 | puts no value | 0 |
@@ -233,18 +233,24 @@ arrives; its next request finds its cache gone, takes a slot by LRU (2,068 of 2,
 2 s median and growing with the context, with the server's main loop blocked meanwhile (4,250 s of an 88-minute run). Five answers
 in flight on `-np 4` made it worse. Fixed: `--no-cache-idle-slots` on every PC launcher, and `pc_round10.sh` starts `N/2*2 + 1`
 slots so every answer in flight keeps its own (slots cost no VRAM under `-kvu`). The same smoke resumed on a fresh server with the
-flag: 153 tok/s total, 1,008 of 1,012 selections by LCP, GPU 63 %. Round 9 had it milder, with four answers on four slots: LRU on
+flag and four answers on four slots: 107 tok/s total over its 16 minutes (153 in the first 3), per slot 30-45 tok/s with no fall as the
+context grew to 30k, 3,523 of 3,527 selections by LCP, GPU 63-91 %. Both changed at once (fresh server, four in flight, the flag); the
+config round 10 uses (`pc_round10.sh`: five slots, five in flight) has not run yet: a 5-minute smoke through the launcher comes first. Round 9 had it milder, with four answers on four slots: LRU on
 7 % of selections in r9b, 17 % in r9a2 (whose per-slot speed fell from 12 to 4 tok/s); its timing is not comparable to round 10's.
-With `-c 524288 -np 5` the 5060 Ti uses 14.8 of 16.3 GB (measured); not adopted, since the two cards keep one config.
+The fixed sweep (`docs/benchmarks.md`, speed of the PC layer): 5060 Ti np 4 / 6 / 8 = 124 / 144 / 154 tok/s total, 37 / 29 / 23 per slot;
+4070 SUPER np 4 / 6 = 132 / 159, 39 / 31. Server flags beyond these (`-cram 0`, `--prio 2`, `--backend-sampling`, MTP and n-gram
+speculative decoding) are under test (`scripts/pc/flag_test.sh`, each speculative config gated by `scripts/pc/spec_probe.py`).
+With `-c 524288 -np 5` the 5060 Ti uses 14.8 of 16.3 GB (measured); the 4070 SUPER cannot, so it would split the config: the developer's
+call. The KV pool has not overflowed so far: no `purging slot` and no failed decode in any log of round 9 or the smoke.
 
-**Expected time:** about 4-6 h with both cards, from round 9's tokens on these rows (~1.7M per arm on the DeepMind and repeated MATH
-rows, ~0.5M for the 17 new MATH rows, C ~0.7M) at ~150 tok/s per card, arm C one answer at a time on each card beside A and B; the
+**Expected time:** about 5-7 h with both cards, from round 9's tokens on these rows (~1.7M per arm on the DeepMind and repeated MATH
+rows, ~0.5M for the 17 new MATH rows, C ~0.7M) at the fixed smoke's ~107 tok/s per card, arm C one answer at a time on each card beside A and B; the
 longest answers (60-70k tokens in round 9) set the tail.
 
 **The smoke** (`a100/pc/r10smoke-*`, `r10smoke4070-c`): A and B answered `dm_swr_p_sequence-3480` with no error, `--letter-count` put
 the counts, `--approx-put` put 3 values (all right). Arm C on the 4070 SUPER answered `stdmath-e3263989` twice: the gate opened
 (`verify gate`), the box ran the checks (`output` by the gate, 1.1-3.0 s), both answers boxed four solutions and are wrong (gold
 `3\pm2\sqrt{2}`). In seed 0 the gate's own check printed `sin = -0.333` for the two negative candidates, and the model still kept them;
-in seed 1 the model's check used an arccot branch under which the negatives pass. Seed 0 also opened two blocks that started
-indented (`IndentationError`). This is round 9's P8 as written: the branch convention is the model's to decide, and the output
+in seed 1 the model's check used an arccot branch under which the negatives pass. Seed 0 also put two code fragments it quoted from its own earlier code in ```` ```python ```` fences ("Let's check `cot_inv`
+implementation in code."), which the harness ran as blocks: `IndentationError`, true output, not a cut by the harness. This is round 9's P8 as written: the branch convention is the model's to decide, and the output
 showed it the answer it did not take.

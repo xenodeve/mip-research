@@ -1,8 +1,9 @@
+45 jobs on 8 processes
 
 ==== arm B, all four: inline_calc,mathbackend,inline_plain,inline_style=general,no_digit_join,guard_progress,loop_close,answer_close,early_cycle,shape_cap=1024,cover_cap=32768,question_quote,approx_put,answer_rewind=2,letter_count
 240 answers replayed (0 without a row), vllm_refused 0
 
-question quote: 16 first acts; right answers, value right: 11, wrong answers, value right: 5
+question quote: 16 first acts; right answers, unchecked: 5, right answers, value right: 6, wrong answers, unchecked: 1, wrong answers, value right: 4
    r9a-gen dm_mixed_longer-926#0 right at 5969/6372 {"at_loop": true}
    r9a-gen dm_mixed_longer-5053#1 right at 13098/13753 {"at_loop": true}
    r9a-gen dm_mul_div_longer-1505#0 wrong at 115/20754 {"copy": "$$ \\frac{18/4}{(11/(-264) \\cdot 6)} \\cdot \\frac{1}{(-25)/((-3025)/(-44) \\cdot 1/(-4))} $$", "cut_tokens": 32}
@@ -165,7 +166,7 @@ answer rewind: 0 first acts;
 ==== question quote alone: inline_calc,mathbackend,inline_plain,inline_style=general,no_digit_join,guard_progress,loop_close,answer_close,early_cycle,shape_cap=1024,cover_cap=32768,question_quote
 240 answers replayed (0 without a row), vllm_refused 0
 
-question quote: 42 first acts; right answers, value right: 31, wrong answers, value right: 11
+question quote: 42 first acts; right answers, unchecked: 12, right answers, value right: 19, wrong answers, unchecked: 2, wrong answers, value right: 9
    r9a-gen dm_mixed_longer-926#0 right at 5969/6372 {"at_loop": true}
    r9a-gen dm_mixed_longer-5053#0 right at 15692/16589 {"at_loop": true}
    r9a-gen dm_mixed_longer-5053#1 right at 13098/13753 {"at_loop": true}
@@ -264,6 +265,105 @@ approx value: 138 first acts; right answers, value right: 119, wrong answers, va
    r9a-gen dm_poly_evaluate-3480#0 right at 892/1523 {"expr": "197784 / 1766", "value": "111.99547"}
    r9a-gen dm_swr_p_sequence-926#0 right at 4167/7377 {"expr": "1/120", "value": "0.008333333333"}
    r9a-gen dm_swr_p_sequence-1501#0 right at 1487/13293 {"expr": "\\frac{1}{11}", "value": "0.09090909091"}
+   r9a-gen dm_swr_p_sequence-1501#1 right at 3054/12501 {"expr": "2/9", "value": "0.2222222222"}
+   r9a-gen dm_swr_p_sequence-5053#1 right at 6171/10626 {"expr": "1/1224", "value": "0.0008169934641"}
+   r9a-gen dm_swr_p_sequence-9937#0 right at 2799/7060 {"expr": "5/273", "value": "0.01831501832"}
+   r9a-gen dm_swr_p_sequence-9937#1 right at 2125/8138 {"expr": "5/273", "value": "0.01831501832"}
+   r9a-gen stdmath-9f7f1563#0 right at 16040/26150 {"expr": "5/7", "value": "0.7142857143"}
+   r9a-gen stdmath-9f7f1563#1 right at 35245/50051 {"expr": "(5 + 4.47)/4", "value": "2.3675"}
+   r9a-gen stdmath-9b21d63d#0 right at 7188/24324 {"expr": "7/25", "value": "0.28"}
+   r9a-gen stdmath-e3263989#0 wrong at 13256/20525 {"expr": "1/3", "value": "0.3333333333"}
+   r9a-gen stdmath-e3263989#1 wrong at 13822/30569 {"expr": "1/0.17", "value": "5.882352941"}
+   r9a-gen stdmath-370853d3#1 wrong at 19242/37143 {"expr": "14/2.414", "value": "5.7995029"}
+   r9a-gen stdmath-245aadb1#0 right at 9185/67141 {"expr": "29/27", "value": "1.074074074"}
+   r9a-gen stdmath-245aadb1#1 right at 3768/22388 {"expr": "721/720", "value": "1.001388889"}
+   r9a-gen stdmath-97b18f58#0 wrong at 59898/71687 {"expr": "256 - 128(1296) + 16(36)", "value": "-165056"}
+   r9a-gen stdmath-a224416f#1 right at 5769/8854 {"expr": "200 + 40/7", "value": "205.7142857"}
+   r9a-gen stdmath-eaaaaeb1#1 right at 15580/21643 {"expr": "(1.618)^9", "value": "75.9987861"}
+   r9a3-gen stdmath-86429feb#0 right at 6418/26282 {"expr": "4 + 12/7", "value": "5.714285714"}
+   r9a3-gen stdmath-b0845d2e#0 right at 10769/25960 {"expr": "20000 / 3.14159", "value": "6366.203101"}
+   r9a3-gen stdmath-b0845d2e#1 right at 5434/21940 {"expr": "20000 / 3.14159", "value": "6366.203101"}
+   r9a3-gen stdmath-1e0d6c4c#0 right at 1701/6914 {"expr": "1/3", "value": "0.3333333333"}
+   r9b-gen dm_mixed_longer-2773#0 right at 10651/13322 {"expr": "1687/3", "value": "562.3333333"}
+   r9b-gen dm_mixed_longer-2773#1 right at 10242/13255 {"expr": "19+16", "value": "35"}
+   r9b-gen dm_mixed_longer-2773#1 right at 10317/13255 {"expr": "-2/241", "value": "-0.008298755187"}
+   r9b-gen dm_mixed_longer-4125#0 right at 835/14688 {"expr": "20999693 / 767", "value": "27379"}
+   r9b-gen dm_mixed_longer-4125#0 right at 8522/14688 {"expr": "27379/12540", "value": "2.183333333"}
+   r9b-gen dm_mixed_longer-4125#1 right at 1435/15759 {"expr": "20999693 / 641212", "value": "32.75"}
+   r9b-gen dm_mixed_longer-5920#0 right at 1005/14705 {"expr": "695/9", "value": "77.22222222"}
+   r9b-gen dm_mixed_longer-5920#1 right at 530/16650 {"expr": "50040 / 648", "value": "77.22222222"}
+   r9b-gen dm_mixed_longer-9951#0 wrong at 1092/20697 {"expr": "6040 / 147", "value": "41.08843537"}
+   r9b-gen dm_mixed_longer-9951#1 right at 3105/17618 {"expr": "32872 / 105", "value": "313.0666667"}
+   r9b-gen dm_mul_div_longer-1395#0 right at 2446/17339 {"expr": "16/3", "value": "5.333333333"}
+   r9b-gen dm_mul_div_longer-4138#0 right at 2092/21868 {"expr": "82/7", "value": "11.71428571"}
+   r9b-gen dm_mul_div_longer-4138#1 right at 4816/18350 {"expr": "82/7", "value": "11.71428571"}
+   r9b-gen dm_mul_div_longer-5942#1 wrong at 25002/30416 {"expr": "3/56", "value": "0.05357142857"}
+   r9b-gen dm_mul_div_longer-9991#1 wrong at 1210/20403 {"expr": "-136/3", "value": "-45.33333333"}
+   r9b-gen dm_div_big-1395#0 right at 225/39393 {"expr": "73388 / 36903", "value": "1.988673008"}
+   r9b-gen dm_div_big-1395#1 right at 225/27365 {"expr": "73000 / 37000", "value": "1.972972973"}
+   r9b-gen dm_div_big-2783#0 wrong at 712/42182 {"expr": "171000000 \\div 2221234", "value": "76.98423489"}
+   r9b-gen dm_div_big-2783#1 right at 738/18475 {"expr": "-0.77 \\times 10^{-4}", "value": "-7.7 \\times 10^{-5}"}
+   r9b-gen dm_div_big-4138#0 wrong at 6034/20825 {"expr": "-139241497 / 13", "value": "-10710884.38"}
+   r9b-gen dm_div_big-4138#1 wrong at 3969/35036 {"expr": "139241497 / 13", "value": "10710884.38"}
+   r9b-gen dm_div_big-4138#1 wrong at 4478/35036 {"expr": "139241497 / 17", "value": "8190676.294"}
+   r9b-gen dm_div_big-5942#0 right at 5677/25153 {"expr": "26 \\div 3", "value": "8.666666667"}
+   r9b-gen dm_div_big-5942#1 right at 10731/16201 {"expr": "8.7 \\times 3", "value": "26.1"}
+   r9b-gen dm_div_big-5942#1 right at 11497/16201 {"expr": "2.6 \\times 10^{10} / 3", "value": "8666666667"}
+   r9b-gen dm_div_big-9991#0 wrong at 3717/17958 {"expr": "1/19", "value": "0.05263157895"}
+   r9b-gen dm_div_big-9991#1 wrong at 6374/7469 {"expr": "-10473105/19", "value": "-551216.0526"}
+   r9b-gen dm_simplify_surd-1391#0 right at 14354/26265 {"expr": "21969 - 448(2.64)", "value": "20786.28"}
+   r9b-gen dm_simplify_surd-1391#1 right at 6379/31169 {"expr": "3136 + 112 - 192(2.64)", "value": "2741.12"}
+   r9b-gen dm_simplify_surd-2773#0 right at 16172/19181 {"expr": "12 \\times 14.28", "value": "171.36"}
+   r9b-gen dm_simplify_surd-2773#1 right at 6972/12122 {"expr": "12 \\times 14.28", "value": "171.36"}
+   r9b-gen dm_simplify_surd-4125#1 right at 1796/6047 {"expr": "26.31 / -26.52", "value": "-0.992081448"}
+   r9b-gen dm_simplify_surd-9951#0 right at 12696/20836 {"expr": "12 \\times 2.645", "value": "31.74"}
+   r9b-gen dm_div_remainder-1391#0 right at 172/20925 {"expr": "851007 / 2548", "value": "333.9901884"}
+   r9b-gen dm_div_remainder-1391#1 right at 232/6607 {"expr": "851000 / 2500", "value": "340.4"}
+   r9b-gen dm_div_remainder-2773#0 right at 1383/8333 {"expr": "5918 \\div 299", "value": "19.79264214"}
+   r9b-gen dm_div_remainder-2773#1 right at 235/10265 {"expr": "714 \\div 300", "value": "2.38"}
+   r9b-gen dm_div_remainder-4125#0 right at 206/14889 {"expr": "1500000 \\div 500", "value": "3000"}
+   r9b-gen dm_div_remainder-4125#0 right at 601/14889 {"expr": "3500 / 477", "value": "7.337526205"}
+   r9b-gen dm_div_remainder-4125#1 right at 578/6116 {"expr": "477 \\times 7", "value": "3339"}
+   r9b-gen dm_div_remainder-4125#1 right at 1530/6116 {"expr": "1514/53", "value": "28.56603774"}
+   r9b-gen dm_div_remainder-5920#0 right at 210/4540 {"expr": "370036 \\div 30836", "value": "12.00012972"}
+   r9b-gen dm_div_remainder-5920#1 right at 316/6296 {"expr": "370000 \\div 30000", "value": "12.33333333"}
+   r9b-gen dm_div_remainder-9951#0 right at 276/13953 {"expr": "2099 \\div 723", "value": "2.903181189"}
+   r9b-gen dm_div_remainder-9951#1 right at 515/16021 {"expr": "20993027 / 723", "value": "29035.99862"}
+   r9b-gen dm_poly_evaluate-2773#0 right at 1087/1985 {"expr": "857^2", "value": "734449"}
+   r9b-gen dm_poly_evaluate-2773#1 right at 1954/4698 {"expr": "857^2", "value": "734449"}
+   r9b-gen dm_swr_p_sequence-2773#0 right at 1614/7389 {"expr": "2/105", "value": "0.01904761905"}
+   r9b-gen dm_swr_p_sequence-4125#0 right at 8141/15490 {"expr": "1/6", "value": "0.1666666667"}
+   r9b-gen dm_swr_p_sequence-4125#1 right at 11778/14227 {"expr": "1/30", "value": "0.03333333333"}
+   r9b-gen dm_swr_p_sequence-5920#0 right at 2202/2739 {"expr": "1/12", "value": "0.08333333333"}
+   r9b-gen dm_swr_p_sequence-9951#0 right at 3484/12453 {"expr": "56 / 495", "value": "0.1131313131"}
+   r9b-gen dm_swr_p_sequence-9951#1 wrong at 5112/9223 {"expr": "7/55", "value": "0.1272727273"}
+   r9b-gen stdmath-3c2b62f6#0 right at 7206/12203 {"expr": "2/27", "value": "0.07407407407"}
+   r9b-gen stdmath-3c2b62f6#1 right at 8952/23309 {"expr": "2/27", "value": "0.07407407407"}
+   r9b-gen stdmath-5dd40b1a#1 right at 3815/28890 {"expr": "\\frac{0.9935}{-0.5736}", "value": "-1.732043236"}
+   r9b-gen stdmath-2aff3e30#0 right at 21230/25440 {"expr": "-11.2 / 13", "value": "-0.8615384615"}
+   r9b-gen stdmath-a74e5ed1#0 right at 9796/15779 {"expr": "\\frac{16.28}{5}", "value": "3.256"}
+   r9b-gen stdmath-516461d8#0 right at 9882/31754 {"expr": "(65 + 28.8)/2", "value": "46.9"}
+   r9b-gen stdmath-516461d8#0 right at 9911/31754 {"expr": "(65 - 28.8)/2", "value": "18.1"}
+   r9b-gen stdmath-516461d8#0 right at 19354/31754 {"expr": "28/6.8", "value": "4.117647059"}
+   r9b-gen stdmath-5bbb82b0#1 right at 2459/12862 {"expr": "1/45", "value": "0.02222222222"}
+   r9b-gen stdmath-1cc4b122#0 right at 16335/72752 {"expr": "-\\frac{4 \\times 65.5}{33}", "value": "-7.939393939"}
+   r9b-gen stdmath-1cc4b122#1 right at 6515/28533 {"expr": "640/7", "value": "91.42857143"}
+   r9b-gen stdmath-e76531f9#1 right at 9365/18237 {"expr": "2/3", "value": "0.6666666667"}
+   r9b-gen stdmath-de4b22ca#1 right at 14857/40582 {"expr": "25/9", "value": "2.777777778"}
+   r9b-gen stdmath-5e2eb2d9#0 right at 2479/9546 {"expr": "5^9", "value": "1953125"}
+   r9b-gen stdmath-dfcde87b#0 right at 8973/22238 {"expr": "10/3", "value": "3.333333333"}
+   r9b-gen stdmath-dfcde87b#1 right at 15077/19530 {"expr": "154^3", "value": "3652264"}
+   r9b-gen stdmath-5a258a23#0 right at 12867/23029 {"expr": "1/18", "value": "0.05555555556"}
+   r9b-gen stdmath-5a258a23#1 right at 28909/38032 {"expr": "2/3", "value": "0.6666666667"}
+   r9b-gen stdmath-45fa3ef2#0 wrong at 512/8260 {"expr": "1.01^{30}", "value": "1.347848915"}
+   r9b-gen stdmath-45fa3ef2#1 right at 619/13528 {"expr": "30 \\times 0.00995033", "value": "0.2985099"}
+   r9b-gen stdmath-fbf10ed4#0 right at 5887/11035 {"expr": "26244/89", "value": "294.8764045"}
+   r9b-gen stdmath-ff2cf3ad#0 right at 7211/23882 {"expr": "20201/10100", "value": "2.00009901"}
+   r9b-gen stdmath-ff2cf3ad#1 right at 2601/25881 {"expr": "0.1 + 2/1.0488", "value": "2.006941266"}
+
+letter count: 0 first acts; 
+
+answer rewind: 0 first acts; 
 
 ==== letter count alone: inline_calc,mathbackend,inline_plain,inline_style=general,no_digit_join,guard_progress,loop_close,answer_close,early_cycle,shape_cap=1024,cover_cap=32768,letter_count
 240 answers replayed (0 without a row), vllm_refused 0

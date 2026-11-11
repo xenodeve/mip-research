@@ -53,75 +53,109 @@ def letters_ok(ev, question):
         and got[0] == s and all(s.count(ch) == n for ch, n in got[1]) and sum(n for _, n in got[1]) == len(s)
 
 
-def quote_ok(question):
+def quote_ok(question, gold):
+    """The quote is read_exact's expression of the question; its value, evaluated here, must be gold (a moved bracket or a lost sign
+    changes the value, which comparing digits in order would not see). None when the quote or gold is not a plain number."""
     from tools.igc.question_read import read_exact
-    from tools.igc.question_quote import numbers_of
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from analyze import quote_value_right
     got = read_exact(question)
-    q = question.split('\n')[0]
-    return got is not None and numbers_of(got[0]) == [x for x in numbers_of(q)][:len(numbers_of(got[0]))]
+    return None if got is None else quote_value_right(got[0], gold)
 
 
-def main():
+_TOK = _IDS = _ROWS = None
+
+
+def _init():
+    """Each worker process loads the tokenizer and the rows once."""
+    global _TOK, _IDS, _ROWS
     from transformers import AutoTokenizer
-    tok = AutoTokenizer.from_pretrained('D:/models/Qwen3.5-4B')
-    IDS = tir4b.Ids(tok, [tok.convert_tokens_to_ids('<|endoftext|>')])
-    rows = {}
+    _TOK = AutoTokenizer.from_pretrained('D:/models/Qwen3.5-4B')
+    _IDS = tir4b.Ids(_TOK, [_TOK.convert_tokens_to_ids('<|endoftext|>')])
+    _ROWS = {}
     for f in ROWS:
         p = W / f
         if p.exists():
             for line in p.read_text(encoding='utf-8').splitlines():
                 if line.strip():
                     r = json.loads(line)
-                    rows[r['id']] = r
-    for name, spec in [('arm B, all four', ARM_B)] + [(f'{k} alone', GENERAL + ',' + v) for k, v in ALONE.items()]:
-        gate(name, spec, rows, tok, IDS)
+                    _ROWS[r['id']] = r
 
 
-def gate(name, spec, rows, tok, IDS):
+def job(name, spec, half, part, parts):
+    """One slice of one config: the records of `half` whose index is `part` mod `parts`. Returns plain data for the parent to merge."""
     arm = arm_kwargs(spec)
     acts = defaultdict(Counter)       # kind -> (final, value verdict) -> n
     listed = defaultdict(list)
     refused = answers = no_row = 0
-    for half in HALVES:
-        d = W / 'pc' / half
-        stored = {}
-        for line in (d / 'ids.jsonl').read_text(encoding='utf-8').splitlines():
-            if line.strip():
-                x = json.loads(line)
-                stored[(x['id'], x.get('sample', 0))] = x['out_ids']
-        for rec in json.loads((d / 'records.json').read_text(encoding='utf-8')):
-            row = rows.get(rec['id'])
-            if row is None:
-                no_row += 1
+    d = W / 'pc' / half
+    stored = {}
+    for line in (d / 'ids.jsonl').read_text(encoding='utf-8').splitlines():
+        if line.strip():
+            x = json.loads(line)
+            stored[(x['id'], x.get('sample', 0))] = x['out_ids']
+    for i, rec in enumerate(json.loads((d / 'records.json').read_text(encoding='utf-8'))):
+        if i % parts != part:
+            continue
+        row = _ROWS.get(rec['id'])
+        if row is None:
+            no_row += 1
+            continue
+        rec = dict(rec, question=row['question'], answer=row['answer'])
+        ok = right(row, rec['text'])   # today's rule (the scorer fixes and the form rule of 2026-11-11), not the stored flag
+        ids = stored.get((rec['id'], rec.get('sample', 0))) or _TOK.encode(rec['text'], add_special_tokens=False)
+        out = replay(rec, ids, arm, _TOK, _IDS, recorded=True)
+        answers += 1
+        refused += len(out.get('refused', []))
+        for ev in out['events']:
+            if ev['kind'] not in NEW:
                 continue
-            rec = dict(rec, question=row['question'], answer=row['answer'])
-            ok = right(row, rec['text'])   # today's rule (the scorer fixes and the form rule of 2026-11-11), not the stored flag
-            ids = stored.get((rec['id'], rec.get('sample', 0))) or tok.encode(rec['text'], add_special_tokens=False)
-            out = replay(rec, ids, arm, tok, IDS, recorded=True)
-            answers += 1
-            refused += len(out.get('refused', []))
-            for ev in out['events']:
-                if ev['kind'] not in NEW:
-                    continue
-                if ev['kind'] == 'approx value':
-                    v = approx_ok(ev)
-                elif ev['kind'] == 'letter count':
-                    v = letters_ok(ev, row['question'])
-                elif ev['kind'] == 'question quote':
-                    v = quote_ok(row['question'])
-                else:
-                    v = 'no value'
-                final = 'right' if ok else 'wrong'
-                acts[ev['kind']][(final, {True: 'value right', False: 'VALUE WRONG', None: 'unchecked'}.get(v, v))] += 1
-                listed[ev['kind']].append(f"{half} {rec['id']}#{rec.get('sample', 0)} {final} at {ev['at']}/{len(ids)} "
-                                          f"{json.dumps({k: ev[k] for k in ('expr', 'value', 'string', 'copy', 'at_loop', 'cut_tokens') if ev.get(k) is not None}, ensure_ascii=False)[:200]}")
-    print(f'\n==== {name}: {spec}')
-    print(f'{answers} answers replayed ({no_row} without a row), vllm_refused {refused}')
-    for kind in NEW:
-        c = acts.get(kind, Counter())
-        print(f'\n{kind}: {sum(c.values())} first acts; ' + ', '.join(f'{f} answers, {v}: {n}' for (f, v), n in sorted(c.items())))
-        for line in listed.get(kind, []):
-            print('   ' + line)
+            if ev['kind'] == 'approx value':
+                v = approx_ok(ev)
+            elif ev['kind'] == 'letter count':
+                v = letters_ok(ev, row['question'])
+            elif ev['kind'] == 'question quote':
+                v = quote_ok(row['question'], row['answer'])
+            else:
+                v = 'no value'
+            final = 'right' if ok else 'wrong'
+            acts[ev['kind']][(final, {True: 'value right', False: 'VALUE WRONG', None: 'unchecked'}.get(v, v))] += 1
+            listed[ev['kind']].append((half, i, f"{half} {rec['id']}#{rec.get('sample', 0)} {final} at {ev['at']}/{len(ids)} "
+                                       f"{json.dumps({k: ev[k] for k in ('expr', 'value', 'string', 'copy', 'at_loop', 'cut_tokens') if ev.get(k) is not None}, ensure_ascii=False)[:200]}"))
+    return name, dict(acts), dict(listed), refused, answers, no_row
+
+
+def main():
+    """Every (config, half, slice) is its own job on a process pool, so the replay uses the cores instead of one; the parent merges
+    the slices and prints each config in a fixed order, the same text a single process would."""
+    import os
+    from concurrent.futures import ProcessPoolExecutor
+    configs = [('arm B, all four', ARM_B)] + [(f'{k} alone', GENERAL + ',' + v) for k, v in ALONE.items()]
+    parts = int(os.environ.get('REPLAY_PARTS', '4'))
+    jobs = [(name, spec, half, part, parts if half != 'r9a3-gen' else 1)
+            for name, spec in configs for half in HALVES for part in range(parts if half != 'r9a3-gen' else 1)]
+    workers = int(os.environ.get('REPLAY_WORKERS', str(max(1, min(len(jobs), (os.cpu_count() or 2) - 4, 10)))))
+    merged = {name: [defaultdict(Counter), defaultdict(list), 0, 0, 0] for name, _ in configs}
+    with ProcessPoolExecutor(workers, initializer=_init) as pool:
+        for name, acts, listed, refused, answers, no_row in pool.map(job, *zip(*jobs)):
+            m = merged[name]
+            for k, c in acts.items():
+                m[0][k].update(c)
+            for k, rows_ in listed.items():
+                m[1][k].extend(rows_)
+            m[2] += refused
+            m[3] += answers
+            m[4] += no_row
+    print(f'{len(jobs)} jobs on {workers} processes')
+    for name, spec in configs:
+        acts, listed, refused, answers, no_row = merged[name]
+        print(f'\n==== {name}: {spec}')
+        print(f'{answers} answers replayed ({no_row} without a row), vllm_refused {refused}')
+        for kind in NEW:
+            c = acts.get(kind, Counter())
+            print(f'\n{kind}: {sum(c.values())} first acts; ' + ', '.join(f'{f} answers, {v}: {n}' for (f, v), n in sorted(c.items())))
+            for _, _, line in sorted(listed.get(kind, []), key=lambda x: (HALVES.index(x[0]), x[1])):
+                print('   ' + line)
 
 
 if __name__ == '__main__':
