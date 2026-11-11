@@ -89,7 +89,8 @@ process it is as fast as Python and takes nothing from the engine.
 - **Integers up to 8,192 limbs (262,144 bits) per part**; past that `NOT_COVERED`, where Python answers ("any size"): open question 3 of
   the design (a bound both sides keep).
 - **A per-call time guard of 0.4 s**: past it `DEVICE_FAILED` (never a value). It keeps every kernel far under Windows' TDR watchdog,
-  whose reset would take down every program using the GPU. One GPU thread does the full path, so 20,000-digit products reach it.
+  whose reset would take down every program using the GPU. One GPU thread does the full path; the 20,000-digit cases of `numbers-s1`
+  finish inside it since the reduction skips the gcd for an integer result (2026-11-12).
 - Only the four rational operations; `UNKNOWN_OP` for the rest.
 
 ## Check it
@@ -105,8 +106,7 @@ sh cuda/mathbackend/run5060.sh out.txt python results/cuda-mathbackend/linger_st
 python -m unittest tools.test_mathbackend_harness
 ```
 
-Expected now: fuzz 4,000 / 4,000, paths 220 / 220, s1 1,800 / 1,816 (the 16 are 20,000-digit cases past the time guard: `DEVICE_FAILED`,
-no wrong value), 0 wrong in the stress run, in modes 1 and 2. `compute-sanitizer --tool memcheck` (and initcheck, racecheck, synccheck)
+Expected now: fuzz 4,000 / 4,000, paths 220 / 220, s1 1,816 / 1,816, 0 wrong in the stress run, in modes 1 and 2. `compute-sanitizer --tool memcheck` (and initcheck, racecheck, synccheck)
 reported 0 errors on the paths corpus on both cards.
 
 Speed: `ping.py` (latency and its split), `floor.py` (the empty-kernel floor), `sparse.py`, `impact.py` (decode tok/s beside the calls,
