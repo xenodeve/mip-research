@@ -21,8 +21,32 @@ import sys
 from decimal import Decimal
 from fractions import Fraction
 
-if hasattr(sys, 'set_int_max_str_digits'):
-    sys.set_int_max_str_digits(0)   # the encoding writes integers of any size as digits
+
+
+def _digits(i):
+    """str(i) for an int of any size. Python's own limit (4,300 digits by default) is lifted only for this conversion and restored, so
+    the reference Python keeps the limit its operations meet in use (the 7 string-returning ops, design "Normalisation rules")."""
+    try:
+        return str(i)
+    except ValueError:
+        old = sys.get_int_max_str_digits()
+        sys.set_int_max_str_digits(0)
+        try:
+            return str(i)
+        finally:
+            sys.set_int_max_str_digits(old)
+
+
+def _int(s):
+    try:
+        return int(s)
+    except ValueError:
+        old = sys.get_int_max_str_digits()
+        sys.set_int_max_str_digits(0)
+        try:
+            return int(s)
+        finally:
+            sys.set_int_max_str_digits(old)
 
 
 def _tree(x):
@@ -32,11 +56,11 @@ def _tree(x):
     if isinstance(x, bool):
         return ['b', x]
     if isinstance(x, int):
-        return ['i', str(x)]
+        return ['i', _digits(x)]
     if isinstance(x, Fraction):
         if x.denominator == 1:
-            return ['i', str(x.numerator)]
-        return ['q', str(x.numerator), str(x.denominator)]
+            return ['i', _digits(x.numerator)]
+        return ['q', _digits(x.numerator), _digits(x.denominator)]
     if isinstance(x, Decimal):
         return ['d', str(x)]
     if isinstance(x, float):
@@ -44,7 +68,7 @@ def _tree(x):
     if isinstance(x, str):
         return ['s', x]
     if isinstance(x, Surd):
-        return ['r', _tree(x.p), _tree(x.q), str(x.d)]
+        return ['r', _tree(x.p), _tree(x.q), _digits(x.d)]
     if isinstance(x, list):
         return ['l', [_tree(y) for y in x]]
     if isinstance(x, tuple):
@@ -83,9 +107,9 @@ def _value(t):
     if tag == 'b':
         return bool(t[1])
     if tag == 'i':
-        return int(t[1])
+        return _int(t[1])
     if tag == 'q':
-        return Fraction(int(t[1]), int(t[2]))
+        return Fraction(_int(t[1]), _int(t[2]))
     if tag == 'd':
         return Decimal(t[1])
     if tag == 'f':
@@ -93,7 +117,7 @@ def _value(t):
     if tag == 's':
         return t[1]
     if tag == 'r':
-        return Surd(_value(t[1]), _value(t[2]), int(t[3]))
+        return Surd(_value(t[1]), _value(t[2]), _int(t[3]))
     if tag == 'l':
         return [_value(y) for y in t[1]]
     if tag == 't':

@@ -33,6 +33,12 @@ class Canon(unittest.TestCase):
         with self.assertRaises(TypeError):
             canon.encode_refusal(ZeroDivisionError())
 
+    def test_python_int_limit_is_kept(self):
+        import sys
+        before = sys.get_int_max_str_digits()
+        canon.encode(10 ** 5000)
+        self.assertEqual(sys.get_int_max_str_digits(), before)   # the reference Python is not changed by the encoding
+
     def test_unknown_type_is_an_error(self):
         with self.assertRaises(TypeError):
             canon.encode(object())

@@ -41,6 +41,32 @@ def cases(module, ops=None, seed=1, n=60):
             yield name, tuple(case[0])
         for case in getattr(sim, 'BOUNDS', {}).get(name, []):   # the bound cases the sim file names
             yield name, tuple(case[0])
+        for args in boundary(name):
+            yield name, tuple(args)
+
+
+def boundary(name):
+    """The adversarial boundary set (design "How 100% is made", 2): the cases seeded generators under-sample, built on purpose.
+    For the rational operations: Python's Fraction(str) grammar at every edge (Unicode digits and whitespace, underscores, signs,
+    '.5' and '5.', a zero denominator, e/n anywhere, the 4000-character cap), and integers across limb boundaries."""
+    if name not in ('numbers.add', 'numbers.sub', 'numbers.mul', 'numbers.div'):
+        return []
+    strings = ['0', '-0', '+7', '-0/5', '.5', '5.', '-.5', '1_000', '1__000', '_1', '1_', '1_000/2_0', '1/0', '0/0', '1 / 2', ' 1/2 ',
+               '  3/4 　', '١٢/٣', '१.२', '１２', '1/-2', '--1', '+-1', '.', '-', '', '   ',
+               '1e3', '1E3', 'nan', 'inf', 'Infinity', '1.5e0', '0x10', '1/2/3', '1.2.3', '١_٢', '1._5', '1.5_', '00012/0004',
+               '7' * 4000, '7' * 4001, ' ' + '7' * 3999 + ' ', '1/' + '9' * 3998, '1.' + '0' * 3998]
+    ints = [0, 1, -1, 2 ** 32 - 1, 2 ** 32, -(2 ** 32), 2 ** 64 + 1, 10 ** 9, 10 ** 9 - 1, -(10 ** 18), 2 ** 1000 - 1, 3 ** 700]
+    from fractions import Fraction
+    other = [Fraction(-1, 2 ** 64), Fraction(2 ** 64 - 1, 2 ** 32 + 1), True, False, None, 1.5, [1], (1, 2)]
+    out = []
+    for s in strings:
+        out += [(s, 1), (1, s)]
+    for i in ints:
+        for j in (ints[3], ints[7], Fraction(1, 3), '-5/6'):
+            out.append((i, j))
+    for x in other:
+        out += [(x, 1), (1, x)]
+    return out
 
 
 def build(module, out_dir, ops=None, seed=1, n=60):
