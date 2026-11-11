@@ -157,3 +157,32 @@ copied; **linking a library as a dependency needs a conversation with the develo
    of values or of search steps), never as time or memory, since a clock or a memory limit refuses differently on each card and on
    Python and breaks refusal identity. The sizes are the developer's to set; the device's memory then follows from the largest input
    the bounds allow. The new bounds pass the gate in point 6 above.
+
+## Progress (2026-11-11)
+
+**Build:** `cuda/mathbackend/mipmath.cu` at `02f2587` (branch `cuda-mathbackend`), CUDA 13.3, sm_89 + sm_120; RTX 5060 Ti alone, no
+llama-server on the card; Python 3.11.9. Ported: `numbers.add`, `sub`, `mul`, `div` (exact rationals; Python's `Fraction(str)` grammar
+with Unicode digits and whitespace on the device), one device thread per call.
+
+| Check | Result |
+|---|---|
+| Corpus `results/cuda-mathbackend/corpus/numbers-s1.jsonl` (1,416 cases: 800 seeded, 616 boundary) | **1,416 / 1,416 byte-identical**, refusals 269 / 269, in both modes (resident worker, one launch per call) |
+| The answer came from the device | an unported op returns `device:UNKNOWN_OP`; the process holds the 5060 Ti; a 2^200 product matches |
+| Null backend / wrong backends | 100 % / each caught (`tools/test_mathbackend_harness.py`) |
+
+**Speed per call** (`results/cuda-mathbackend/speed.py`, 30 repeats, median; `speed-resident1.txt`, `speed-resident0.txt`):
+
+| | Python | Device, resident worker | Device, one launch per call |
+|---|---|---|---|
+| all 1,416 cases | 24.8 us | 440 us (18x slower) | 656 us (Python 37.0 in that run) |
+| `add`, small arguments | 14-19 us | 294-384 us | 454-510 us |
+| 4,000-character strings | 192-194 us | 71,900 us (370x slower) | |
+
+Why, read from the code, not yet profiled: one device thread does everything, and every limb, digit and code point lives in global
+memory (hundreds of cycles per dependent access, nothing to hide it behind); each character of a string is matched against the 66
+digit runs and 29 spaces in constant memory; strings become integers digit-chunk by digit-chunk (quadratic). In the resident mode the
+host also spins on the slot while it waits, so the CPU is not yet freed either. The latency floor of a mapped-memory round trip is a
+few microseconds, so a single small call can at best come near Python; the gain the design is after (no CPU work, host time per decode
+round) needs the next steps: an ASCII fast path and registers or shared memory for small values, a warp per call for big ones, many
+calls per pass (one slot per warp), and a host that waits without spinning. Then measure again, per call, batched, and host time per
+decode round.
