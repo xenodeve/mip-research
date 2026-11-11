@@ -24,6 +24,7 @@
 // refuses at the same bound.
 #define MIP_LIMBS 8192
 #define ARENA_WORDS (MIP_LIMBS * 64)
+#define SH_WORDS 12032   // the shared-memory arena of the worker: 47 KB, under the 48 KB a block gets without opting in
 #define MIP_STR_MAX 4000          // numbers._rat: a string longer than 4000 characters (after strip) is BadInput
 #define MIP_WORKER_SECONDS 1.0
 
@@ -31,11 +32,15 @@ enum { OP_ADD = 1, OP_SUB, OP_MUL, OP_DIV };
 
 struct Slot {
     volatile int32_t state;       // 0 empty, 1 request, 2 answered, 3 quit
+    volatile int32_t seen;        // diagnostics: the worker sets it the moment it reads a request
     int32_t op;
     int32_t status;
     uint32_t args_len;
     uint32_t out_len;
     uint64_t dev_cycles;   // clock cycles serve() took on the device: the work, apart from the round trip
+    uint64_t polls;        // diagnostics: polls of the flag since this worker launched, and the cycles they spanned
+    uint64_t poll_cycles;
+    uint64_t wait_cycles;  // cycles from the previous answer to seeing this request (the device side of the gap)
     uint8_t args[MIP_ARGS_MAX];
     uint8_t out[MIP_OUT_MAX];
 };
@@ -50,6 +55,7 @@ struct Big {
 
 struct Ctx {
     uint32_t *arena;
+    int cap;    // words in this arena (shared or global)
     int used;
     int fail;   // a device failure: arena exhausted (never a value)
 };
@@ -59,7 +65,7 @@ __device__ Big big_new(Ctx &c, int cap) {
     b.n = 0;
     b.neg = 0;
     b.cap = cap;
-    if (c.used + cap > ARENA_WORDS) {
+    if (c.used + cap > c.cap) {
         c.fail = 1;
         b.w = c.arena;
         b.cap = 0;
@@ -421,7 +427,7 @@ __device__ int json_string(const uint8_t *s, int len, int &i, uint8_t *dst, int 
 // Returns MIP_OK or MIP_BAD_INPUT; r gets the unreduced value.
 __device__ int rat_from_str(Ctx &c, Rat &r, const uint8_t *s, int len) {
     // decode, strip; the code points go to the arena (a 16 KB local array would overflow the device stack)
-    if (c.used + MIP_STR_MAX + 1 > ARENA_WORDS) { c.fail = 1; return MIP_DEVICE_FAILED; }
+    if (c.used + MIP_STR_MAX + 1 > c.cap) { c.fail = 1; return MIP_DEVICE_FAILED; }
     uint32_t *cps = c.arena + c.used;
     int i = 0, n = 0, start = -1, end = -1;
     uint32_t cp;
@@ -459,7 +465,7 @@ __device__ int rat_from_str(Ctx &c, Rat &r, const uint8_t *s, int len) {
     if (!(p < m && (nd_digit(cps[p]) >= 0 || (cps[p] == '.' && p + 1 < m && nd_digit(cps[p + 1]) >= 0)))) return MIP_BAD_INPUT;
     uint8_t *num = (uint8_t *)(c.arena + c.used);   // digit values, borrowed from the arena's free space
     int need = (3 * MIP_STR_MAX + 3) / 4 + 4;
-    if (c.used + need > ARENA_WORDS) { c.fail = 1; return MIP_DEVICE_FAILED; }
+    if (c.used + need > c.cap) { c.fail = 1; return MIP_DEVICE_FAILED; }
     c.used += need;
     uint8_t *den = num + MIP_STR_MAX, *dec = den + MIP_STR_MAX;
     // digits[_digits]* or empty; returns count, -1 on a bad underscore
@@ -522,7 +528,7 @@ __device__ int big_from_ascii(Ctx &c, Big &r, const uint8_t *s, int len) {
     if (limbs > MIP_LIMBS) return MIP_NOT_COVERED;   // past the device's bound (design open question 3)
     r = big_new(c, 2 * limbs + 4);
     uint8_t *dig = (uint8_t *)(c.arena + c.used);
-    if (c.used + digits / 4 + 2 > ARENA_WORDS) { c.fail = 1; return MIP_DEVICE_FAILED; }
+    if (c.used + digits / 4 + 2 > c.cap) { c.fail = 1; return MIP_DEVICE_FAILED; }
     if (c.fail) return MIP_DEVICE_FAILED;
     for (int k = 0; k < digits; k++) {
         uint8_t ch = s[i + k];
@@ -555,7 +561,7 @@ __device__ void put_big(Ctx &c, Out &o, Big a) {
     uint32_t *chunks = c.arena + c.used;   // base-10^9 digits, least significant first
     int nc = 0;
     while (a.n) {
-        if (c.used + nc + 1 > ARENA_WORDS) { c.fail = 1; return; }
+        if (c.used + nc + 1 > c.cap) { c.fail = 1; return; }
         chunks[nc++] = mag_divmod_small(a, 1000000000u);
     }
     char buf[12];
@@ -627,7 +633,7 @@ __device__ int read_rat(Ctx &c, Rat &r, const uint8_t *s, int len, int &i) {
         if (s[i] != ',') return MIP_BAD_INPUT;
         i = skip_ws(s, len, i + 1);
         uint8_t *buf = (uint8_t *)(c.arena + c.used);
-        int room = (ARENA_WORDS - c.used) * 4 / 2;
+        int room = (c.cap - c.used) * 4 / 2;
         int bl = json_string(s, len, i, buf, room);
         if (bl < 0) return MIP_DEVICE_FAILED;
         c.used += (bl + 7) / 4;
@@ -646,7 +652,7 @@ __device__ int read_rat(Ctx &c, Rat &r, const uint8_t *s, int len, int &i) {
                     if (s[i] != ',') return MIP_BAD_INPUT;
                     i = skip_ws(s, len, i + 1);
                     uint8_t *b2 = (uint8_t *)(c.arena + c.used);
-                    int l2 = json_string(s, len, i, b2, (ARENA_WORDS - c.used) * 4 / 2);
+                    int l2 = json_string(s, len, i, b2, (c.cap - c.used) * 4 / 2);
                     if (l2 < 0) return MIP_DEVICE_FAILED;
                     c.used += (l2 + 7) / 4;
                     st = big_from_ascii(c, r.d, b2, l2);
@@ -669,14 +675,12 @@ __device__ int read_rat(Ctx &c, Rat &r, const uint8_t *s, int len, int &i) {
 // bound (NOT_COVERED) meets a BadInput: then Python's order is followed.
 // ---- the small fast path -------------------------------------------------------------------------------------------------------------
 // Most calls the model's text makes are small. When both arguments are an int, a Fraction or a plain ASCII string ([sign] digits,
-// optionally '/' digits or '.' digits) whose parts have at most 9 digits, the call runs in registers with 64-bit integers and no
-// arena. Anything else (Unicode, whitespace, underscores, a zero denominator or divisor, a malformed string, a longer number, another
-// type) is not judged here: the call goes to the full path, which holds Python's rules and its order of refusals. So the fast path only
-// answers calls the full path would answer with a value. Parts below 10^9 keep each product below 10^18 and a sum of two below
-// 2 * 10^18 < 2^63. (MSVC, nvcc's host compiler here, has no __int128, so 18-digit parts would need a two-word type.)
-typedef long long i128;
-typedef unsigned long long u128;
-#define FAST_DIGITS 9
+// optionally '/' digits or '.' digits) whose parts have at most 18 digits, the call runs in registers with two-word (128-bit)
+// integers and no arena. Anything else (Unicode, whitespace, underscores, a zero denominator or divisor, a malformed string, a longer
+// number, another type) is not judged here: the call goes to the full path, which holds Python's rules and its order of refusals. So the
+// fast path only answers calls the full path would answer with a value. Parts below 10^18 < 2^60 keep each product below 2^120 and a
+// sum of two below 2^121. (MSVC, nvcc's host compiler here, has no __int128: U2 is two 64-bit words, products by __umul64hi.)
+#define FAST_DIGITS 18
 
 __device__ int fast_digits(const uint8_t *s, int a, int b, long long &v) {   // s[a..b): 1 to FAST_DIGITS ASCII digits
     if (b - a < 1 || b - a > FAST_DIGITS) return 0;
@@ -753,26 +757,121 @@ __device__ int fast_arg(const uint8_t *s, int len, int &i, long long &n, long lo
     return 1;
 }
 
-__device__ int ctz128(u128 x) { return __ffsll((long long)x) - 1; }   // x nonzero
+struct U2 {
+    unsigned long long lo, hi;
+};
 
-__device__ u128 gcd128(u128 a, u128 b) {   // binary gcd, both nonzero
-    int sh = ctz128(a | b);
-    a >>= ctz128(a);
-    while (b) {
-        b >>= ctz128(b);
-        if (a > b) { u128 t = a; a = b; b = t; }
-        b -= a;
+__device__ U2 u2(unsigned long long x) { U2 r; r.lo = x; r.hi = 0; return r; }
+__device__ int u2_zero(U2 x) { return !x.lo && !x.hi; }
+__device__ int u2_cmp(U2 x, U2 y) { return x.hi != y.hi ? (x.hi < y.hi ? -1 : 1) : x.lo != y.lo ? (x.lo < y.lo ? -1 : 1) : 0; }
+__device__ U2 u2_mul(unsigned long long a, unsigned long long b) { U2 r; r.lo = a * b; r.hi = __umul64hi(a, b); return r; }
+__device__ U2 u2_add(U2 x, U2 y) { U2 r; r.lo = x.lo + y.lo; r.hi = x.hi + y.hi + (r.lo < x.lo); return r; }
+__device__ U2 u2_sub(U2 x, U2 y) { U2 r; r.lo = x.lo - y.lo; r.hi = x.hi - y.hi - (x.lo < y.lo); return r; }   // x >= y
+__device__ U2 u2_shr(U2 x, int k) {   // 0 <= k < 128
+    U2 r;
+    if (k == 0) return x;
+    if (k >= 64) { r.lo = x.hi >> (k - 64); r.hi = 0; return r; }
+    r.lo = (x.lo >> k) | (x.hi << (64 - k));
+    r.hi = x.hi >> k;
+    return r;
+}
+__device__ U2 u2_shl(U2 x, int k) {   // 0 <= k < 128
+    U2 r;
+    if (k == 0) return x;
+    if (k >= 64) { r.hi = x.lo << (k - 64); r.lo = 0; return r; }
+    r.hi = (x.hi << k) | (x.lo >> (64 - k));
+    r.lo = x.lo << k;
+    return r;
+}
+__device__ int u2_ctz(U2 x) { return x.lo ? __ffsll((long long)x.lo) - 1 : 64 + __ffsll((long long)x.hi) - 1; }   // x nonzero
+
+__device__ int u2_bits(U2 x) { return x.hi ? 128 - __clzll((long long)x.hi) : x.lo ? 64 - __clzll((long long)x.lo) : 0; }
+
+// q = u / v, r = u % v (v nonzero). One word each: the hardware divide. Otherwise shift-subtract over the bits u has above v's top only.
+__device__ void u2_divmod(U2 u, U2 v, U2 &q, U2 &r) {
+    if (!u.hi && !v.hi) {
+        q = u2(u.lo / v.lo);
+        r = u2(u.lo % v.lo);
+        return;
     }
-    return a << sh;
+    q = u2(0);
+    r = u2(0);
+    int top = u2_bits(u) - 1;
+    for (int i = top; i >= 0; i--) {
+        r = u2_shl(r, 1);
+        r.lo |= (i >= 64 ? u.hi >> (i - 64) : u.lo >> i) & 1;
+        if (u2_cmp(r, v) >= 0) {
+            r = u2_sub(r, v);
+            if (i >= 64) q.hi |= 1ull << (i - 64);
+            else q.lo |= 1ull << i;
+        }
+    }
 }
 
-__device__ void put_u128(Out &o, u128 v) {
-    char t[24], buf[24];
+__device__ U2 u2_gcd(U2 a, U2 b) {   // binary gcd, both nonzero
+    int sh = u2_ctz(U2{a.lo | b.lo, a.hi | b.hi});
+    a = u2_shr(a, u2_ctz(a));
+    while (!u2_zero(b)) {
+        if (!a.hi && !b.hi) {   // one word each: finish in 64-bit registers
+            unsigned long long x = a.lo, y = b.lo;
+            while (y) {
+                y >>= __ffsll((long long)y) - 1;
+                if (x > y) { unsigned long long t = x; x = y; y = t; }
+                y -= x;
+            }
+            return u2_shl(u2(x), sh);
+        }
+        b = u2_shr(b, u2_ctz(b));
+        if (u2_cmp(a, b) > 0) { U2 t = a; a = b; b = t; }
+        b = u2_sub(b, a);
+    }
+    return u2_shl(a, sh);
+}
+
+__device__ void put_u2(Out &o, U2 v) {   // decimal, in chunks of 18 digits
+    const U2 base = u2(1000000000000000000ull);
+    unsigned long long chunk[3];
     int n = 0;
-    do { t[n++] = (char)('0' + (int)(v % 10)); v /= 10; } while (v);
-    for (int k = 0; k < n; k++) buf[k] = t[n - 1 - k];
-    buf[n] = 0;
-    put(o, buf);
+    do {
+        U2 q, r;
+        u2_divmod(v, base, q, r);
+        chunk[n++] = r.lo;
+        v = q;
+    } while (!u2_zero(v));
+    char buf[24];
+    for (int k = n - 1; k >= 0; k--) {
+        unsigned long long x = chunk[k];
+        char t[20];
+        int m = 0;
+        do { t[m++] = (char)('0' + x % 10); x /= 10; } while (x);
+        int b = 0;
+        for (int z = k == n - 1 ? 0 : 18 - m; z > 0; z--) buf[b++] = '0';
+        for (int z = m - 1; z >= 0; z--) buf[b++] = t[z];
+        buf[b] = 0;
+        put(o, buf);
+    }
+}
+
+// a signed two-word value: magnitude and sign
+struct S2 {
+    U2 m;
+    int neg;
+};
+
+__device__ S2 s2_mul(long long a, long long b) {   // |a|, |b| < 2^63
+    S2 r;
+    r.m = u2_mul((unsigned long long)(a < 0 ? -a : a), (unsigned long long)(b < 0 ? -b : b));
+    r.neg = !u2_zero(r.m) && ((a < 0) != (b < 0));
+    return r;
+}
+
+__device__ S2 s2_add(S2 x, S2 y) {
+    S2 r;
+    if (x.neg == y.neg) { r.m = u2_add(x.m, y.m); r.neg = x.neg; }
+    else if (u2_cmp(x.m, y.m) >= 0) { r.m = u2_sub(x.m, y.m); r.neg = x.neg; }
+    else { r.m = u2_sub(y.m, x.m); r.neg = y.neg; }
+    if (u2_zero(r.m)) r.neg = 0;
+    return r;
 }
 
 // 1: answered into o; 0: not a fast call (o untouched)
@@ -793,30 +892,37 @@ __device__ int process_fast(int op, const uint8_t *s, int len, Out &o) {
     if (i >= len || s[i] != ']') return 0;
     i = skip_ws(s, len, i + 1);
     if (i >= len || s[i] != ']' || skip_ws(s, len, i + 1) != len) return 0;
-    i128 N, D;
-    if (op == OP_ADD) { N = (i128)an * bd + (i128)bn * ad; D = (i128)ad * bd; }
-    else if (op == OP_SUB) { N = (i128)an * bd - (i128)bn * ad; D = (i128)ad * bd; }
-    else if (op == OP_MUL) { N = (i128)an * bn; D = (i128)ad * bd; }
-    else {
+    S2 N, D;
+    if (op == OP_ADD || op == OP_SUB) {
+        S2 t = s2_mul(bn, ad);
+        if (op == OP_SUB && !u2_zero(t.m)) t.neg = !t.neg;
+        N = s2_add(s2_mul(an, bd), t);
+        D = s2_mul(ad, bd);
+    } else if (op == OP_MUL) {
+        N = s2_mul(an, bn);
+        D = s2_mul(ad, bd);
+    } else {
         if (bn == 0) return 0;   // division by zero: the full path refuses it
-        N = (i128)an * bd;
-        D = (i128)ad * bn;
-        if (D < 0) { N = -N; D = -D; }
+        N = s2_mul(an, bd);
+        D = s2_mul(ad, bn);
+        if (D.neg) {   // the sign goes to the numerator
+            D.neg = 0;
+            if (!u2_zero(N.m)) N.neg = !N.neg;
+        }
     }
-    int neg = N < 0;
-    u128 un = neg ? (u128)(-N) : (u128)N, ud = (u128)D;
-    if (un == 0) {
+    if (u2_zero(N.m)) {
         put(o, "[\"i\",\"0\"]");
         return !o.over;
     }
-    u128 g = gcd128(un, ud);
-    un /= g;
-    ud /= g;
-    put(o, ud == 1 ? (neg ? "[\"i\",\"-" : "[\"i\",\"") : (neg ? "[\"q\",\"-" : "[\"q\",\""));
-    put_u128(o, un);
-    if (ud != 1) {
+    U2 g = u2_gcd(N.m, D.m), r;
+    u2_divmod(N.m, g, N.m, r);
+    u2_divmod(D.m, g, D.m, r);
+    int whole = D.m.lo == 1 && D.m.hi == 0;
+    put(o, whole ? (N.neg ? "[\"i\",\"-" : "[\"i\",\"") : (N.neg ? "[\"q\",\"-" : "[\"q\",\""));
+    put_u2(o, N.m);
+    if (!whole) {
         put(o, "\",\"");
-        put_u128(o, ud);
+        put_u2(o, D.m);
     }
     put(o, "\"]");
     return !o.over;
@@ -883,19 +989,15 @@ __device__ int process(Ctx &c, int op, const uint8_t *s, int len, Out &o) {
     return MIP_OK;
 }
 
-__device__ void serve_inner(Slot *slot, uint32_t *arena);
+__device__ void serve_inner(Slot *slot, uint32_t *arena, uint32_t *sh);
 
-__device__ void serve(Slot *slot, uint32_t *arena) {
+__device__ void serve(Slot *slot, uint32_t *arena, uint32_t *sh) {
     long long t = clock64();
-    serve_inner(slot, arena);
+    serve_inner(slot, arena, sh);
     slot->dev_cycles = (uint64_t)(clock64() - t);
 }
 
-__device__ void serve_inner(Slot *slot, uint32_t *arena) {
-    Ctx c;
-    c.arena = arena;
-    c.used = 0;
-    c.fail = 0;
+__device__ void serve_inner(Slot *slot, uint32_t *arena, uint32_t *sh) {
     Out o;
     o.p = slot->out;
     o.n = 0;
@@ -914,14 +1016,28 @@ __device__ void serve_inner(Slot *slot, uint32_t *arena) {
         o.n = 0;
         o.over = 0;
     }
-    // the arguments are read many times while parsing: copy them once into device memory in 4-byte words (in the resident mode the
-    // slot is mapped host memory, and every byte read there is a PCIe transaction)
+    // The full path. Its working memory goes to the block's shared memory first (tens of cycles a word, against hundreds in global
+    // memory, and one thread waits on every access); a call that runs out of it is done again from the start on the global arena.
+    // The arguments are copied in once, in 4-byte words (in the resident mode the slot is mapped host memory: a read there crosses PCIe).
     uint32_t len = slot->args_len, words = (len + 3) / 4;
-    if (words + 16 > ARENA_WORDS) { slot->status = MIP_DEVICE_FAILED; slot->out_len = 0; return; }
-    const uint32_t *src = (const uint32_t *)slot->args;
-    for (uint32_t k = 0; k < words; k++) arena[k] = src[k];
-    c.used = words + 1;
-    int st = process(c, slot->op, (const uint8_t *)arena, (int)len, o);
+    int st = MIP_DEVICE_FAILED;
+    for (int attempt = sh ? 0 : 1; attempt < 2; attempt++) {
+        uint32_t *ar = attempt == 0 ? sh : arena;
+        int cap = attempt == 0 ? SH_WORDS : ARENA_WORDS;
+        if (words + 64 > (uint32_t)cap) continue;
+        Ctx c;
+        c.arena = ar;
+        c.cap = cap;
+        c.fail = 0;
+        const uint32_t *src = (const uint32_t *)slot->args;
+        for (uint32_t k = 0; k < words; k++) ar[k] = src[k];
+        c.used = words + 1;
+        o.n = 0;
+        o.over = 0;
+        st = process(c, slot->op, (const uint8_t *)ar, (int)len, o);
+        if (!(attempt == 0 && c.fail)) break;   // only a shared arena that ran out is worth a second try
+        st = MIP_DEVICE_FAILED;
+    }
     if (st == MIP_NOT_COVERED || st == MIP_BAD_INPUT) {
         o.n = 0;
         o.over = 0;
@@ -933,26 +1049,43 @@ __device__ void serve_inner(Slot *slot, uint32_t *arena) {
     slot->out_len = o.n;
 }
 
+__device__ int g_poll_mode = 1;   // 1: flag read with ld.cv and written with a system atomic; 0: plain volatile (MIP_POLL)
+
 // The resident worker: polls the slot until about `budget` clock cycles have passed, then ends (the host launches the next).
-__global__ void worker(Slot *slot, uint32_t *arena, long long budget) {
-    long long t0 = clock64();
+__global__ void worker(Slot *slot, uint32_t *arena, long long budget, int sleep_ns) {
+    extern __shared__ uint32_t sh_arena[];
+    long long t0 = clock64(), last = t0;
+    unsigned long long polls = 0;
     for (;;) {
-        int st = slot->state;
+        // read the flag past every cache (ld.global.cv): a cached copy of mapped host memory can stay stale for a long time
+        int st = g_poll_mode ? __ldcv((const int *)&slot->state) : slot->state;
+        polls++;
         if (st == 1) {
+            atomicExch_system((int *)&slot->seen, 1);
+            long long seen = clock64();
+            slot->polls = polls;
+            slot->poll_cycles = (uint64_t)(seen - t0);
+            slot->wait_cycles = (uint64_t)(seen - last);
             __threadfence_system();
-            serve(slot, arena);
+            serve(slot, arena, sh_arena);
+            last = clock64();
             __threadfence_system();
-            slot->state = 2;   // a call does not reset the budget: the worker still ends on time
+            // a call does not reset the budget: the worker still ends on time
+            if (g_poll_mode) atomicExch_system((int *)&slot->state, 2);
+            else slot->state = 2;
         } else if (st == 3) {
             return;
         }
         if (clock64() - t0 > budget) return;
-        __nanosleep(500);
+        if (sleep_ns) __nanosleep(sleep_ns);   // MIP_NANOSLEEP: between polls; 0 polls flat out
     }
 }
 
 // One launch per call (the comparison mode): the slot is in device memory.
-__global__ void once(Slot *slot, uint32_t *arena) { serve(slot, arena); }
+__global__ void once(Slot *slot, uint32_t *arena) {
+    extern __shared__ uint32_t sh_arena[];
+    serve(slot, arena, sh_arena);
+}
 
 // ---- host ----------------------------------------------------------------------------------------------------------------------------
 static std::mutex g_lock;
@@ -965,11 +1098,13 @@ static long long g_budget = 0;
 static int g_running = 0;
 static std::chrono::steady_clock::time_point g_launched;   // when the running worker was launched
 static int g_clock_khz = 1;
+static double g_us_seen = 0, g_us_done = 0;   // diagnostics of the last resident call, host clock
 static int g_spin = 2000;   // polls before the host starts yielding the core (MIP_SPIN)
+static int g_sleep_ns = 500;   // the worker's sleep between polls (MIP_NANOSLEEP)
 static std::atomic<uint64_t> g_launches{0};
 
 static int launch_worker() {
-    worker<<<1, 1, 0, g_stream>>>(g_dev_slot, g_arena, g_budget);
+    worker<<<1, 1, SH_WORDS * sizeof(uint32_t), g_stream>>>(g_dev_slot, g_arena, g_budget, g_sleep_ns);
     if (cudaGetLastError() != cudaSuccess) return -1;
     cudaEventRecord(g_done, g_stream);
     g_running = 1;
@@ -995,6 +1130,8 @@ extern "C" MIP_API int mip_open(int device, int resident) {
     // one launch per call: the host blocks in the driver while the kernel runs instead of spinning
     cudaSetDeviceFlags(cudaDeviceMapHost | (resident ? cudaDeviceScheduleAuto : cudaDeviceScheduleBlockingSync));
     if (const char *e = getenv("MIP_SPIN")) g_spin = atoi(e);
+    if (const char *e = getenv("MIP_NANOSLEEP")) g_sleep_ns = atoi(e);
+    if (const char *e = getenv("MIP_POLL")) { int m = atoi(e); cudaMemcpyToSymbol(g_poll_mode, &m, sizeof m); }
     int clock_khz = 0;
     cudaDeviceGetAttribute(&clock_khz, cudaDevAttrClockRate, device);
     g_clock_khz = clock_khz ? clock_khz : 1;
@@ -1048,6 +1185,11 @@ extern "C" MIP_API const char *mip_ops(void) { return "numbers.add\nnumbers.sub\
 extern "C" MIP_API uint64_t mip_launches(void) { return g_launches.load(); }
 
 // microseconds the last call spent in serve() on the device (clock64 over the rated clock: an estimate under boost clocks)
+extern "C" MIP_API void mip_diag(uint64_t *v) {   // polls, poll cycles, wait cycles, clock kHz
+    v[0] = g_host_slot->polls; v[1] = g_host_slot->poll_cycles; v[2] = g_host_slot->wait_cycles; v[3] = (uint64_t)g_clock_khz;
+    v[4] = (uint64_t)(g_us_seen * 1000); v[5] = (uint64_t)(g_us_done * 1000);   // ns: request written -> seen flag back, -> answer back
+}
+
 extern "C" MIP_API double mip_last_device_us(void) { return g_host_slot ? g_host_slot->dev_cycles / (g_clock_khz / 1000.0) : 0.0; }
 
 extern "C" MIP_API int mip_call(const char *op, const uint8_t *args, size_t args_len, uint8_t *out, size_t out_cap, size_t *out_len) {
@@ -1062,11 +1204,18 @@ extern "C" MIP_API int mip_call(const char *op, const uint8_t *args, size_t args
     h->args_len = (uint32_t)args_len;
     h->op = id;
     if (g_resident) {
+        h->seen = 0;
         std::atomic_thread_fence(std::memory_order_seq_cst);
+        auto t0 = std::chrono::steady_clock::now();
         h->state = 1;
         if (!worker_alive() && launch_worker()) return MIP_HOST_ERROR;
         int spins = 0;
+        int marked = 0;
         while (h->state != 2) {
+            if (!marked && h->seen) {
+                g_us_seen = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
+                marked = 1;
+            }
             // poll a little (a small call answers in microseconds), then give the core away between polls
             if (++spins > g_spin) std::this_thread::yield();
             if (!worker_alive()) {   // the worker ended (its budget) before it took the request: launch the next
@@ -1075,12 +1224,14 @@ extern "C" MIP_API int mip_call(const char *op, const uint8_t *args, size_t args
                 if (launch_worker()) return MIP_HOST_ERROR;
             }
         }
+        g_us_done = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
+        if (!marked) g_us_seen = -1;
         std::atomic_thread_fence(std::memory_order_seq_cst);
         h->state = 0;
     } else {
         size_t head = offsetof(Slot, args) + args_len;
         if (cudaMemcpyAsync(g_dev_slot, h, head, cudaMemcpyHostToDevice, g_stream) != cudaSuccess) return MIP_HOST_ERROR;
-        once<<<1, 1, 0, g_stream>>>(g_dev_slot, g_arena);
+        once<<<1, 1, SH_WORDS * sizeof(uint32_t), g_stream>>>(g_dev_slot, g_arena);
         g_launches++;
         if (cudaMemcpyAsync(&h->status, &g_dev_slot->status, offsetof(Slot, args) - offsetof(Slot, status), cudaMemcpyDeviceToHost, g_stream) != cudaSuccess)
             return MIP_HOST_ERROR;

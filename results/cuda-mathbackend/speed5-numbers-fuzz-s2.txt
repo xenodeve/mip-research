@@ -1,0 +1,25 @@
+4000 cases of ['numbers.add', 'numbers.div', 'numbers.mul', 'numbers.sub']; 0 disagreed and were not timed; launches 7
+op               digits   cases   Python us (median)   device us (median)   device / Python   of it on the device us
+numbers.add           0      58                  9.1                 32.4              3.6x                 18.7
+numbers.add          10     392                  9.3                 35.2              3.8x                 25.1
+numbers.add          20     378                 11.1                 55.6              5.0x                 43.9
+numbers.add          30     171                 14.4                 75.5              5.2x                 66.4
+numbers.add          40      16                 13.9                 90.2              6.5x                 81.5
+numbers.div           0      38                  9.3                 32.6              3.5x                 19.0
+numbers.div          10     407                  9.9                 35.0              3.5x                 25.4
+numbers.div          20     374                 13.3                 57.6              4.3x                 47.9
+numbers.div          30     170                 14.3                 73.9              5.2x                 65.2
+numbers.div          40      14                 14.5                 87.4              6.0x                 80.3
+numbers.mul           0      55                  8.5                 32.0              3.8x                 17.6
+numbers.mul          10     380                  9.4                 35.3              3.8x                 26.8
+numbers.mul          20     367                 11.1                 58.2              5.2x                 47.7
+numbers.mul          30     154                 14.2                 78.8              5.5x                 71.9
+numbers.mul          40      19                 16.1                 89.7              5.6x                 83.3
+numbers.sub           0      46                  8.9                 32.4              3.6x                 17.8
+numbers.sub          10     399                  9.5                 35.3              3.7x                 25.8
+numbers.sub          20     392                 12.3                 53.6              4.4x                 42.3
+numbers.sub          30     152                 13.8                 73.9              5.4x                 65.0
+numbers.sub          40      18                 15.2                 88.5              5.8x                 83.5
+all calls: Python 10.4 us, device 42.5 us median, of which computing on the device 32.8 us
+(host CPU below: Windows thread time ticks ~15.6 ms, so a block of calls shorter than that reads 0 or one tick)
+host CPU per call (mean over 80000.0 calls): Python 12.5 us, device 52.1 us (MIP_SPIN 2000)

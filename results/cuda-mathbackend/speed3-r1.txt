@@ -1,0 +1,51 @@
+1768 cases of ['numbers.add', 'numbers.div', 'numbers.mul', 'numbers.sub']; 0 disagreed and were not timed; launches 94
+op               digits   cases   Python us (median)   device us (median)   device / Python   of it on the device us
+numbers.add           0     231                  9.4                378.2             40.2x                  7.9
+numbers.add          10     100                  9.8                370.1             37.8x                 24.3
+numbers.add          20      43                  8.7                376.4             43.3x                 42.8
+numbers.add          30      25                  8.2                397.2             48.4x                 71.6
+numbers.add          40      10                  7.5                398.1             53.1x                 73.4
+numbers.add          50       4                  7.4                397.9             53.8x                 77.9
+numbers.add          60       6                 11.1                442.5             39.9x                 88.1
+numbers.add          70       4                 12.9                436.4             34.0x                102.0
+numbers.add          80       1                 11.1                495.4             44.6x                110.7
+numbers.add         300       4                  9.2                886.6             96.4x                408.6
+numbers.add         330       4                  9.4               1077.0            114.6x                753.8
+numbers.add        4000      10                138.6              67576.9            487.6x              72596.7
+numbers.div           0     223                 12.0                460.4             38.4x                  8.1
+numbers.div          10     107                 12.6                496.7             39.4x                 24.1
+numbers.div          20      41                 11.9                497.5             42.0x                 40.1
+numbers.div          30      29                 13.9                528.4             38.0x                 66.5
+numbers.div          40       5                 15.8                537.7             34.0x                 69.1
+numbers.div          50       5                 16.1                546.4             33.8x                 71.3
+numbers.div          60       8                 17.7                554.0             31.3x                 95.8
+numbers.div          70       5                 15.7                571.1             36.4x                 99.6
+numbers.div          80       1                 15.5                584.3             37.7x                112.5
+numbers.div         300       4                 10.7               1097.6            102.1x                642.7
+numbers.div         330       4                 10.6               1222.7            115.3x                754.4
+numbers.div        4000      10                144.2              67857.5            470.4x              72544.1
+numbers.mul           0     228                 11.5                444.3             38.6x                  8.0
+numbers.mul          10     102                 12.4                470.6             37.9x                 25.1
+numbers.mul          20      49                 10.5                486.2             46.3x                 44.7
+numbers.mul          30      29                 11.0                509.5             46.3x                 66.1
+numbers.mul          40       9                 14.4                508.2             35.3x                 66.4
+numbers.mul          50       3                 15.4                525.5             34.1x                 73.1
+numbers.mul          60       3                 15.1                531.9             35.1x                 88.2
+numbers.mul          70       1                 17.2                528.5             30.7x                 92.8
+numbers.mul         300       4                 10.0               1498.7            149.9x                892.6
+numbers.mul         330       4                 10.1               1230.9            121.9x                794.2
+numbers.mul        4000      10                139.2              67758.3            486.8x              72540.3
+numbers.sub           0     213                 11.8                345.4             29.3x                  8.1
+numbers.sub          10      99                 12.5                481.0             38.5x                 24.7
+numbers.sub          20      45                 10.5                440.9             41.8x                 42.1
+numbers.sub          30      36                 10.7                414.0             38.7x                 74.8
+numbers.sub          40      12                 11.9                426.0             35.9x                 82.4
+numbers.sub          50       7                 15.2                438.6             28.9x                 90.4
+numbers.sub          60       3                 17.6                421.9             23.9x                101.9
+numbers.sub          70       9                 17.4                448.6             25.8x                105.4
+numbers.sub         300       4                  9.9               1433.3            144.8x                867.1
+numbers.sub         330       4                  9.7               1254.5            129.3x                757.3
+numbers.sub        4000      10                136.5              67619.0            495.4x              72576.1
+all calls: Python 11.3 us, device 451.2 us median, of which computing on the device 10.0 us
+(host CPU below: Windows thread time ticks ~15.6 ms, so a block of calls shorter than that reads 0 or one tick)
+host CPU per call (mean over 53040.0 calls): Python 18.6 us, device 1385.2 us (MIP_SPIN 2000)

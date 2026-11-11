@@ -170,19 +170,26 @@ with Unicode digits and whitespace on the device), one device thread per call.
 | The answer came from the device | an unported op returns `device:UNKNOWN_OP`; the process holds the 5060 Ti; a 2^200 product matches |
 | Null backend / wrong backends | 100 % / each caught (`tools/test_mathbackend_harness.py`) |
 
-**Speed per call** (`results/cuda-mathbackend/speed.py`, 30 repeats, median; `speed-resident1.txt`, `speed-resident0.txt`):
+**Speed per call** (`results/cuda-mathbackend/speed.py`, resident worker, RTX 5060 Ti alone at Idle priority, Python 3.11.9 in the same
+process, medians; `speed7-*.txt`). Correct on every run: `numbers-s1` 1,768 / 1,768 and the fuzz corpus `numbers-fuzz-s2` 4,000 / 4,000,
+both modes.
 
-| | Python | Device, resident worker | Device, one launch per call |
+| Arguments | Python | Device, round trip | Of it, computing on the device |
 |---|---|---|---|
-| all 1,416 cases | 24.8 us | 440 us (18x slower) | 656 us (Python 37.0 in that run) |
-| `add`, small arguments | 14-19 us | 294-384 us | 454-510 us |
-| 4,000-character strings | 192-194 us | 71,900 us (370x slower) | |
+| parts of at most 9 digits (register path) | 6.5-11.5 us | 14.9-16.8 us | 7.1-7.7 us |
+| 10-18 digits (register path, two-word arithmetic) | 8.7-12.0 us | 18.9-21.7 us | 9.3-12.6 us |
+| 19-40 characters (full path) | 7.7-13.5 us | 51-70 us | 39-64 us |
+| 300 digits (full path) | 9-11 us | 0.46-1.0 ms | 0.38-0.85 ms |
+| 4,000-character strings (full path) | 102 us | 70 ms | 76 ms |
+| all `numbers-s1` cases | 10.5 us | 18.4 us | 8.7 us |
 
-Why, read from the code, not yet profiled: one device thread does everything, and every limb, digit and code point lives in global
-memory (hundreds of cycles per dependent access, nothing to hide it behind); each character of a string is matched against the 66
-digit runs and 29 spaces in constant memory; strings become integers digit-chunk by digit-chunk (quadratic). In the resident mode the
-host also spins on the slot while it waits, so the CPU is not yet freed either. The latency floor of a mapped-memory round trip is a
-few microseconds, so a single small call can at best come near Python; the gain the design is after (no CPU work, host time per decode
-round) needs the next steps: an ASCII fast path and registers or shared memory for small values, a warp per call for big ones, many
-calls per pass (one slot per warp), and a host that waits without spinning. Then measure again, per call, batched, and host time per
-decode round.
+How it got there (`results/cuda-mathbackend/ping.py`, `numbers.add 1 + 1`): the round trip itself is **9.5 us** from writing the request
+to reading the answer in the DLL (3.1 us until the device's seen-flag comes back); the device polls the flag every 1.4 us. The first
+speed tables (440 us per call) were **the Python wrapper**, not the device: `ctypes` `.raw` copied the whole 1 MB output buffer on every
+call (~310 us); it now reads only the bytes written. A launch per call costs 248 us (the WDDM driver), so the resident worker stays.
+The register path (the device's own time from 16.7 to 7.4 us for small calls) uses native 64-bit operations whenever the two-word
+values fit one word. Moving the full path's working memory to shared memory changed little: its cost is not the arena (to profile:
+register spills to local memory, the parsing).
+
+Next: the full path for 19-200 digits (profile it first), a warp per call for big integers, several calls per pass, then the other
+`numbers` ops; then the measure the design fixed, host time per decode round beside llama-server.

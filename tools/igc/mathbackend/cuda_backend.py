@@ -51,7 +51,8 @@ def call(name, args_b):
     n = ctypes.c_size_t(0)
     st = lib.mip_call(name.encode(), bytes(args_b), len(args_b), _out, len(_out), ctypes.byref(n))
     if st in (0, 1, 2):
-        return _out.raw[:n.value]
+        # only the bytes written: `_out.raw` copies the whole 1 MB buffer, which was ~310 us of every call in the first speed runs
+        return ctypes.string_at(_out, n.value)
     return f'device:{STATUS.get(st, st)}'.encode()
 
 
