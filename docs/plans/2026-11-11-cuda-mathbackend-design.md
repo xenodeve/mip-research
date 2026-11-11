@@ -275,3 +275,19 @@ calls are sparse and, during a dense burst, holds the GPU like the resident work
 Tried and dropped (same session, the committed build re-measured beside each): the lingering kernel reading small arguments in 16-byte
 vectors and writing the answer through a local buffer in 4-byte words: 10.1 -> 11.2 us (device 5.2 -> 6.5 us). Posted byte writes to
 mapped memory do not stall the thread; the local buffer's round trip does.
+
+**Further levers, each A/B'd twice on the 5060 Ti (`ping.py`, 5,000 calls; same session):**
+
+| Lever | Before | After | Kept |
+|---|---|---|---|
+| Python wrapper: the op's bytes cached, the length cell made once, no `bytes()` copy | wrapper 1.1 us, single 15.5 | **0.8 us, single 13.8 us** | yes |
+| doorbell: `op` and length in the same 8-byte word as the flag the lingering kernel polls (one PCIe read fewer) | linger 10.0 us, device 5.2 | **8.7-9.1 us, device 3.9-4.2** | yes |
+| linger poll sleep 100 ns -> 0 (`MIP_LINGER_SLEEP`) | 10.2 / 10.3 | 10.0 / 10.1 | knob, default 100 |
+| host spin 1,000,000 -> 2,000 polls before yielding | 10.0 | 9.9-10.0 | no change |
+| 16 uncached (`ld.cv`) loads of the arguments in flight | device 5.4 us | **21 us**: each uncached read of mapped memory is its own round trip | dropped |
+| request aligned to a 32-byte sector | 10.0 / 13.9 | 10.0 / 13.9 | harmless, kept |
+| answer through a local buffer in 4-byte words | 8.9-9.1 | 9.0-9.2 | dropped |
+| a 64-byte parameter block instead of 268 bytes | single 13.8-13.9 | 13.9-14.0 | dropped |
+
+After them: a single call **13.8 us** (the launch call ~5 us and the kernel's start ~5 us are WDDM's), back to back with the linger
+**8.7-9.1 us**. `linger_stress.py` 60,000 racing calls: 0 wrong; every corpus as before, linger on and off.

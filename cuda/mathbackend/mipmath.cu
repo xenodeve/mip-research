@@ -32,6 +32,7 @@ enum { OP_ADD = 1, OP_SUB, OP_MUL, OP_DIV };
 
 struct Slot {
     volatile int32_t state;       // 0 empty, 1 request, 2 answered, 3 quit
+    volatile uint32_t oplen;      // beside state in one 8-byte word: op in the low 8 bits, the argument length above (mode 2)
     volatile int32_t seen;        // diagnostics: the worker sets it the moment it reads a request
     volatile int32_t lingering;   // mode 2 with MIP_LINGER_US: 1 while a kernel waits for the next request after answering
     volatile uint32_t seq;        // the request's number (mode 2): a kernel launched for an older request does not use its params
@@ -44,7 +45,7 @@ struct Slot {
     uint64_t poll_cycles;
     uint64_t wait_cycles;  // cycles from the previous answer to seeing this request (the device side of the gap)
     uint32_t path;         // the paths the last call took (g_path bits)
-    uint8_t args[MIP_ARGS_MAX];
+    alignas(32) uint8_t args[MIP_ARGS_MAX];   // one 32-byte sector holds a short request: one PCIe read for it
     uint8_t out[MIP_OUT_MAX];
 };
 
@@ -1022,14 +1023,14 @@ __device__ int process(Ctx &c, int op, const uint8_t *s, int len, Out &o) {
     return MIP_OK;
 }
 
-__device__ void serve_inner(Slot *slot, uint32_t *arena, uint32_t *sh);
+__device__ void serve_inner(Slot *slot, uint32_t *arena, uint32_t *sh, int op, uint32_t len);
 
-__device__ void serve(Slot *slot, uint32_t *arena, uint32_t *sh) {
+__device__ void serve_req(Slot *slot, uint32_t *arena, uint32_t *sh, int op, uint32_t len) {
     long long t = clock64();
     g_deadline = t + g_call_cycles;
     g_timed_out = 0;
     g_path = 0;
-    serve_inner(slot, arena, sh);
+    serve_inner(slot, arena, sh, op, len);
     if (g_timed_out) {   // whatever the call left is not an answer
         slot->status = MIP_DEVICE_FAILED;
         slot->out_len = 0;
@@ -1038,30 +1039,37 @@ __device__ void serve(Slot *slot, uint32_t *arena, uint32_t *sh) {
     slot->dev_cycles = (uint64_t)(clock64() - t);
 }
 
-__device__ void serve_inner(Slot *slot, uint32_t *arena, uint32_t *sh) {
+// the header read from the slot (modes 0 and 1, and mode 2's fallbacks)
+__device__ void serve(Slot *slot, uint32_t *arena, uint32_t *sh) { serve_req(slot, arena, sh, slot->op, slot->args_len); }
+
+__device__ void serve_inner(Slot *slot, uint32_t *arena, uint32_t *sh, int op, uint32_t len_arg) {
     Out o;
     o.p = slot->out;
     o.n = 0;
     o.cap = MIP_OUT_MAX;
     o.over = 0;
-    if (slot->args_len <= 256) {   // small arguments: a local copy (L1-cached), then the register path
+    if (len_arg <= 256) {   // small arguments: a local copy (L1-cached), then the register path
         uint32_t loc[64];
-        uint32_t w = (slot->args_len + 3) / 4;
+        uint32_t w = (len_arg + 3) / 4;
         const uint32_t *src0 = (const uint32_t *)slot->args;
+        // plain loads: the L2 fetches a 32-byte sector a PCIe read; ld.cv loads went one round trip a word (5.4 -> 21 us, 2026-11-11)
         for (uint32_t k = 0; k < w; k++) loc[k] = src0[k];
-        if (process_fast(slot->op, (const uint8_t *)loc, (int)slot->args_len, o)) {
+        Out lo;
+        lo.p = slot->out;   // byte writes: posted, they do not stall (a local buffer written in words measured no faster)
+        lo.n = 0;
+        lo.cap = MIP_OUT_MAX;
+        lo.over = 0;
+        if (process_fast(op, (const uint8_t *)loc, (int)len_arg, lo)) {
             g_path |= 1;
             slot->status = MIP_OK;
-            slot->out_len = o.n;
+            slot->out_len = lo.n;
             return;
         }
-        o.n = 0;
-        o.over = 0;
     }
     // The full path. Its working memory goes to the block's shared memory first (tens of cycles a word, against hundreds in global
     // memory, and one thread waits on every access); a call that runs out of it is done again from the start on the global arena.
     // The arguments are copied in once, in 4-byte words (in the resident mode the slot is mapped host memory: a read there crosses PCIe).
-    uint32_t len = slot->args_len, words = (len + 3) / 4;
+    uint32_t len = len_arg, words = (len + 3) / 4;
     int st = MIP_DEVICE_FAILED;
     g_path |= 2;
     for (int attempt = sh ? 0 : 1; attempt < 2; attempt++) {
@@ -1077,7 +1085,7 @@ __device__ void serve_inner(Slot *slot, uint32_t *arena, uint32_t *sh) {
         c.used = words + 1;
         o.n = 0;
         o.over = 0;
-        st = process(c, slot->op, (const uint8_t *)ar, (int)len, o);
+        st = process(c, op, (const uint8_t *)ar, (int)len, o);
         if (!(attempt == 0 && c.fail)) break;   // only a shared arena that ran out is worth a second try
         st = MIP_DEVICE_FAILED;
     }
@@ -1136,6 +1144,7 @@ __global__ void once(Slot *slot, uint32_t *arena) {
 // (Dekker): either the host sees the kernel gone and launches, or the kernel sees the request and serves it. Kernels on one stream run
 // one after another, and a kernel serves only a flag that reads 1, so a request is served once.
 __device__ long long g_linger_cycles = 0;
+__device__ unsigned g_linger_sleep_ns = 100;
 
 __device__ void serve_flag(Slot *slot, uint32_t *arena, uint32_t *sh) {
     __threadfence_system();
@@ -1150,14 +1159,19 @@ __device__ void linger(Slot *slot, uint32_t *arena, uint32_t *sh) {
     __threadfence_system();
     long long end = clock64() + g_linger_cycles;
     for (;;) {
-        int st = __ldcv((const int *)&slot->state);
-        if (st == 1) {
-            serve_flag(slot, arena, sh);
+        unsigned long long bell = __ldcv((const unsigned long long *)&slot->state);
+        int st = (int)(unsigned)bell;
+        if (st == 1) {   // the same read brought op and length: no PCIe read for the header
+            unsigned ol = (unsigned)(bell >> 32);
+            __threadfence_system();
+            serve_req(slot, arena, sh, (int)(ol & 0xFF), ol >> 8);
+            __threadfence_system();
+            atomicExch_system((int *)&slot->state, 2);
             end = clock64() + g_linger_cycles;
             continue;
         }
         if (st == 3 || clock64() > end) break;
-        __nanosleep(100);
+        if (g_linger_sleep_ns) __nanosleep(g_linger_sleep_ns);   // MIP_LINGER_SLEEP: between polls of the linger window
     }
     slot->lingering = 0;
     __threadfence_system();
@@ -1174,16 +1188,20 @@ __global__ void once_mapped(Slot *slot, uint32_t *arena) {
 
 // Mode 2 with small arguments: they travel in the launch's own parameters (the constant bank), so the register path reads no byte over
 // PCIe; a call the register path does not take falls back to serve(), which reads the copy in the mapped slot.
-struct ParamArgs {
+template <int W>
+struct ParamArgsT {
     int32_t op;
     int32_t len;
     uint32_t seq;
-    uint32_t w[64];   // up to 256 bytes of canonical arguments
+    uint32_t w[W];   // up to 4*W bytes of canonical arguments
 };
+typedef ParamArgsT<64> ParamArgs;    // 256 bytes
+// (a 64-byte block for short requests measured no faster to launch: 13.8-14.0 us either way, 2026-11-11)
 
 __device__ int g_param_smem = 0;   // 1: once_param launches with the shared arena (MIP_PARAM_SMEM); 0: none, a faster start
 
-__global__ void once_param(Slot *slot, uint32_t *arena, ParamArgs pa) {
+template <int W>
+__global__ void once_param(Slot *slot, uint32_t *arena, ParamArgsT<W> pa) {
     extern __shared__ uint32_t sh_arena[];
     uint32_t *sh = g_param_smem ? sh_arena : nullptr;
     // only with lingering can a kernel find its request taken or replaced; without it the two PCIe reads are skipped
@@ -1277,6 +1295,7 @@ extern "C" MIP_API int mip_open(int device, int resident) {
     cudaSetDeviceFlags(cudaDeviceMapHost | sync);
     if (const char *e = getenv("MIP_GRAPH")) g_use_graph = atoi(e);
     if (const char *e = getenv("MIP_PARAM")) g_param_args = atoi(e);
+    if (const char *e = getenv("MIP_LINGER_SLEEP")) { unsigned ns = (unsigned)atoi(e); cudaMemcpyToSymbol(g_linger_sleep_ns, &ns, sizeof ns); }
     if (const char *e = getenv("MIP_LINGER_US")) {
         int cr = 0;
         cudaDeviceGetAttribute(&cr, cudaDevAttrClockRate, device);
@@ -1376,9 +1395,11 @@ extern "C" MIP_API int mip_call(const char *op, const uint8_t *args, size_t args
     if (g_resident == 2) {
         // launch (or replay the graph), then poll the flag the kernel raises: no copy, no synchronising call
         h->seq = ++g_seq;
+        h->oplen = (uint32_t)id | ((uint32_t)args_len << 8);
         std::atomic_thread_fence(std::memory_order_seq_cst);
         auto t0 = std::chrono::steady_clock::now();
-        h->state = 1;
+        // state and oplen in one aligned 8-byte store (the slot is page-aligned; state is its first word)
+        *(volatile uint64_t *)&h->state = ((uint64_t)h->oplen << 32) | 1u;
         std::atomic_thread_fence(std::memory_order_seq_cst);   // Dekker with the kernel's exit: the flag, then `lingering`
         cudaError_t e = cudaSuccess;
         int launched = !h->lingering;   // read once
@@ -1392,7 +1413,7 @@ extern "C" MIP_API int mip_call(const char *op, const uint8_t *args, size_t args
             pa.len = (int32_t)args_len;
             pa.seq = g_seq;
             memcpy(pa.w, args, args_len);
-            once_param<<<1, 1, g_param_smem_host ? SH_WORDS * sizeof(uint32_t) : 0, g_stream>>>(g_dev_slot, g_arena, pa);
+            once_param<64><<<1, 1, g_param_smem_host ? SH_WORDS * sizeof(uint32_t) : 0, g_stream>>>(g_dev_slot, g_arena, pa);
             e = cudaGetLastError();
         } else {
             once_mapped<<<1, 1, SH_WORDS * sizeof(uint32_t), g_stream>>>(g_dev_slot, g_arena);

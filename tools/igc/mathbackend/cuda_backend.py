@@ -46,13 +46,29 @@ def launches():
     return _load().mip_launches()
 
 
+_names = {}            # op name -> its encoded bytes, made once
+_n = ctypes.c_size_t(0)
+_n_ref = None
+_call = None
+_out_len = 0
+
+
 def call(name, args_b):
-    lib = _load()
-    n = ctypes.c_size_t(0)
-    st = lib.mip_call(name.encode(), bytes(args_b), len(args_b), _out, len(_out), ctypes.byref(n))
-    if st in (0, 1, 2):
+    """The wrapper keeps per call only what must change: the op's bytes are cached, the length cell and its reference are made once,
+    and `args_b` goes to ctypes as it is (a bytes object needs no copy)."""
+    global _n_ref, _call, _out_len
+    if _call is None:
+        lib = _load()
+        _call, _n_ref, _out_len = lib.mip_call, ctypes.byref(_n), len(_out)
+    nb = _names.get(name)
+    if nb is None:
+        nb = _names[name] = name.encode()
+    if type(args_b) is not bytes:
+        args_b = bytes(args_b)
+    st = _call(nb, args_b, len(args_b), _out, _out_len, _n_ref)
+    if st < 3:
         # only the bytes written: `_out.raw` copies the whole 1 MB buffer, which was ~310 us of every call in the first speed runs
-        return ctypes.string_at(_out, n.value)
+        return ctypes.string_at(_out, _n.value)
     return f'device:{STATUS.get(st, st)}'.encode()
 
 
