@@ -397,3 +397,8 @@ kernel **174.8 us** (p10 140.0): the call costs what a kernel that does nothing 
 cross-process switch, not this code. The 29 us between that and the 204 us seen from Python is the calling thread waking from its
 sleep (Python's own MathBackend: 47-49 us on that rhythm). On an idle card a single call is 11.2 us inside the DLL against the empty
 kernel's 8.7 us: the 2.5 us between them is the call's work (2.1 us on the device) and its parameters; the wrapper adds ~1.5 us.
+
+**32-bit divides in the register path** (the GPU has no 64-bit divide instruction): answers below 2^32 printed with 32-bit `%` and `/`,
+the reduction by the gcd and the gcd's last steps in 32 bits when the values fit. Device time 2.0 -> 1.9 us; back to back with the linger
+7.3 -> **7.0-7.2 us** on the 5060 Ti; a single call 11.1 us inside the DLL against the empty kernel's 8.7. Every corpus in modes 1 and 2
+as before, 40,000 racing calls 0 wrong. What is left of the work is the byte-wise parse on one GPU thread (~1.2 us of the 1.9).

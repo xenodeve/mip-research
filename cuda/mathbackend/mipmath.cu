@@ -854,6 +854,15 @@ __device__ U2 u2_gcd(U2 a, U2 b) {   // binary gcd, both nonzero
     int sh = u2_ctz(U2{a.lo | b.lo, a.hi | b.hi});
     a = u2_shr(a, u2_ctz(a));
     while (!u2_zero(b)) {
+        if (!a.hi && !b.hi && a.lo <= 0xFFFFFFFFull && b.lo <= 0xFFFFFFFFull) {   // 32 bits each: finish in 32-bit registers
+            unsigned x = (unsigned)a.lo, y = (unsigned)b.lo;
+            while (y) {
+                y >>= __ffs((int)y) - 1;
+                if (x > y) { unsigned t = x; x = y; y = t; }
+                y -= x;
+            }
+            return u2_shl(u2(x), sh);
+        }
         if (!a.hi && !b.hi) {   // one word each: finish in 64-bit registers
             unsigned long long x = a.lo, y = b.lo;
             while (y) {
@@ -870,7 +879,22 @@ __device__ U2 u2_gcd(U2 a, U2 b) {   // binary gcd, both nonzero
     return u2_shl(a, sh);
 }
 
+// a value below 2^32 printed with 32-bit division: the GPU has no 64-bit divide instruction (each 64-bit `/` or `%` is a long software
+// routine), and most answers of the register path are this small
+__device__ void put_u32(Out &o, unsigned x) {
+    char t[12], buf[12];
+    int m = 0;
+    do { t[m++] = (char)('0' + x % 10u); x /= 10u; } while (x);
+    for (int z = 0; z < m; z++) buf[z] = t[m - 1 - z];
+    buf[m] = 0;
+    put(o, buf);
+}
+
 __device__ void put_u2(Out &o, U2 v) {   // decimal, in chunks of 18 digits
+    if (!v.hi && v.lo <= 0xFFFFFFFFull) {
+        put_u32(o, (unsigned)v.lo);
+        return;
+    }
     const U2 base = u2(1000000000000000000ull);
     unsigned long long chunk[3];
     int n = 0;
@@ -949,8 +973,13 @@ __device__ int process_fast(int op, const uint8_t *s, int len, Out &o) {
         return !o.over;
     }
     U2 g = u2_gcd(N.m, D.m), r;
-    u2_divmod(N.m, g, N.m, r);
-    u2_divmod(D.m, g, D.m, r);
+    if (!N.m.hi && !D.m.hi && !g.hi && N.m.lo <= 0xFFFFFFFFull && D.m.lo <= 0xFFFFFFFFull) {   // all below 2^32: 32-bit divides
+        N.m = u2((unsigned)N.m.lo / (unsigned)g.lo);
+        D.m = u2((unsigned)D.m.lo / (unsigned)g.lo);
+    } else {
+        u2_divmod(N.m, g, N.m, r);
+        u2_divmod(D.m, g, D.m, r);
+    }
     int whole = D.m.lo == 1 && D.m.hi == 0;
     put(o, whole ? (N.neg ? "[\"i\",\"-" : "[\"i\",\"") : (N.neg ? "[\"q\",\"-" : "[\"q\",\""));
     put_u2(o, N.m);
