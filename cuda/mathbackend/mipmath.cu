@@ -1384,6 +1384,58 @@ extern "C" MIP_API void mip_diag(uint64_t *v) {   // polls, poll cycles, wait cy
 // runtime API (api 0) or the driver API's cuLaunchKernel on the same function (api 1). The median of n round trips, measured inside the
 // DLL (no Python), is the least a launch per call can cost on this machine; out[0] the median round trip, out[1] the median time of the
 // launch call alone, in microseconds.
+// ---- an engine in the same process (a stand-in) -------------------------------------------------------------------------------------
+// The module's end shape is MIP inside the engine's process, sharing its CUDA context. To measure that without an engine: a host thread
+// launches back-to-back "decode step" kernels on their own stream of this context, each a grid that fills every SM for about
+// `step_us` (blocks spin on the clock), the way a decode step keeps the card busy; mip_call meanwhile goes through its usual path.
+// mip_engine_stop returns the steps completed per second, so the engine's slowdown is measured beside our latency.
+__global__ void engine_step(long long cycles, unsigned *sink) {
+    long long t = clock64();
+    unsigned x = threadIdx.x;
+    while (clock64() - t < cycles) x = x * 1664525u + 1013904223u;
+    if (x == 0x12345678u) atomicAdd(sink, 1u);   // keeps the loop from being removed
+}
+
+static std::thread g_engine;
+static std::atomic<int> g_engine_run{0};
+static std::atomic<uint64_t> g_engine_steps{0};
+static std::chrono::steady_clock::time_point g_engine_t0;
+
+extern "C" MIP_API int mip_engine_start(double step_us, int high_priority) {
+    if (!g_open || g_engine_run.load()) return MIP_HOST_ERROR;
+    int dev = 0, sms = 0, khz = 0, lo, hi;
+    cudaGetDevice(&dev);
+    cudaDeviceGetAttribute(&sms, cudaDevAttrMultiProcessorCount, dev);
+    cudaDeviceGetAttribute(&khz, cudaDevAttrClockRate, dev);
+    cudaDeviceGetStreamPriorityRange(&lo, &hi);
+    long long cycles = (long long)(khz * 1000.0 * step_us * 1e-6);
+    g_engine_run = 1;
+    g_engine_steps = 0;
+    g_engine_t0 = std::chrono::steady_clock::now();
+    g_engine = std::thread([=]() {
+        cudaSetDevice(dev);
+        cudaStream_t st;
+        cudaStreamCreateWithPriority(&st, cudaStreamNonBlocking, high_priority ? hi : lo);
+        unsigned *sink;
+        cudaMalloc(&sink, sizeof(unsigned));
+        while (g_engine_run.load()) {
+            for (int k = 0; k < 8; k++) engine_step<<<sms * 4, 256, 0, st>>>(cycles, sink);   // 4 blocks of 256 per SM: every SM busy
+            cudaStreamSynchronize(st);
+            g_engine_steps += 8;
+        }
+        cudaFree(sink);
+        cudaStreamDestroy(st);
+    });
+    return MIP_OK;
+}
+
+extern "C" MIP_API double mip_engine_stop(void) {
+    g_engine_run = 0;
+    if (g_engine.joinable()) g_engine.join();
+    double s = std::chrono::duration<double>(std::chrono::steady_clock::now() - g_engine_t0).count();
+    return g_engine_steps.load() / s;
+}
+
 __global__ void flag_only(Slot *slot) {
     __threadfence_system();
     slot->state = 2;

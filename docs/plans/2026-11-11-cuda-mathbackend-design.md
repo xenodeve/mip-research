@@ -330,3 +330,22 @@ reach across processes); the resident worker 170 us median but p10 43 / p90 1,32
 the full path, which reads JSON), and digits accumulate in two 32-bit runs of at most 9 joined once. Device time 2.5 -> 2.0 us (single),
 3.8 -> 3.4 us (linger); 10-18 digits ~12.6 -> 8.7 us. Back to back with the linger **7.3-7.4 us**; a single call 12.8-13.7 us. Every
 corpus in modes 1 and 2 as before, 40,000 racing calls 0 wrong, memcheck 0 errors.
+
+### MIP inside the engine's process (the end shape), measured with a stand-in engine (2026-11-11)
+
+`in_process.py`: `mip_engine_start` runs back-to-back kernels that fill every SM (4 blocks of 256 threads per SM, 50 us or 10 us
+each) on their own stream of the **same** CUDA context, the way decode keeps the card busy; calls `numbers.add 1 + 1` meanwhile. RTX
+5060 Ti; the engine's steps per second measured alone (no MIP kernel alive) and beside the calls.
+
+| Mode, a call every 5 ms | Latency median (p10 / p90) | Of it inside the DLL | Engine's steps/s |
+|---|---|---|---|
+| resident worker (mode 1) | **35-38 us** (29-37 / 51-56) | request -> seen 2.4 us, -> answer 7.5 us (work 4.6) | **-0.2 to -1.9 %** |
+| a launch per call (mode 2), low or high stream priority, 10 or 50 us steps | 87-97 us (70-85 / 131-154) | the launch waits on the driver while the engine thread launches and synchronises | -2.5 to -11 % (one run -28 %) |
+| mode 2 with the linger, back to back | 9.4 us | | -4.7 % |
+| resident worker, back to back | 10.3 us | 7.1 us | -47 % (the worker serving without pause) |
+
+Inside one process there is no context switch: the resident worker answers a sparse call in 7.5 us of DLL time, the rest of the 35-38 us
+being the calling thread waking from its 5 ms sleep (Python's own MathBackend pays the same on that rhythm: 33-51 us sparse against 7-12
+warm). Stream priority and the engine's step length did not move mode 2, whose cost is the launch queued behind the engine thread's
+driver calls. So in the end shape the resident worker on a low-priority stream is the mode: sparse calls at the caller's own wake-up
+cost, the engine within 2 %. Across processes (today's PC layer) it is the opposite (resident -44 to -59 % decode), and mode 2 is used.
