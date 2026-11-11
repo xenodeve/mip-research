@@ -33,6 +33,8 @@ enum { OP_ADD = 1, OP_SUB, OP_MUL, OP_DIV };
 struct Slot {
     volatile int32_t state;       // 0 empty, 1 request, 2 answered, 3 quit
     volatile int32_t seen;        // diagnostics: the worker sets it the moment it reads a request
+    volatile int32_t lingering;   // mode 2 with MIP_LINGER_US: 1 while a kernel waits for the next request after answering
+    volatile uint32_t seq;        // the request's number (mode 2): a kernel launched for an older request does not use its params
     int32_t op;
     int32_t status;
     uint32_t args_len;
@@ -1128,13 +1130,46 @@ __global__ void once(Slot *slot, uint32_t *arena) {
     serve(slot, arena, sh_arena);
 }
 
+// Mode 2 linger (MIP_LINGER_US): after answering, a kernel keeps polling the slot for a short while, so a request that follows soon is
+// served without a launch (the resident worker's latency) while a quiet engine gets its GPU back as soon as the window closes. A kernel
+// that ends clears `lingering`, fences, then looks at the flag once more; the host sets the flag, fences, then reads `lingering`
+// (Dekker): either the host sees the kernel gone and launches, or the kernel sees the request and serves it. Kernels on one stream run
+// one after another, and a kernel serves only a flag that reads 1, so a request is served once.
+__device__ long long g_linger_cycles = 0;
+
+__device__ void serve_flag(Slot *slot, uint32_t *arena, uint32_t *sh) {
+    __threadfence_system();
+    serve(slot, arena, sh);
+    __threadfence_system();
+    atomicExch_system((int *)&slot->state, 2);
+}
+
+__device__ void linger(Slot *slot, uint32_t *arena, uint32_t *sh) {
+    if (g_linger_cycles <= 0) return;
+    slot->lingering = 1;
+    __threadfence_system();
+    long long end = clock64() + g_linger_cycles;
+    for (;;) {
+        int st = __ldcv((const int *)&slot->state);
+        if (st == 1) {
+            serve_flag(slot, arena, sh);
+            end = clock64() + g_linger_cycles;
+            continue;
+        }
+        if (st == 3 || clock64() > end) break;
+        __nanosleep(100);
+    }
+    slot->lingering = 0;
+    __threadfence_system();
+    if (__ldcv((const int *)&slot->state) == 1) serve_flag(slot, arena, sh);
+}
+
 // One launch per call, zero copy (mode 2): the slot is mapped host memory; the kernel reads the request there, answers there and raises
 // the slot's flag itself, so the host needs no copy and no synchronising driver call: it launches, then polls the flag.
 __global__ void once_mapped(Slot *slot, uint32_t *arena) {
     extern __shared__ uint32_t sh_arena[];
-    serve(slot, arena, sh_arena);
-    __threadfence_system();
-    atomicExch_system((int *)&slot->state, 2);
+    if (__ldcv((const int *)&slot->state) == 1) serve_flag(slot, arena, sh_arena);   // else a lingering kernel already served it
+    linger(slot, arena, sh_arena);
 }
 
 // Mode 2 with small arguments: they travel in the launch's own parameters (the constant bank), so the register path reads no byte over
@@ -1142,6 +1177,7 @@ __global__ void once_mapped(Slot *slot, uint32_t *arena) {
 struct ParamArgs {
     int32_t op;
     int32_t len;
+    uint32_t seq;
     uint32_t w[64];   // up to 256 bytes of canonical arguments
 };
 
@@ -1149,6 +1185,19 @@ __device__ int g_param_smem = 0;   // 1: once_param launches with the shared are
 
 __global__ void once_param(Slot *slot, uint32_t *arena, ParamArgs pa) {
     extern __shared__ uint32_t sh_arena[];
+    uint32_t *sh = g_param_smem ? sh_arena : nullptr;
+    // only with lingering can a kernel find its request taken or replaced; without it the two PCIe reads are skipped
+    if (g_linger_cycles > 0) {
+        if (__ldcv((const int *)&slot->state) != 1) {   // already served (by a lingering kernel): only linger
+            linger(slot, arena, sh);
+            return;
+        }
+        if (slot->seq != pa.seq) {   // a newer request than this launch's parameters: serve it from the slot
+            serve_flag(slot, arena, sh);
+            linger(slot, arena, sh);
+            return;
+        }
+    }
     long long t = clock64();
     uint32_t loc[64];
     int words = (pa.len + 3) / 4;
@@ -1168,10 +1217,11 @@ __global__ void once_param(Slot *slot, uint32_t *arena, ParamArgs pa) {
         slot->path = 1;
         slot->dev_cycles = (uint64_t)(clock64() - t);
     } else {
-        serve(slot, arena, g_param_smem ? sh_arena : nullptr);   // no shared memory asked: the full path uses the global arena
+        serve(slot, arena, sh);   // no shared memory asked: the full path uses the global arena
     }
     __threadfence_system();
     atomicExch_system((int *)&slot->state, 2);
+    linger(slot, arena, sh);
 }
 
 // ---- host ----------------------------------------------------------------------------------------------------------------------------
@@ -1181,6 +1231,8 @@ static cudaGraphExec_t g_graph_exec = nullptr;   // mode 2 with MIP_GRAPH=1: the
 static int g_use_graph = 0;
 static int g_param_args = 1;   // mode 2: small arguments in the launch parameters (MIP_PARAM=0 turns it off)
 static int g_param_smem_host = 0;   // MIP_PARAM_SMEM: the parameter kernel asks for the shared arena too
+static uint32_t g_seq = 0;
+static uint64_t g_skipped = 0;   // mode 2 calls a lingering kernel served without a launch
 static Slot *g_host_slot = nullptr, *g_dev_slot = nullptr;   // resident: mapped pinned memory; per call: device memory
 static uint32_t *g_arena = nullptr;
 static cudaStream_t g_stream;
@@ -1225,6 +1277,12 @@ extern "C" MIP_API int mip_open(int device, int resident) {
     cudaSetDeviceFlags(cudaDeviceMapHost | sync);
     if (const char *e = getenv("MIP_GRAPH")) g_use_graph = atoi(e);
     if (const char *e = getenv("MIP_PARAM")) g_param_args = atoi(e);
+    if (const char *e = getenv("MIP_LINGER_US")) {
+        int cr = 0;
+        cudaDeviceGetAttribute(&cr, cudaDevAttrClockRate, device);
+        long long lc = (long long)(cr * 1000.0 * atof(e) * 1e-6);
+        cudaMemcpyToSymbol(g_linger_cycles, &lc, sizeof lc);
+    }
     if (const char *e = getenv("MIP_PARAM_SMEM")) { g_param_smem_host = atoi(e); cudaMemcpyToSymbol(g_param_smem, &g_param_smem_host, sizeof(int)); }
     if (const char *e = getenv("MIP_SPIN")) g_spin = atoi(e);
     if (const char *e = getenv("MIP_NANOSLEEP")) g_sleep_ns = atoi(e);
@@ -1292,6 +1350,9 @@ extern "C" MIP_API const char *mip_ops(void) { return "numbers.add\nnumbers.sub\
 
 extern "C" MIP_API uint64_t mip_launches(void) { return g_launches.load(); }
 
+// mode 2: calls a lingering kernel served without a launch
+extern "C" MIP_API uint64_t mip_skipped(void) { return g_skipped; }
+
 // microseconds the last call spent in serve() on the device (clock64 over the rated clock: an estimate under boost clocks)
 extern "C" MIP_API void mip_diag(uint64_t *v) {   // polls, poll cycles, wait cycles, clock kHz
     v[0] = g_host_slot->polls; v[1] = g_host_slot->poll_cycles; v[2] = g_host_slot->wait_cycles; v[3] = (uint64_t)g_clock_khz;
@@ -1314,16 +1375,22 @@ extern "C" MIP_API int mip_call(const char *op, const uint8_t *args, size_t args
     h->op = id;
     if (g_resident == 2) {
         // launch (or replay the graph), then poll the flag the kernel raises: no copy, no synchronising call
+        h->seq = ++g_seq;
         std::atomic_thread_fence(std::memory_order_seq_cst);
         auto t0 = std::chrono::steady_clock::now();
         h->state = 1;
-        cudaError_t e;
-        if (g_graph_exec) {
+        std::atomic_thread_fence(std::memory_order_seq_cst);   // Dekker with the kernel's exit: the flag, then `lingering`
+        cudaError_t e = cudaSuccess;
+        int launched = !h->lingering;   // read once
+        if (!launched) {
+            g_skipped++;   // a kernel is waiting: no launch
+        } else if (g_graph_exec) {
             e = cudaGraphLaunch(g_graph_exec, g_stream);
         } else if (args_len <= sizeof(((ParamArgs *)0)->w) && g_param_args) {
             ParamArgs pa;
             pa.op = id;
             pa.len = (int32_t)args_len;
+            pa.seq = g_seq;
             memcpy(pa.w, args, args_len);
             once_param<<<1, 1, g_param_smem_host ? SH_WORDS * sizeof(uint32_t) : 0, g_stream>>>(g_dev_slot, g_arena, pa);
             e = cudaGetLastError();
@@ -1332,7 +1399,7 @@ extern "C" MIP_API int mip_call(const char *op, const uint8_t *args, size_t args
             e = cudaGetLastError();
         }
         if (e != cudaSuccess) return MIP_HOST_ERROR;
-        g_launches++;
+        if (launched) g_launches++;
         // diagnostics: the launch call's own time, and the time until the flag came back (host clock)
         g_us_seen = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - t0).count();
         int spins = 0;
@@ -1342,7 +1409,12 @@ extern "C" MIP_API int mip_call(const char *op, const uint8_t *args, size_t args
                 // a kernel that ended without raising the flag failed: ask the driver now and then, not on every poll
                 if ((spins & 1023) == 0) {
                     cudaError_t q = cudaStreamQuery(g_stream);
-                    if (q != cudaErrorNotReady && h->state != 2) return q == cudaSuccess ? MIP_DEVICE_FAILED : MIP_DEVICE_FAILED;
+                    if (q == cudaSuccess && h->state == 1) {   // no kernel left and the request not taken: launch one
+                        once_mapped<<<1, 1, SH_WORDS * sizeof(uint32_t), g_stream>>>(g_dev_slot, g_arena);
+                        g_launches++;
+                    } else if (q != cudaSuccess && q != cudaErrorNotReady) {
+                        return MIP_DEVICE_FAILED;
+                    }
                 }
             }
         }

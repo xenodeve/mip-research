@@ -256,3 +256,18 @@ Where mode 2's 15.5 us goes (DLL clock): the Python wrapper 1.1 us, the launch c
 Correct in mode 2 on every corpus (`numbers-fuzz-s2` 4,000 / 4,000, `numbers-paths-s3` 220 / 220, `numbers-s1` 1,800 / 1,816 with the
 16 time-guard cases). Beside llama-server (`impact-mode2.txt`): none 232.7 tok/s, keep -0.2 %, busy -8.0 % at ~5,200 calls/s.
 Mode 2 is the PC layer's mode: the latency of the resident worker within 4 us, at no cost to decode while idle.
+
+**Linger** (`MIP_LINGER_US`): after answering, the mode-2 kernel keeps polling the slot for the window, so a request that follows soon
+needs no launch; the host sets the flag, fences, reads `lingering`, and launches only when no kernel waits (the kernel clears
+`lingering`, fences, and reads the flag once more: Dekker, so a request is neither lost nor served twice; a request number keeps a
+kernel from answering with an older launch's parameters).
+
+| | Back-to-back median | Launches for 5,000 calls | Beside llama-server: keep / busy |
+|---|---|---|---|
+| mode 2, no linger | 16.5 us | 5,001 | -0.2 % / -8.0 % (~5,200 calls/s) |
+| **mode 2, linger 50 us** | **10.1 us** | 12 | +5.0 % (noise) / -28.4 % (~22,000 calls/s) |
+| mode 2, linger 200 us | 10.2 us | 6 | |
+
+`linger_stress.py`: 60,000 calls `add(i, 1)` with gaps drawn from 0-30, 0-120 and 0-400 us around the window's end: **0 wrong answers**;
+a lingering kernel served 91 %, 19 % and 4 % of them. All three corpora as before with the linger on. The window costs nothing while
+calls are sparse and, during a dense burst, holds the GPU like the resident worker; it is a knob for bursty callers, off by default.
