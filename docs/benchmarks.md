@@ -6,6 +6,9 @@ vLLM, **4B bf16 GGUF · llama.cpp · 5060 Ti** on llama-server, and **4B NVFP4 W
 all through `tir4b`) and **Qwen3.8-Flash-Next** (the Gyro-M Swift 1.5 IQ2_XS pack on Strata's own engine, on this PC's D2x placement or on one
 Colab A100). A result is only comparable with another one from the same model, machine, sampling and round; the method section says why.
 
+
+> **The DeepMind rows' prompt line (2026-11-11).** Rounds 1-9 end every DeepMind question with our own line `Give the final answer as a single number in \boxed{} at the end.` (`scripts/a100/frozen_rows.py`); the dataset gives the question alone. That line made the model doubt the answer's form (round 9: 7 General and 14 control answers wrong while citing it). Round 10 keeps it; from frozen10 the DeepMind rows get the MATH rows' neutral line, `Put the final answer in \boxed{} at the end.` DeepMind numbers here are ours, not leaderboard numbers, and are not compared across that change ([failures](failures.md#the-deepmind-rows-prompt-line-decided-2026-11-11)).
+
 ## Summary
 
 | Mechanism | What it does (one line) | Runs on | In best config? | Best measured result | Status |

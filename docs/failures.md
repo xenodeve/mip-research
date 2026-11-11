@@ -184,6 +184,28 @@ PC layer**, General Style + closers), each read by hand (plan:
 - `div_big-2783#0` 70,772 tokens, `div_big-5070#1` 67,665 in the targeted run. `--exact-answer` fixes the value at the close, not the
   loop's length. The settle probe (2026-11-10): settle line and close together 32 of 49, today's close 31, fewer tokens.
 
+## The DeepMind rows' prompt line (decided 2026-11-11)
+
+**What it is.** Every DeepMind row of rounds 1-9 ends with `Give the final answer as a single number in \boxed{} at the end.`
+(`scripts/a100/frozen_rows.py`, `SUFFIX`, added 2026-11-08). It is **our** line: the DeepMind Mathematics dataset (Saxton et al.,
+ICLR 2019) gives the question alone (`Divide -73388 by 36903.`) and an exact answer. The MATH rows end with
+`Put the final answer in \boxed{} at the end.` (`SUFFIX_ANY`), the line math evaluations commonly use.
+
+**What it did** (round 9, `results/exact-answer-r9/single_number.py`): answers that cite "single number" while
+choosing between a decimal, an integer quotient and rounding: General 21 (11 right, 3 right with a form note, **7 wrong**), control 23
+(9 right, **14 wrong**), nearly all `div_big`. `div_big-4138#0`: *"Given the request for a 'single number' ... I will provide the integer
+quotient."* The line makes the model doubt the form, and part of the class-C loops the closers end come from it.
+
+**Decision (the developer, 2026-11-11):**
+- Changing the line to ask for an exact value is not done: it would steer the form toward gold's and move further from the dataset.
+- **Round 10 keeps the current line**, so it compares with round 9 directly.
+- **frozen10 onward: the DeepMind rows get the same neutral line as the MATH rows** (`Put the final answer in \boxed{} at the end.`):
+  no form asked, the model chooses, and the scorer's form rule (a correct decimal of a gold with no finite decimal is right, noted)
+  applies to every arm alike.
+- **What may be claimed:** "DeepMind Mathematics questions with our answer-format line, scored by our rule and the API reader". Rounds
+  1-9 used our own line; no DeepMind number here is a leaderboard number, and the DeepMind numbers before and after frozen10 are not
+  compared directly.
+
 ## Loops
 
 A loop makes the model wrong two ways: with no closer it runs until the stuck stop and ends with **no answer** (control: 73 of 240
@@ -456,3 +478,11 @@ settle probe: บรรทัด settle อย่างเดียวหยุ�
 | **Sandbox** | S1-S17 | โมเดลไม่เปิดบล็อกเอง (S1), เรียกเครื่องมือหลังคิดจบแล้ว (S2), `print(` ที่บังคับได้ค่าคงที่ (S4), hypothesis loop ไม่เคยครบวง (S8), เรียกเครื่องมือบนสมมติฐานที่แต่งขึ้น (S10), กล่องแยกยังมีช่องโหว่ (S16) |
 | **Learned / latent** | T1-T9 | หยุดพักอยู่ หัวที่เรียนแล้วใช้กับรูปแบบโจทย์ใหม่ไม่ได้ |
 | **การวัดผลผิด** | M1-M20 | แก้หรือถอนหมดแล้ว และกลายเป็นกฎ: จับคู่ในรอบเดียวกัน, ใช้บริบทเต็ม, ไม่ปรับกฎให้เข้ากับชุดทดสอบ, ใช้ชุดแช่แข็ง |
+
+### คำสั่งรูปคำตอบของข้อ DeepMind (ตัดสิน 2026-11-11)
+
+ข้อ DeepMind ในรอบ 1-9 ลงท้ายด้วย `Give the final answer as a single number in \boxed{} at the end.` ซึ่งเป็นข้อความที่**เราเขียนเอง** ชุดข้อมูลจริงมีแค่โจทย์กับคำตอบเป๊ะ
+ในรอบ 9 มีคำตอบที่อ้างคำว่า "single number" ตอนเลือกรูปคำตอบ General 21 ข้อ (ผิด 7) control 23 ข้อ (ผิด 14) เกือบทั้งหมดเป็น `div_big`
+ผู้พัฒนาตัดสิน: ไม่เปลี่ยนเป็น "exact" เพราะจะชี้นำให้ตรงกับเฉลยและห่างจากชุดข้อมูลมากขึ้น รอบ 10 ใช้คำสั่งเดิมเพื่อเทียบกับรอบ 9 ได้ตรง
+ตั้งแต่ frozen10 ข้อ DeepMind ใช้คำสั่งกลางเดียวกับข้อ MATH (`Put the final answer in \boxed{} at the end.`) ไม่ระบุรูป ให้โมเดลเลือกเอง แล้วใช้กฎหมายเหตุของตัวตรวจกับทุกแขน
+สิ่งที่อ้างได้: "โจทย์จาก DeepMind Mathematics พร้อมคำสั่งรูปคำตอบของเรา ตรวจด้วยกฎของเราและ API" ไม่ใช่ตัวเลข leaderboard และห้ามเทียบตัวเลข DeepMind ก่อนและหลัง frozen10 ตรง ๆ
