@@ -1,6 +1,6 @@
 # Failure patterns: what made the model wrong, and what fixes it
 
-Every way an answer went wrong that was read by hand, one row per pattern: what the model did, where it was seen (with the build),
+Every way an answer or a mechanism went wrong that was read by hand or recorded in the docs, one row per pattern: what the model did, where it was seen (with the build),
 what fixes it or is expected to, and **whether the fix has been tested**. A pattern stays here after it is fixed, so the next model
 or round can be checked against it. The developer's rule (2026-11-10): a pattern that can occur gets fixed, however rare.
 
@@ -39,6 +39,12 @@ PC layer**, General Style + closers), each read by hand (plan:
 | P16 | The rule scorer read a right answer as wrong (or a hedge as right) | round 9: 6 | the scorer rules | re-score of round 9 | fixed |
 | L1-L8 | Loops, by the shape the detectors see | A100 rounds, round 9 | [Anti-loop](antiloop.md) detectors + closes | see [Loops](#loops) | mostly in best config |
 | LA-LF | Loops, by what the model repeats (round 9's 69 closes) | round 9 | decide layer: one pairing per kind | simulation + settle probe | fix planned |
+| D1-D18 | Detection: a calculation missed, misread, or a false call | see [Detection](#detection) | | | mixed |
+| I1-I17 | Inject: a put form, note or closer that misled the model or was ignored | see [Inject](#inject) | | | mixed |
+| C1-C5 | Compute: a wrong or slow value from the software | see [Compute](#compute) | | | mixed |
+| S1-S17 | Sandbox and tools: blocks not opened, programs that mislead, box faults | see [Sandbox and tools](#sandbox-and-tools) | | | mixed |
+| T1-T9 | Learned / latent heads that did not generalize | see [Learned and latent](#learned-and-latent) | | | mostly paused |
+| M1-M20 | Measurement errors that made a result look better or worse than it was | see [Measurement](#measurement-and-instrument-errors) | | | fixed or withdrawn |
 
 ## Round 9, one by one
 
@@ -171,6 +177,135 @@ Every General answer with a close in round 9 (232 pairs), read by hand at the cl
   "settle, then close only if the loop resumes" 16; settle and close at once **32**, against today's close 31, with fewer tokens. So
   a settle line does not end a loop by itself; it goes with the close. The gain over today's close is not shown yet.
 
+## Detection
+
+Where a calculation is, and what it is. Builds as the source states; "engine" = Flash-Next (Gyro-M) · Strata engine.
+Detail: [Detection](detect.md), [detection coverage plan](plans/2026-11-10-detection-coverage-plan.md).
+
+| # | Pattern | Example / seen | Fix | Tested | Status |
+|---|---|---|---|---|---|
+| D1 | Question reader off in round 9, no reason recorded | it reads 30 of 120 frozen9 questions, all equal to gold (4B NVFP4 · PC layer) | turn it on (coverage plan slot 1); `read_exact` widened it (P5) | reader check 84/84 | fix planned |
+| D2 | The `=` reader leaves points to the model, cause not split | 331 + 290 of 14,609 + 17,352 points not put (98 % put) | split the 621 by cause (echo skips, join holds, unread forms) | no | fix planned |
+| D3 | No stop at `\approx` or `\equiv` | 116 of the 334 hand values `--check-hand` calls wrong sit on such lines (37 `\equiv` + 79 `\approx`) | stop at both (detection side of P11) | no | fix planned |
+| D4 | Forms the reader cannot read | H3: 1,052 of 31,996 (unbalanced tails 342, roots 95, `...` decimals 89, huge powers 87 by design, fractions 70, spaced factors 52, fractional powers 52, pi in degrees 52) | none named | — | open |
+| D5 | Point names read as functions | `P(2, 3) =`, `C(4, 6) =` got `0`; a polygon regex put gold 315 after the question's own wording | `4dc5e546`: bare `C(`/`P(` not read, `P(n,k)` with k > n is a point | replay: no value on those texts | fixed, replay |
+| D6 | Ops written from single target questions | `polar_triangle_chain` wrong in most of its domain; `triangle_wave_intersections` | both deleted, the rest moved off the inline path; the "WON" claims withdrawn | — | fixed |
+| D7 | MathBackend reader misreads | `gcd(1,000, 25)` = 1 (thousands split); Greek letters as functions; a determinant taken as the whole text's value; `Vmatrix` | `a48a0570`, `e2285304`, `67ca97d5` | 387 ops, 31,064 cases, 0 disagree | fixed, measured |
+| D8 | A function the text defined was read | the latest `f(x) = ...` put a wrong value at 11 places of stored control answers (`w(0)`) | the reading removed | — | fixed |
+| D9 | Engine parser ignored a scaling word | `half of 68 + 10 =` read as `68 + 10`, 78 put (gold 54); 2 of 4 runs did not recover (engine) | `scales_next` | six rounds all right, none wrote 78 | fixed, measured (small) |
+| D10 | Engine parser walked across a sentence end | `909. 59,237*900,000 =` refused; the model's wrong value stood | `. ` ends the walk | no number | fixed, not measured |
+| D11 | Engine parser: sign merged into the token, `\times` unknown | `a+b=-1+5=` put 6; `4 \times 125 - 2 =` put 123; MATH-500 integers 55 on vs 59 off | `af41da64` (operators added, refuse after 1,010 binding tokens) | no rerun | fixed, not measured |
+| D12 | Engine parser: a number against a letter | on16: 16 wrong of 957 puts, 13 of them `d12^2=` read as `12^2` | `1be41906` | class not re-counted | fixed |
+| D13 | Percent read as arithmetic | `100 - 30%` is 70 to a reader, 99.7 to arithmetic | percent only as a factor | the ABBA build lacked it | fixed, not measured |
+| D14 | A name as an operand ends the parse and the run sticks | `gsm8k-34`: the model multiplied with a name `C` (engine, GSM-Hard) | none | — | **open** |
+| D15 | `--check-hand` false corrections | replay: 6 of 6 corrections false (tails of longer expressions, parity, `\to`, degrees); H3 found more forms, each now a test; flags 432 -> 303 | rules with tests | a count, not precision | fixed, replay (unconfirmed) |
+| D16 | `--check-hand` false flags still open | 12 of 64 sampled flags not errors: 7 long-multiplication carry (`$8 \times 3 = 24 + 2 = 26$`), 5 chain splits; precision 51/64; 270 unread | carry and chain-split rules, a gate before it runs | no | fix planned |
+| D17 | Latent signals see wrong values, loops and doomed traces badly | wrong value AUROC 0.705 (4B) / 0.668 (Qwen3.6); loops: 24 onsets, router 11/24 at k=2; on a MIP arm probe onsets fall to 80 / 59 / 50 % at k = 2/8/32 | none | — | open |
+| D18 | Offline precision did not predict live firing (sidecar, `UnifiedDetector`) | sidecar fired 3 times live, one before a wrong answer; "0 destructive false alarms" contradicted by #14 | sidecar off; fusion acts only with the exact parse | — | withdrawn |
+
+## Inject
+
+How a value or note goes in, and how the model takes it. Detail: [Inject](inject.md), [settle adoption](plans/2026-11-10-settle-adoption-plan.md).
+
+| # | Pattern | Example / seen | Fix | Tested | Status |
+|---|---|---|---|---|---|
+| I1 | The ` (exact)` note draws a re-check (4B) | re-check word within 300 characters 41 -> 65 % and 35 -> 57 %; first word `wait` in 42/126 with the mark vs 12/126 without (4B bf16 · A100) | `--inline-plain` | measured | fixed, in best config |
+| I2 | The opposite on Gyro-M: an unmarked value is distrusted | `= 2939885984? Let me compute carefully.` looped to the limit (engine, one unpaired run) | decision: the plain value for every model | unconfirmed | superseded |
+| I3 | The model writes ` (exact)` after its own wrong value | engine | none: the note is no proof of source | — | open |
+| I4 | A digit joined onto a put | `-5` then the model's `75` read as `-575`; `8^{34} = ...` then zeros | `--no-digit-join` | General 92/21,398 -> 0/17,485; Qwen profile 234/35,319 -> 0/15,282 | fixed, in best config |
+| I5 | The model took a delivered sum's value as its first term | `5*8387270 + 8 = 41936358 (exact) + 8 = 41936366` (engine) | `--igc-sum-note 1` | 13 events in 10/24 runs -> 0/24; tir4b has no sum note | fixed (engine) |
+| I6 | A system hint copied into a new loop | "marked values come from a calculator": re-check sentences 290 -> 333 (Gyro-M, 60 cases) | hint rejected | measured | fixed (not adopted) |
+| I7 | `stop checking` ends the thinking with work left | 10 of 294 runs ended on the repeat note, 5 with a step to go (engine) | wordings 1 and 2 built | queued, not run | fix planned |
+| I8 | The third-repeat close cuts the thinking mid-work | 61 of 294 runs ended on it, 6 wrong on answerable questions; `math-3`, `math-119`; lost LCB row 3364 (engine) | none | same-exe A/B stopped at 9 of 26 | open (unconfirmed) |
+| I9 | Values put in the middle of the model's own method | `--inline-calc` alone, thinking off: 81/105 vs base 85 (4B · L4) | the General Style, arithmetic mode | measured | superseded |
+| I10 | The General Style alone raises re-checking and loops | re-check words +14 %; 197/240 vs control 209, every wrong answer a loop (4B bf16 · A100) | the loop closers | measured (round 9: 215 vs 161) | fixed by the closers |
+| I11 | A correction read and redone by hand | `--check-hand` corrected 22 values on 17 rows; the model redid the work after each; 116 vs base 121 (4B · L4) | none | measured | open (not in best config) |
+| I12 | Old model profiles write false forms | residue guess held on the 4B (5/6), failed on R1/QwQ (22/61) | profiles left unused | measured | fixed |
+| I13 | Soft logit override does nothing | +8: 19/48 vs 21/48, 2.8x wall time (4B bf16 · A100) | none | measured | kept as option |
+| I14 | Re-check hold-down harms | with loop-close: cut answers 3 -> 9, tokens per right answer +43 % | dropped | measured | dropped |
+| I15 | Wording does not end a doubt loop | after `Checked exactly: $2928 / 28 = 732/7$ holds.` the model wrote `Let me re-check $2928 / 28$.`; voice line 6/49 (4B NVFP4 · PC layer) | the line goes with the close | settle_close 32 vs close 31, one seed | fix planned (more seeds) |
+| I16 | ThinkBrake never fires in a doubt loop | 47 loops: `</think>` never within 1.0 nat of the top token | none | measured | ceiling |
+| I17 | Closers' own misses not in the loop section | V7 closed 2 right answers early (`stdmath-d93ff30b#0`, `1adf1706#0`, unpaired); shape cap's only act ended wrong (sign lost); cover cap has no live run | — | — | open (unconfirmed) |
+
+## Compute
+
+What computes the value. Detail: [Compute](compute.md).
+
+| # | Pattern | Example / seen | Fix | Status |
+|---|---|---|---|---|
+| C1 | Wrong values in MathBackend ops behind an earlier "0 disagreements" claim | found later; two ops deleted | fixed or refused; now 387 ops, 31,064 cases, 0 disagree | corrected |
+| C2 | Ops with no work budget | `canon('(x+y+z+w)^200')` 15-20 s before refusing; `count_real_roots`, `sturm_sequence`, `poly_gcd` | none (not reachable from the text) | open |
+| C3 | Conventions a model may not share | `stirling1` unsigned, `sigma(n, k)` n first, `falling_factorial(5, 7) = 0` | documented, not changed | by design |
+| C4 | The engine path has no value audit | "0 wrong values" is a tir4b claim only | none | open |
+| C5 | Qwenputer too slow, not integrated | about 5 s per call (`17*23` 5,079 ms) vs 0.066 ms for ABI1; 8 of 29 math cases firmware errors or refusals | replaced by ABI1-3 for arithmetic | replaced |
+
+## Sandbox and tools
+
+Code run inside the reasoning. Detail: [Sandbox and tools](sandbox.md).
+
+| # | Pattern | Example / seen | Fix | Tested | Status |
+|---|---|---|---|---|---|
+| S1 | The model rarely opens a block itself | Flash-Next 2 of 450 runs; 4B 2 in 82 rows; `--native-tool` 0 calls in 9 | forced block (built); 4B fine-tune (built) | fine-tune: no result (no CU) | open |
+| S2 | Spontaneous calls come after the thinking, not in it | 203 of 205 (greedy); sampled 0 inside the thinking (GPQA 0/27, HLE 0/64) | none | — | open |
+| S3 | Drafts written, never called | most of 15 blocks "printed nothing" | `kNothingPrinted`, `--igc-sandbox-call`, `auto_call` | see S4 | fixed (mechanism) |
+| S4 | A forced `print(` gives a blind constant | HumanEvalFix: 12 of 22 forced calls printed a constant | none | — | open |
+| S5 | Close after a print fires on a wrong program | 1 wrong answer from the close; 13 runs printed nothing (41 % of the arm's tokens) | none | +4 right, p 0.29 | kept as option (unconfirmed) |
+| S6 | The close loses on coding | LCB hard 20, paired, A100: plain 17 vs block + close 13-15 | ruled out for coding | measured | ruled out |
+| S7 | Forced blocks too long on the 4B | 40 of 82 too long (reasoning in comments); 58 vs 56 (4B bf16 · A100) | none | measured | open |
+| S8 | The hypothesis loop never completes | "a real mismatch, then a pass" 0 in every arm; 3017 `expect` used a made-up value and the why-line called a right program wrong | none | measured | open |
+| S9 | An unfinished brute force read as a wrong approach | returned `None`; brute gave a value 3 times in 181 blocks | `c1460ad2` (`kStubNote`) | no arm | fixed, not measured |
+| S10 | Tool calls built on a made-up premise | GPQA: 26 calls on an invented sign convention, right -> wrong; SuperGPQA `b6b43614` | none | — | open |
+| S11 | A hint cuts the reading of the question | the line hint lost 5 rows on MMLU-Pro (11 vs 16); no hint moved wrong -> right | tuning stopped by a rule set before | measured | stopped |
+| S12 | A trust line ignored | `--trust-line cort`: the 4B re-checked a printed -530 for 12,000 tokens | none | — | open |
+| S13 | The kernel handoff showed old prints | a first block moving to the kernel | `8569a1a2` | — | fixed |
+| S14 | A dead kernel written to (past 120 s) | — | `04cc1b26` | — | fixed, not measured |
+| S15 | Box bug failed blocks | `_Stays` had no `poll()`: 20 of 45 blocks failed in `pc5` | `3aed1e9b` | — | fixed |
+| S16 | Box isolation gaps | deny ACE does nothing against an AppContainer on 26300; disk limit is a poll (43-143 MiB at a 32 MiB limit); can read `C:\Windows` and HKLM | none | — | open |
+| S17 | Names lost in the served reasoning tool | names do not reach the next round unless the turn moved to the kernel | engine side of Strata-xeno#291 | never run | fix planned |
+
+## Learned and latent
+
+Heads on the hidden state; the latent path is paused. Detail: [Learned and latent](learned.md).
+
+| # | Pattern | Example / seen | Status |
+|---|---|---|---|
+| T1 | Input heads do not generalize to new templates | 0/12 exact operand tuples on template-held-out cases; 16/32 false calls on each new axis | gate never passed |
+| T2 | Adam overshoot | loss 2.1e-5 -> 1.03 at epoch 70 | fixed (cosine LR) |
+| T3 | The value is not only at the literal digit | literal value at the attention argmax lowered tuples 50 -> 39, 77 -> 29 | rejected |
+| T4 | Retained head: digit-3 errors and false calls | all 96 active-digit errors on digit 3; 112/384 quote-copy false-call candidates | open |
+| T5 | Warm start forgets | 22 right legacy tuples turned wrong | open |
+| T6 | Readiness misses a new family | `en-exact-result` 0/12 selected; more data made it worse (110/112) | open |
+| T7 | Bundle v2 does not generalize | 0/120 in-scope calls, 16/40 false calls on GSM8K | withdrawn |
+| T8 | Residual write is not selective | rewrote right values at up to 59/60 control points | not adopted |
+| T9 | No whole value at `=` in the residual | digit 3 reads 0.15 at L28 (digits 1-2: 0.99 / 0.89) | ceiling |
+
+## Measurement and instrument errors
+
+Errors in how a result was measured; each one changed a number that was quoted. Full list with ids: [ERRATA](ERRATA.md).
+
+| # | Pattern | Example | Status |
+|---|---|---|---|
+| M1 | An edit that never applied | `on-07` repeated `on-06` | withdrawn |
+| M2 | False determinism | "engine repeats 27/27": 48 of 49 text pairs diverge at T 0 | withdrawn |
+| M3 | "Paired" comparisons that were path noise | vLLM A100 control token-identical on 2/104 | corrected |
+| M4 | Unpaired, different-exe or different-session arms | PC block-2048 5/6 reversed to 13/20 when paired | corrected |
+| M5 | Greedy wins matched by sampled controls | GPQA 11/13 vs 6/13: sampled no-tool controls turn most misses right | withdrawn |
+| M6 | Regression to the mean | rows picked as misses turn right on any new path | rule: fresh paired baseline |
+| M7 | Scorer faults | GSM8K 25/40, MATH 45 % (`I hope it is correct.`), every root answer wrong (160 -> 173 of 213), LCB `pow` | fixed |
+| M8 | Audit blind to a class | `value_audit.py` skipped text after a letter: on16 16 wrong of 957 unseen | fixed (`1be41906`) |
+| M9 | Audit false flags | 7 puts `1.18 \times 10^9 / 4 \times 10^3 = 295000` flagged, all exact; "0 wrong of 51,015" corrected to 39,046 | corrected |
+| M10 | Over-counted failure review | third-repeat closes matched on thinking that ended by itself | corrected |
+| M11 | Labeller faults | rule pointer 46/411 -> 21/293; sidecar "65 % exact" while all-`none` scores 69 % | corrected |
+| M12 | Standard error on the wrong unit | computations counted as independent; per row: logit8 - ctrl = -0.9 [-6.0, +4.9] | corrected |
+| M13 | Small-sample AUROC inflated by one trace | digit confidence 0.984 -> 0.705 | corrected |
+| M14 | Token caps that cut answers | the 20,000 cap cut 24 of 48 in control | rule: full context every test |
+| M15 | An arm run without execution | `--hint-calc` without `--execute`: outputs made up | withdrawn |
+| M16 | The bench stuck check stopped a plain arm early | a 2-token cycle stopped before the engine could close | noted |
+| M17 | Candidate-close replay claims | replay `min_tokens=1500` vs live 0, one of three paths | withdrawn |
+| M18 | Development-set tuning presented as results | pc9 156/160: rules set reading the same rows; base 114-121 | rule: no test tuning, frozen sets |
+| M19 | Wrong gold | GSM-Hard: 20 cases wrong in both arms | noted |
+| M20 | A gate too short | the 73-token numeric gate missed drift at 2,048 positions | corrected |
+
 ## Patterns MIP itself caused (fixed in the put)
 
 | Pattern | Seen | Fix |
@@ -246,3 +381,14 @@ loop ทำให้ตอบผิดได้สองทาง ถ้าไ�
 | LF | ขัดแย้งในโจทย์ยากที่แก้ไม่ได้ | 1 / 1 / 0 / 4 | ปิดเหมือนเดิม; Sandbox / oracle | เพดานของตัวปิด |
 
 settle probe: บรรทัด settle อย่างเดียวหยุด loop ได้ 7 จาก 49, settle แล้วปิดทันทีได้ 32 เทียบกับปิดแบบปัจจุบัน 31 ยังไม่เห็นว่าดีกว่า
+
+### หมวดอื่น (รายละเอียดอยู่ในตารางภาษาอังกฤษด้านบน)
+
+| หมวด | ข้อ | ที่ยังเปิดหรือรอแก้ |
+|---|---|---|
+| **Detection** (หาตำแหน่งการคำนวณ) | D1-D18 | ตัวอ่านโจทย์ยังไม่ได้เปิดใน General (D1), 621 จุดที่ไม่ได้ใส่ค่ายังไม่ได้แยกสาเหตุ (D2), ไม่หยุดที่ `\approx`/`\equiv` (D3), รูปที่ยังอ่านไม่ได้ 1,052 จุด (D4), ชื่อตัวแปรเป็นตัวถูกดำเนินการแล้วรันค้าง (D14), `--check-hand` ยังเตือนผิดเรื่องตัวทดกับการแยกสาย (D16), สัญญาณแฝงจับค่าผิดได้ไม่ดี (D17) |
+| **Inject** (ใส่ค่าและคำบอก) | I1-I17 | โมเดลเขียน `(exact)` ต่อท้ายค่าผิดของตัวเอง (I3), `stop checking` และการปิดครั้งที่สามตัดงานกลางทาง (I7, I8), โมเดลทำการแก้ไขซ้ำด้วยมือ (I11), คำพูดอย่างเดียวหยุด loop ไม่ได้ (I15), V7 ปิดข้อถูกเร็วเกินไป 2 ข้อ (I17) |
+| **Compute** (คำนวณค่า) | C1-C5 | op ที่ไม่มีงบเวลา (C2), เส้นทางของ engine ยังไม่มีการตรวจค่า (C4) |
+| **Sandbox** | S1-S17 | โมเดลไม่เปิดบล็อกเอง (S1), เรียกเครื่องมือหลังคิดจบแล้ว (S2), `print(` ที่บังคับได้ค่าคงที่ (S4), hypothesis loop ไม่เคยครบวง (S8), เรียกเครื่องมือบนสมมติฐานที่แต่งขึ้น (S10), กล่องแยกยังมีช่องโหว่ (S16) |
+| **Learned / latent** | T1-T9 | หยุดพักอยู่ หัวที่เรียนแล้วใช้กับรูปแบบโจทย์ใหม่ไม่ได้ |
+| **การวัดผลผิด** | M1-M20 | แก้หรือถอนหมดแล้ว และกลายเป็นกฎ: จับคู่ในรอบเดียวกัน, ใช้บริบทเต็ม, ไม่ปรับกฎให้เข้ากับชุดทดสอบ, ใช้ชุดแช่แข็ง |
