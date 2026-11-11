@@ -415,3 +415,9 @@ two-word arithmetic. Device 1.9 -> **1.6 us**; single call **10.8 us** inside th
 back to back with the linger **6.9 us** on the 5060 Ti and **6.5-6.7 us** on the 4070 SUPER (re-measured with this build; its single
 calls 9.9 us p10, 15 us median while a game used the card). Every corpus in modes 1 and 2, the 4070's fuzz corpus 4,000 / 4,000,
 40,000 racing calls 0 wrong.
+
+**Where the last microsecond goes** (measurement-only builds that stop the register path at each stage and write a fixed answer; RTX
+5060 Ti, `numbers.add 1 + 1`, device time, two runs each): no work 0.6 us (the parameter copy, the answer and the flag); after parsing
+1.1 us (+0.5); after the arithmetic 1.3 us (+0.2); the full call 1.7 us (+0.4 printing). Inside the DLL: 10.3-10.4, 10.6, 11.0-11.1 us.
+So of the single call's 10.8-11.1 us, 8.7 us is the empty kernel's launch and flag, ~0.6 us the call's fixed device part, and ~1.1 us
+the parse, arithmetic and printing on one GPU thread; a warp-parallel parse could reach at most the parse's 0.5 us.
