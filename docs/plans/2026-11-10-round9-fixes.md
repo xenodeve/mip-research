@@ -79,3 +79,22 @@ The developer: write it down now, and test live together with the next round so 
 1. `--exact-answer` with the widened reader (D19) on the 40 development rows x 2 seeds **and** the 6 MATH-500 questions it reads (never used here: the first live run outside DeepMind's wording).
 2. Whatever of P11 (`pprox` put) and P12 (close on a step of the asked quantity) passes its offline gate by then, each designed from the case's statement ([failures](../failures.md#how-a-pattern-is-fixed-the-situation-not-the-test-set)).
 3. P7 and P8 stay out: their evidence is one module / one question.
+
+## Research behind the remaining fixes (2026-11-11)
+
+Searched before building, so a case already shown in published work is not re-proved here. What the literature settles, and what it
+does not (our reader's correctness and whether the 4B adopts a put are still ours to measure). Abstracts and summaries read, not
+every full paper.
+
+| Fix | What published work shows | What it settles | Still ours to test |
+|---|---|---|---|
+| P11 put after `\approx` | MATH 401 (arXiv 2304.02015): persistent weakness on decimal exponentiation and large numbers. MedCalc-Bench audit (arXiv 2603.02222): models often get exponentiations and logs of decimals slightly wrong, and a ~0.7 % error compounds past a ±5 % band. Calculator / SymPy checking of a model's own calculations (Language hooks, arXiv 2412.05967). A silently wrong tool costs up to 47 % (arXiv 2406.19228) | the case is general, not a test artefact; software should compute it; a false put is worse than none | the reader on `(1.01)^{30}` (D4) and 0 false reads in replay |
+| P12 close on a step | The detection-extraction gap (arXiv 2604.06613): forcing an answer out of a prefix fails on 42 % of prefixes whose free continuation recovers it; forced early exits lose 41-62 points; free continuation as the exit gains 1-5 | **forcing the final-answer cue is the failing mechanism**, matching round 9's L7 (3 hurt, all after a forced cue); the fix should let the model continue rather than force a value | which form of "continue" ends the loop on the 4B (the settle probe saw free writing run to the cap: 16 vs 31) |
+| P13 long loops | Circular reasoning (arXiv 2601.05693): loops are preceded by a surge of reflective sentences (`But`, `Wait`); REFRAIN (arXiv 2510.10103) and Word Salad Chopper detect redundant repetition earlier; entropy after `</think>` (arXiv 2509.26522) flags when more thinking stops paying, 12-22 % fewer tokens, no accuracy loss | earlier loop detection is possible from signals we do not read yet | first measure where 2783#0's 70k tokens went |
+| P7 letters of a string | The Strawberry Problem (arXiv 2505.14172, EMNLP 2025): character-level tasks fail from tokenization and emerge late in training; letter-count errors grow with word length and letter frequency (arXiv 2412.18626) | the case is a general weakness of tokenized models, not DeepMind's; a count by software is exact | a reader that finds the quoted string in any wording, 0 false reads |
+| P8 candidate solutions | Step-level verification work treats squaring and similar steps as candidate-generating and requires each candidate checked against the original equation (arXiv 2608.28725); self-verification by the model is unreliable (arXiv 2512.02304) | checking candidates is the right structure, and software should do it | the arccot branch has two conventions, so a put is not true under every reading: stays a Sandbox check by the model |
+
+Sources: arXiv [2304.02015](https://arxiv.org/abs/2304.02015), [2603.02222](https://arxiv.org/abs/2603.02222), [2412.05967](https://arxiv.org/abs/2412.05967),
+[2406.19228](https://arxiv.org/abs/2406.19228), [2604.06613](https://arxiv.org/abs/2604.06613), [2601.05693](https://arxiv.org/abs/2601.05693),
+[2510.10103](https://arxiv.org/abs/2510.10103), [2509.26522](https://arxiv.org/abs/2509.26522), [2505.14172](https://arxiv.org/abs/2505.14172),
+[2412.18626](https://arxiv.org/abs/2412.18626), [2608.28725](https://arxiv.org/abs/2608.28725), [2512.02304](https://arxiv.org/abs/2512.02304).
