@@ -71,7 +71,7 @@ Only solid rows; each links to the page that holds its setup, and the [master ta
 | DeepMind arithmetic, 160 rows, thinking off, greedy | 4B bf16 GGUF · llama.cpp · 5060 Ti | arithmetic mode | **156 vs 118** right; **12,062 vs 261,731** tokens (0.046x)[^dm160] | [inject](inject.md#arithmetic-mode) |
 | Loop rows, 24 x 2, T 0.6, full context | 4B bf16 · vLLM · A100 | best-config closers (A + B + V7) | **37 vs 24** of 48 right; answers with no answer **1 vs 21**[^loop48] | [anti-loop](antiloop.md) |
 | Same rows, median tokens of right answers | same | same | MATH L5 **15,260 → 9,090** | [benchmarks](benchmarks.md#master-results-table) |
-| Round 9 frozen set (frozen9: 8 DeepMind modules x 10 + MATH-500 L5 x 40) x 2 seeds, T 0.6, full context | **4B NVFP4 W4A8 · llama.cpp · PC layer** | General Style + the closers (best config), against control | **204 vs 157** of 232 paired answers by the rule (API reader **208 vs 157**); General alone right 54, control alone 7, sign test p = 2e-10; tokens 3.24 M vs 3.22 M[^r9] | [benchmarks](benchmarks.md#4b-nvfp4-w4a8--llamacpp--pc-layer-rtx-5060-ti--rtx-4070-super) |
+| Round 9 frozen set (frozen9: 8 DeepMind modules x 10 + MATH-500 L5 x 40) x 2 seeds, T 0.6, full context | **4B NVFP4 W4A8 · llama.cpp · PC layer** | General Style + the closers (best config), against control | **215 vs 161** of 240 paired answers by the rule (API reader **216 vs 161**); General alone right 59, control alone 5, sign test p = 9e-13; tokens 3.45 M vs 3.42 M[^r9] | [benchmarks](benchmarks.md#4b-nvfp4-w4a8--llamacpp--pc-layer-rtx-5060-ti--rtx-4070-super) |
 | Rerun of the 52 rows any arm got wrong, 104 answers | same | Qwen profile + `--no-digit-join` + `--guard-progress` | **67 → 79** right (control 73 → 71)[^unpaired] | [inject](inject.md#model-profiles) |
 | 5-digit multiplication, 40, ABBA | Flash-Next IQ2_XS · Strata-xeno · this PC (D2x) | `--igc-result-bridge --igc-inline-exec` | tokens **137, 142 vs 491, 522**; seconds **2.80, 2.82 vs 6.25, 6.61**; right 39, 39 vs 40, 39 | [inject](inject.md#engine-inline-execution) |
 | GSM-Hard, first 200 | same | same | 177 vs 178 right; **571 vs 731** tokens; decode **1,942 vs 2,363 s** | [benchmarks](benchmarks.md#master-results-table) |
@@ -112,7 +112,7 @@ The mechanisms most worth carrying over, with what each needs. Every one has its
     and whether it repeats a sampled run with the same seed is not measured yet.
 [^dm160]: หมายเหตุ: thinking off, 4,096-token cap; the hand-off rules were set while reading these 160 rows, so 156 is a development
     result. Records: [`results/arithmetic-mode`](../results/arithmetic-mode/).
-[^r9]: หมายเหตุ: 4B NVFP4 W4A8 only, not an A100 number. Each card ran both arms on its own half of the rows (half A on the 5060 Ti, half B on the 4070 SUPER); 4 of half A's rows (8 pairs) moved to the 4070 and are still running, so 232 of 240 pairs. Of the 7 control-only answers, `stdmath-fbf10ed4#1` is the answer close boxing an unfinished step (58, a cross-product component) and `dm_div_big-9977#0` the cue dropping the minus (`{-` is one Qwen token); see [ERRATA](ERRATA.md).
+[^r9]: หมายเหตุ: 4B NVFP4 W4A8 only, not an A100 number. Each card ran both arms on its own half of the rows (half A on the 5060 Ti, half B on the 4070 SUPER); 4 of half A's MATH-500 rows (8 pairs, a3) moved to the 4070 and finished there: General 8 of 8, control 4 of 8 (4 `stuck`). Scored by the rule as fixed 2026-11-10/11 (`96cf412`: a `? No` box, a hedge, `0.2` for `1/5`, an inequality for an interval; `2fcfbb9`: a set in set braces); the first count, 204 vs 157 of 232, was the older rule. Of the 7 control-only answers, `stdmath-fbf10ed4#1` is the answer close boxing an unfinished step (58, a cross-product component) and `dm_div_big-9977#0` the cue dropping the minus (`{-` is one Qwen token); see [ERRATA](ERRATA.md).
 [^loop48]: หมายเหตุ: the plain arm (24 / 48) is round 1's control, a different run from the closer arms; the inline-only arm of the
     same round had 25 / 48 and 23 with no answer. Two answers were lost to V7 closing too early ([anti-loop](antiloop.md)).
 [^unpaired]: หมายเหตุ: a rerun of rows chosen because some arm got them wrong; not paired token for token across runs (mip-research#21).
@@ -177,7 +177,7 @@ MIP รันอยู่สองที่ ใช้กฎชุดเดีย
 
 - **Arithmetic mode (4B bf16 GGUF · llama.cpp · 5060 Ti):** ถูก 156 จาก 160 เทียบ 118 ใช้ token 12,062 เทียบ 261,731 (0.046 เท่า)
 - **ตัวปิด loop ของ best config (4B bf16 · vLLM · A100):** ถูก 37 เทียบ 24 จาก 48 คำตอบที่ไม่มีคำตอบลดจาก 21 เหลือ 1
-- **รอบ 9 ชุดแช่แข็ง (4B NVFP4 W4A8 · llama.cpp · PC layer):** ตามกฎ General ถูก 204 เทียบ control 157 จาก 232 คู่ ตัวอ่านคำตอบ (API) ให้ 208 เทียบ 157 General ถูกฝ่ายเดียว 54 ข้อ control ถูกฝ่ายเดียว 7 ข้อ p = 2e-10 ยังเหลือ 8 คู่บน 4070
+- **รอบ 9 ชุดแช่แข็ง (4B NVFP4 W4A8 · llama.cpp · PC layer):** ครบ 240 คู่ ตามกฎ General ถูก 215 เทียบ control 161 ตัวอ่านคำตอบ (API) ให้ 216 เทียบ 161 General ถูกฝ่ายเดียว 59 ข้อ control ถูกฝ่ายเดียว 5 ข้อ p = 9e-13
 - **Flash-Next บน engine:**
   - คูณ 5 หลัก token ลด 72% เวลาลด 56%
   - GSM-Hard token 571 เทียบ 731

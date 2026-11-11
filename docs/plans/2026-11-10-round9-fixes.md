@@ -44,6 +44,10 @@ If 1-4 and 8 hold, up to about 17 of the 23 can move; replay has to show it.
 | 2. `--exact-answer` any value (2) | done, `96cf412` | replay 19 acts, 13 wrong -> right, 0 right -> wrong |
 | 2. surd questions (3) | done, `ce92287` | `read_exact`: 84 of 379 stored rows read, 84 of 84 gold, 0 wrong. Replay 24 acts, **16 wrong -> right, 0 right -> wrong**; control 0 acts |
 | 2. `\approx` (4) | **measured, not built: the design does not hold** | see below |
+| 1. a3 (done 2026-11-10) | done on the 4070 | General 8 of 8, control 4 of 8 (4 `stuck`). Round 9, 240 pairs: **215 vs 161** by the rule (API **216 vs 161**), General alone 59, control alone 5, p = 9e-13 |
+| scorer: set braces | done, `2fcfbb9` | `\{-2, 1-\sqrt{5}, 1+\sqrt{5}\}` for `\{1\pm\sqrt{5},-2\}` (a3 `stdmath-bf7ece2b` x2) was scored wrong |
+| 4a. targeted live run (2026-11-11) | done, `6c9331e` | the 11 rows the replay moved x 2 seeds, round 9's flags + `--exact-answer`: **22 of 22 right** (round 9: 7 of 22); 13 acts, 13 values right; all 9 `div_big` answers wrong in round 9 right with an act; 4 others right with no act (sample path). Loops as long as before. [inject.md](../inject.md#--exact-answer), #19 |
+| 4. paired live test | next | 40 rows x 2 seeds, both arms; the 5060 Ti ran ~12 tok/s with ~30k-token answers in flight against 60-80 on the 4070 with short ones (hypothesis: each request resends the whole answer for ~18 tokens), to be measured first |
 
 **`\approx`: what the gate showed** (`results/exact-answer-r9/approx_scan.py`, `approx_scan_put.py`, round 9 stored text). General wrote
 3,391 `\approx` with a decimal after it; the `=` reader reads the computation before 1,952 of them, and the model's value is off by more

@@ -267,7 +267,7 @@ a form choice, a factor search, a token run, a contradiction) decides what is pu
 
 | Item | Target |
 |---|---|
-| **Round 9 on the PC layer (#19)** | General Style against the plain model on **4B NVFP4 W4A8 · llama.cpp · PC layer**, both arms in one round: 204 vs 157 right by the rule (208 vs 157 by the API reader) on 232 of 240 pairs; 8 pairs left, then the verdict, A100 or review ([benchmarks](docs/benchmarks.md#4b-nvfp4-w4a8--llamacpp--pc-layer-rtx-5060-ti--rtx-4070-super)) |
+| **Round 9 on the PC layer (#19)** | General Style against the plain model on **4B NVFP4 W4A8 · llama.cpp · PC layer**, both arms in one round: **215 vs 161** right by the rule (**216 vs 161** by the API reader) of 240 pairs, General alone right 59, control alone 5 (p = 9e-13). Next: the paired live test of `--exact-answer` (targeted run 22 of 22 right against 7 of 22 in round 9), then frozen10 ([benchmarks](docs/benchmarks.md#4b-nvfp4-w4a8--llamacpp--pc-layer-rtx-5060-ti--rtx-4070-super)) |
 | **Answer close** | A live paired run of the new cue, which ends before `{` so a negative value keeps its minus |
 | **Target models & decode loop** | After the 4B is settled (AGENTS.md, order of models): thresholds on **Qwen3.8-Flash-Next** and **Qwen3.6-35B-A3B-NVFP4**, and inline put inside Strata's decode loop [^next] |
 | **Plug-in module** | The end goal ([What MIP is](#what-mip-is-and-where-it-stands)): the protocol is written once the methods stop changing |
@@ -569,7 +569,7 @@ Qwen3.6-35B-A3B ([detection](docs/detect.md))
 
 | แผนงาน | รายละเอียด |
 |---|---|
-| **รอบ 9 บนชั้น PC (#19)** | General Style เทียบกับโมเดลปกติบน **4B NVFP4 W4A8 · llama.cpp · PC layer** ทั้งสองฝั่งในรอบเดียวกัน ได้ 204 ต่อ 157 ตามกฎตรวจ (208 ต่อ 157 ตามตัวอ่านคำตอบ API) จาก 232 ใน 240 คู่ เหลือ 8 คู่ แล้วจึงตัดสินว่าขึ้น A100 หรือกลับไปทบทวน ([benchmarks](docs/benchmarks.md#4b-nvfp4-w4a8--llamacpp--pc-layer-rtx-5060-ti--rtx-4070-super)) |
+| **รอบ 9 บนชั้น PC (#19)** | General Style เทียบกับโมเดลปกติบน **4B NVFP4 W4A8 · llama.cpp · PC layer** ทั้งสองฝั่งในรอบเดียวกัน ได้ **215 ต่อ 161** ตามกฎตรวจ (**216 ต่อ 161** ตามตัวอ่านคำตอบ API) ครบ 240 คู่ General ถูกฝ่ายเดียว 59 ข้อ control ถูกฝ่ายเดียว 5 ข้อ (p = 9e-13) ขั้นต่อไปคือทดสอบ `--exact-answer` แบบจับคู่ (รันเฉพาะข้อแล้วถูก 22 จาก 22 เทียบกับ 7 จาก 22 ในรอบ 9) แล้วจึง frozen10 ([benchmarks](docs/benchmarks.md#4b-nvfp4-w4a8--llamacpp--pc-layer-rtx-5060-ti--rtx-4070-super)) |
 | **ประโยคปิดคำตอบ** | รันจริงแบบจับคู่เพื่อยืนยันประโยคปิดแบบใหม่ ที่จบก่อน `{` เพื่อให้ค่าติดลบไม่เสียเครื่องหมายลบ |
 | **ตั้งเกณฑ์บนโมเดลเป้าหมาย & ผสานเข้า Decode Loop** | หลังจาก 4B นิ่งแล้ว (AGENTS.md ลำดับของโมเดล) ตั้งเกณฑ์บน **Qwen3.8-Flash-Next** และ **Qwen3.6-35B-A3B-NVFP4** พร้อมย้ายการใส่ค่าเข้าไปใน decode loop ของ Strata [^th-next] |
 | **module ที่เสียบเข้า engine** | เป้าหมายปลายทาง ([MIP คืออะไร](#mip-คืออะไร-และตอนนี้อยู่ตรงไหน)) จะเขียนสเปก protocol เมื่อวิธีการนิ่งแล้ว |
