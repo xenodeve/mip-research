@@ -73,6 +73,13 @@ copied; **linking a library as a dependency needs a conversation with the develo
 - **CUDA Graph:** the work of an operation is issued as a captured graph replayed with new parameters. The rule is that the host never
   drives an iteration, not that every loop is a graph node: a data-dependent loop may be a graph conditional node (CUDA 12.4+) or one
   kernel that loops on the device (recursion, memoisation, DPLL and Pollard rho are not practical as conditional nodes).
+- **Launch: a resident kernel, relaunched every ~1 s** (the developer, 2026-11-11). A worker kernel stays on the device and polls a
+  request queue in mapped host memory, so a call costs a PCIe round trip instead of a launch (the engine's ABI1-3 measured
+  0.066-0.093 ms per launched call). Each launch of the worker ends itself after about one second and the host launches the next at
+  once, so no kernel outlives Windows' TDR watchdog (2 s under WDDM; every GeForce card runs WDDM); the registry is not touched. To
+  measure before it is relied on: the call latency against a launch per call and against Python; and, beside llama-server on the same
+  card, how much decode slows, since two processes' contexts time-share the GPU on Windows (no MPS). Inside an engine's own process
+  the worker runs on a low-priority stream of that context instead, which is the module's end shape.
 - **Values cross the ABI as digits, not limbs** (proposed 2026-11-11, for the developer). Turning a decimal string into limbs is bignum arithmetic, so it runs on the device
   (goal 3); the canonical encoding carries integers as sign + decimal digits, and the device parses and prints them.
 - **A fourth status, `DEVICE_FAILED`** (proposed 2026-11-11, for the developer), for what is not the op's answer: out of device memory, a kernel fault, or a device loop that
