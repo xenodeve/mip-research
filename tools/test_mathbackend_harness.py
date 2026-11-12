@@ -1,6 +1,7 @@
 """Tests for the CUDAMathBackend's gate: the canonical encoding (canon.py) and the harness (harness.py). The harness must pass Python
 through its own encoding at 100 % (the null backend) and must fail every wrong backend on the operations that backend damages."""
 import json
+import os
 import tempfile
 import unittest
 from decimal import Decimal
@@ -86,3 +87,27 @@ class Harness(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+@unittest.skipUnless(os.environ.get('MIP_CUDA_TEST'), 'needs the CUDAMathBackend DLL and a GPU (MIP_CUDA_TEST=1)')
+class CudaBindingThreads(unittest.TestCase):
+    def test_threads_never_read_each_others_answers(self):
+        """Many threads calling at once each get their own call's bytes (2026-11-12: a shared output buffer read outside the lock gave
+        tir4b's answers in flight each other's values)."""
+        import threading
+        from fractions import Fraction
+        from tools.igc.mathbackend import canon, cuda_backend
+        bad = []
+
+        def work(k):
+            for i in range(400):
+                a, b = Fraction(k * 1000 + i, 7), Fraction(i + 3, k + 2)
+                got = canon.decode(cuda_backend.call('numbers.mul', canon.encode([a, b])))
+                if got != a * b:
+                    bad.append((k, i, got))
+        ts = [threading.Thread(target=work, args=(k,)) for k in range(8)]
+        for t in ts:
+            t.start()
+        for t in ts:
+            t.join()
+        self.assertEqual(bad[:3], [])

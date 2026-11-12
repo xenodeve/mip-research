@@ -8,15 +8,26 @@ harness counts it as a disagreement.
 """
 import ctypes
 import os
+import threading
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 STATUS = {0: 'OK', 1: 'NOT_COVERED', 2: 'BAD_INPUT', 3: 'DEVICE_FAILED', 4: 'UNKNOWN_OP', 5: 'HOST_ERROR'}
 _lib = None
 _out = None
+# One output buffer and one length cell serve every call, so a call is the C call and the read of its bytes under one lock: without it a
+# thread could read the bytes another thread's call had just written (2026-11-12, tir4b with 6 answers in flight: 5 values and 39
+# fallbacks were another call's). The DLL serialises its calls anyway, so the lock costs no parallelism.
+_lock = threading.RLock()
 
 
 def _load():
+    global _lib, _out
+    with _lock:
+        return _load_locked()
+
+
+def _load_locked():
     global _lib, _out
     if _lib is not None:
         return _lib
@@ -57,18 +68,19 @@ def call(name, args_b):
     """The wrapper keeps per call only what must change: the op's bytes are cached, the length cell and its reference are made once,
     and `args_b` goes to ctypes as it is (a bytes object needs no copy)."""
     global _n_ref, _call, _out_len
-    if _call is None:
-        lib = _load()
-        _call, _n_ref, _out_len = lib.mip_call, ctypes.byref(_n), len(_out)
     nb = _names.get(name)
     if nb is None:
         nb = _names[name] = name.encode()
     if type(args_b) is not bytes:
         args_b = bytes(args_b)
-    st = _call(nb, args_b, len(args_b), _out, _out_len, _n_ref)
-    if st < 3:
-        # only the bytes written: `_out.raw` copies the whole 1 MB buffer, which was ~310 us of every call in the first speed runs
-        return ctypes.string_at(_out, _n.value)
+    with _lock:
+        if _call is None:
+            lib = _load()
+            _call, _n_ref, _out_len = lib.mip_call, ctypes.byref(_n), len(_out)
+        st = _call(nb, args_b, len(args_b), _out, _out_len, _n_ref)
+        if st < 3:
+            # only the bytes written: `_out.raw` copies the whole 1 MB buffer, which was ~310 us of every call in the first speed runs
+            return ctypes.string_at(_out, _n.value)
     return f'device:{STATUS.get(st, st)}'.encode()
 
 
@@ -77,7 +89,9 @@ def last_device_us():
 
 
 def close():
-    global _lib
-    if _lib is not None:
-        _lib.mip_close()
-        _lib = None
+    global _lib, _call
+    with _lock:
+        if _lib is not None:
+            _lib.mip_close()
+            _lib = None
+            _call = None
