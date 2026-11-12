@@ -123,6 +123,46 @@ class ChannelTests(unittest.TestCase):
         self.shim.open('a#0#1', 0, PROMPT + r.out)
         self.assertEqual(spell(self.shim.ask(0, 0)['dag']), ' 12')   # the next request writes it from its start
 
+    def _cut_inside_a_value(self, out_after):
+        r = roll()
+        self.svc.register('a#0#0', r, Planner(r, PIECES))
+        self.shim.open('a#0#0', 0, PROMPT)
+        pre = 'Some long reasoning first, then $3 \\times 4 ='
+        self.shim.toks(0, pre)
+        m = self.shim.ask(0, 1)
+        t0 = min(m['dag']['edges'][0])[0]
+        self.shim.send(t='tok', slot=0, id=t0)
+        self.shim.ask(0, 2)                                    # every token before it was read
+        r.out = out_after(pre, t0)
+        return r
+
+    def test_no_resume_after_the_thinking_closed(self):
+        # the driver cut the text back past the value and closed the thinking: the rest of the value must never be steered
+        r = self._cut_inside_a_value(lambda pre, t0: TOK.encode('Some') + [SPECIAL['</think>']])
+        r.phase = 'answer'
+        self.svc.register('a#0#1', r, Planner(r, PIECES))
+        self.shim.open('a#0#1', 1, PROMPT + r.out)
+        self.assertIsNone(self.shim.ask(1, 0)['dag'])
+        ev = [e for e in r.events if e['kind'] == 'steered value']
+        self.assertTrue(all(e.get('dropped') for e in ev))      # every plan of it ended as dropped, none left open
+
+    def test_no_resume_when_the_text_before_the_value_changed(self):
+        # cut back and rewritten (a loop close in the thinking): the value's place is gone
+        r = self._cut_inside_a_value(lambda pre, t0: TOK.encode('Some long reasoning first, then $3 \\times 5 =') + [t0])
+        self.svc.register('a#0#1', r, Planner(r, PIECES))
+        self.shim.open('a#0#1', 1, PROMPT + r.out)
+        self.assertIsNone(self.shim.ask(1, 0)['dag'])
+
+    def test_an_event_names_its_slot_and_seq(self):
+        # gate 3 joins the shim's missed asks (llama.log, by slot and seq) to tell a value the model wrote itself
+        r = roll()
+        self.svc.register('a#0#0', r, Planner(r, PIECES))
+        self.shim.open('a#0#0', 5, PROMPT)
+        self.shim.toks(5, 'So $3 \\times 4 =')
+        self.shim.ask(5, 3)
+        ev = [e for e in r.events if e['kind'] == 'steered value']
+        self.assertEqual((ev[0]['slot'], ev[0]['seq']), (5, 3))
+
     def test_the_fixed_question_line_at_the_start_only(self):
         r = roll(question='What is 2*240?')
         self.svc.register('b#0#0', r, Planner(r, PIECES))

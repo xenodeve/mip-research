@@ -199,14 +199,20 @@ in-process on the A100) and Strata-xeno through the same plan format.
   seeds, arm A General text puts and arm B General through the channel, both `--think-only` and `MIP_EXPR_DEVICE=cuda` on the same
   patched binary. API reader 19 / 20 in both arms, the same answer wrong in both (`div_big`, a rounded decimal boxed): 0 pairs where
   only one arm is right, so 0 right -> wrong caused by a touch. Every touch: 2,474 planned values, on answers that finished right 2,387
-  right and 0 wrong, on the one that finished wrong 87 right and 0 wrong; 2,443 written as steered, 31 planned after the shim's 50 ms
-  wait (the model wrote its own value there). Needed: under the mask nothing shows what the model would have written; the probe above
+  right and 0 wrong, on the one that finished wrong 87 right and 0 wrong; 2,443 written as planned, 31 not. The shim missed 73 asks at
+  its 50 ms wait, and dev1's events do not name the ask, so up to 42 of the 2,443 may be the model's own value written without the mask
+  (events now carry slot and seq, and gate 3 counts a missed ask apart). Needed: under the mask nothing shows what the model would have written; the probe above
   is the estimate (the model's own first choice at 92.3 % of puts). Helped: no difference in right answers on 20 answers. Fixed-question
   lines were steered on 4 answers (`mul_div_longer`), all right in both arms. Tokens are noise at this size (footnote in
   `docs/inject.md`).
 - **Found and fixed while running it:** the value DAG cost ~36 ms a line against the 50 ms wait (a character trie: under 5 ms,
   `a831a82`); an ask read after the driver took the reply double-counted the request and misplaced one event of 2,474 (the value itself
   steered in the right place; `055c05d`); gate 3 now checks surds, powers and `P(n, k)` by sympy (426 values had been left unread).
+- **Found by the whole-branch review and fixed:** a value cut inside by the driver (a loop cut or a close) could be resumed at the
+  next request, after `</think>` or after changed text; a resume now needs the text before the value unchanged and the thinking open
+  (0 such cases in dev1); `--channel` with `--whole-hint` is refused; a plan replaced before it finished is counted dropped. In the
+  shim (built and tested only after the developer's go-ahead): a reconnect that could hang the server thread, a 2 s blocking connect
+  when the service is down (now 100 ms non-blocking), and a plan's node indexes checked.
 - **Not yet run:** the first experiment's variable (forcing against `--logit-value` +8 at the same positions), and a rerun on the fixed
   code to see the misses fall.
 

@@ -15,6 +15,13 @@ def roll(**arm):
 
 
 class ChannelArmTests(unittest.TestCase):
+    def test_the_channel_refuses_the_whole_hint(self):
+        # --whole-hint's pending state is cleared by a text put, which the channel never makes: every steered value after the hint
+        # would become the question's value
+        with self.assertRaisesRegex(SystemExit, '--whole-hint'):
+            tir4b.main(['run', '--model', 'unused', '--rows', 'unused', '--out', 'unused', '--server', 'http://127.0.0.1:1',
+                        '--channel', '--inline-calc', '--whole-hint'])
+
     def test_no_value_stops_on_the_channel(self):
         q = roll(channel=True).request()
         self.assertFalse(q[1] & IDS.equals)

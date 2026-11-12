@@ -2124,6 +2124,9 @@ def install_seal(llm, args):
 
 
 def run(args):
+    if getattr(args, 'channel', False) and args.whole_hint:
+        raise SystemExit('--channel with --whole-hint: the hint waits for a text put to clear it, which the channel never makes, so every '
+                         'steered value after it would become the question\'s value')
     import os
     os.environ.setdefault('STRATA_SANDBOX_THROWAWAY', '1')   # the kernel runs bare only on a VM that is thrown away (exec_bridge.throwaway)
     from serve.sandbox.exec_bridge import Kernel, throwaway

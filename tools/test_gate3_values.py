@@ -11,6 +11,16 @@ def inline(expr, value):
     return dict(what='inline value', expr=expr, value=value)
 
 
+class MissedTests(unittest.TestCase):
+    def test_missed_asks_from_the_server_log(self):
+        from gate3_values import missed_asks
+        log = ('9.30.049.948 W mip-channel: no plan for slot 52 seq 4 in 50 ms (21 missed)\n'
+               'other line\n'
+               '83.16.007.777 W mip-channel: the service closed the connection; requests go on unsteered\n'
+               '69.11.619.787 W mip-channel: no plan for slot 264 seq 11 in 50 ms (73 missed)\n')
+        self.assertEqual(missed_asks(log), {(52, 4), (264, 11)})
+
+
 class SurdTests(unittest.TestCase):
     # surds are checked by sympy, a computer MIP's own code does not use
     def test_a_right_surd(self):

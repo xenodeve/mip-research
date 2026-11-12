@@ -24,6 +24,7 @@ class _Answer:
     """What the service keeps for one answer across its requests: the plan being steered and where it started."""
     def __init__(self):
         self.plan, self.at, self.node, self.event = None, 0, 0, None
+        self.prefix = []   # the answer's tokens before the value: a resume needs them unchanged
 
 
 class ChannelService:
@@ -95,7 +96,7 @@ class ChannelService:
                 m = json.loads(line)
                 t = m.get('t')
                 if t == 'open':
-                    slots[m['slot']] = dict(mip_id=m['mip_id'], new=[], base=self._base(m['mip_id']))
+                    slots[m['slot']] = dict(mip_id=m['mip_id'], slot=m['slot'], new=[], base=self._base(m['mip_id']))
                 elif t == 'tok':
                     s = slots.get(m['slot'])
                     if s is not None:
@@ -138,7 +139,7 @@ class ChannelService:
                 if plan is None and not rollout.out and rollout.phase == 'think':
                     plan = planner.at_start(rollout.row.get('question'))
                     if plan is not None:
-                        self._begin(rollout, a, plan, 0)
+                        self._begin(rollout, a, plan, [], s, 0)
                 return plan
             new = s['new']
             phase = 'answer' if rollout.phase != 'think' or self.think_close in new else 'think'
@@ -146,18 +147,27 @@ class ChannelService:
             text = self.tok.decode(before + new)
             plan = planner.on_trigger(text, phase)
             if plan is not None:
-                self._begin(rollout, a, plan, len(before) + len(new))
+                self._begin(rollout, a, plan, before + new, s, seq)
             return plan
 
-    def _begin(self, rollout, a, plan, at):
-        a.plan, a.at, a.node = plan, at, 0
-        a.event = dict(kind='steered value', expr=plan.expr[:200], value=plan.value, what=plan.kind, at=at, done=False)
+    def _begin(self, rollout, a, plan, prefix, s, seq):
+        """A plan starts after `prefix` (the answer's tokens up to the value); the event names the shim's slot and seq, so a plan
+        the shim gave up waiting for (llama.log names it) is told from a value the model wrote itself."""
+        if a.plan is not None:
+            self._drop(a)   # a new plan replaces one not finished: the old one is counted dropped, not left open
+        at = len(prefix)
+        a.plan, a.at, a.node, a.prefix = plan, at, 0, list(prefix)
+        a.event = dict(kind='steered value', expr=plan.expr[:200], value=plan.value, what=plan.kind, at=at, done=False,
+                       slot=s.get('slot'), seq=seq)
         rollout.events.append(a.event)
         self.counts['plans'] += 1
 
     def _resume(self, rollout, a):
         """The rest of a plan a previous request of this answer ended inside, read against the answer's own text."""
         if a.plan is None:
+            return None
+        if rollout.phase != 'think' or len(rollout.out) < a.at or rollout.out[:a.at] != a.prefix:
+            self._drop(a)   # the driver cut or closed the text since: the value's place is gone, never steer it elsewhere
             return None
         written = self.tok.decode(rollout.out[a.at:])
         full = a.plan.text

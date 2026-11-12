@@ -87,8 +87,18 @@ def value_right(e, question):
     return None if got is None else got == want
 
 
+MISSED = re.compile(r'no plan for slot (\d+) seq (\d+) in')
+
+
+def missed_asks(log):
+    """(slot, seq) of every ask the shim gave up waiting for: a plan for it was never applied, whatever the event says."""
+    return {(int(a), int(b)) for a, b in MISSED.findall(log)}
+
+
 def main():
     out = Path(sys.argv[1])
+    log = out.parent / 'llama.log'
+    missed = missed_asks(log.read_text(encoding='utf-8', errors='replace')) if log.exists() else set()
     from transformers import AutoTokenizer
     tok = AutoTokenizer.from_pretrained('C:/Users/xenod/mip-work/q4b-hf')
     rows = {}
@@ -108,7 +118,8 @@ def main():
         for e in rec.get('events', []):
             if e.get('kind') != 'steered value':
                 continue
-            state = 'done' if e.get('done') else 'dropped' if e.get('dropped') else 'open'
+            state = 'missed' if (e.get('slot'), e.get('seq')) in missed else \
+                'done' if e.get('done') else 'dropped' if e.get('dropped') else 'open'
             c[(final, state)] += 1
             ok = value_right(e, rows.get(rec['id'], {}).get('question'))
             c[(final, 'value right' if ok else 'unchecked' if ok is None else 'VALUE WRONG')] += 1

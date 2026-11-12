@@ -240,7 +240,8 @@ independently (`../scripts/pc/gate3_values.py`: exact arithmetic, `q rem r` by i
 **On development rows** (same build; 10 DeepMind rows, 2 each of `div_big`, `mixed_longer`, `mul_div_longer`, `simplify_surd`,
 `swr_p_sequence`, x 2 seeds, T 0.6, full context; both arms `--think-only` on the same patched binary): the API reader scores 19 / 20
 in both arms, the same answer wrong in both (a rounded decimal boxed), so no pair where only one arm is right. 2,474 values were planned
-and all are right: 2,443 written as steered, 31 planned too late for the shim's 50 ms wait (the model wrote its own). Records:
+and all are right: 2,443 written as planned, 31 not; the shim missed 73 asks at its 50 ms wait, so up to 42 of the 2,443 may be the
+model's own value (events now name their ask, and gate 3 counts misses apart). Records:
 [`../results/token-channel/dev1/`](../results/token-channel/dev1/). [^channel]
 
 [^channel]: หมายเหตุ: 20 answers on development rows find bugs; they do not measure. Tokens: 262,540 with the channel against 324,229, but
