@@ -1,0 +1,8 @@
+gate 1 (token channel): stock build-w4a8 vs patched build-w4a8-mip with MIP_CHANNEL set and no mip_id; 4B NVFP4 W4A8 · llama.cpp · RTX 5060 Ti; 3 questions x 400 tokens, greedy and T 0.6 seed 1
+question 0 greedy: 400 vs 400 tokens, identical
+question 0 sampled: 400 vs 400 tokens, identical
+question 1 greedy: 400 vs 400 tokens, identical
+question 1 sampled: 400 vs 400 tokens, identical
+question 2 greedy: 400 vs 400 tokens, identical
+question 2 sampled: 400 vs 400 tokens, identical
+PASS

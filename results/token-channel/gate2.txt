@@ -1,0 +1,4 @@
+gate 2 (token channel): round 9 General traces, every `=` in the thinking asked through the Planner
+answers 240 (no row 0); `=` asked 85827; recorded puts 29645; planned 29645
+same text 29645; different text 0; recorded, not planned 0; planned, not recorded 0
+PASS
