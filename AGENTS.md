@@ -18,8 +18,9 @@ bare `#N` written before 2026-11-08 means Strata-xeno #N; read it through the ma
   model writes a block in its reasoning, MIP runs it in place, no tool call), then other software that acts on decoding. **Now is research:** no protocol spec and no module refactor until the methods stop
   changing, and every result says it came from `tir4b`, the reference outside the engine (README, "What MIP is").
 - **Integrating and optimising MIP into the inference engine in use is the next stage, not this one** (developer, 2026-11-12). It is
-  not done while MIP's own cost does not slow the tests. Measured: MIP's host work is ~0.2 ms per generated token (2.5-3 ms per stop),
-  against ~60 ms a token per answer, while the pause of a put (~210 ms) is the engine's stop and resume over HTTP
+  not done while MIP's own cost does not slow the tests. Measured (4B NVFP4 W4A8 · llama.cpp, on the 4070 SUPER and the 5060 Ti apart):
+  MIP's host work is 0.20-0.25 ms per generated token (2.5-3.6 ms per put), against 60-69 ms a token per answer, while the pause of a
+  put (218-277 ms) is the engine's stop and resume over HTTP
   ([pause measurement](docs/plans/2026-11-11-cuda-mathbackend-design.md), "The pause of an inline put"). Look again when a test's
   decode gets fast enough for MIP to show (a few hundred tok/s per answer) or the pause itself costs a run's time.
 - **Software computes, the model reasons** (developer, 2026-11-06). Every calculation software can do in the model's place is

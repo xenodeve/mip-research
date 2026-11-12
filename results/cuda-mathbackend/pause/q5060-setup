@@ -1,0 +1,1 @@
+server /c/AI/llama.cpp/build-w4a8/bin/llama-server.exe c9f3203a4bc9631f gguf C:/Users/xenod/mip-work/gguf/qwen35-4b-nvfp4-axion.gguf fddcfc7a825b0190 gpu 1 (NVIDIA GeForce RTX 5060 Ti) np 13 args -ctk q8_0 -ctv q8_0 --no-cache-idle-slots -cram 0 --prio 2

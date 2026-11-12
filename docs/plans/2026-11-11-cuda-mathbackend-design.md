@@ -571,40 +571,44 @@ Mode 1 beside the stand-in engine on the final build (`in_process.py`, two runs 
 
 ## The pause of an inline put, end to end (2026-11-12)
 
-**Build and engine: 4B NVFP4 W4A8 · llama.cpp `build-w4a8` (sm_89) · RTX 4070 SUPER**, llama-server `-c 262144 -np 13 -kvu -fa on -ctk
-q8_0 -ctv q8_0 --no-cache-idle-slots -cram 0 --prio 2`; tir4b with round 10's General flags (`--inline-calc --mathbackend --inline-plain
---inline-style general --no-digit-join --guard-progress --loop-close --answer-close --early-cycle --shape-cap 1024 --cover-cap 32768`),
-6 DeepMind arithmetic rows (`dm_mixed_longer`, `dm_mul_div_longer`, `dm_div_big`, 2 each) x 2 seeds, two arms at once on the one server
-(12 answers in flight): `py` computes in Python's `Fraction`; `cuda` sends every + - * / of `mathexpr` to the CUDAMathBackend (mode 2,
-the same card, another process). `scripts/pc/pause_latency.sh`, `results/cuda-mathbackend/pause_latency.py`; one line per request
-(`TIR4B_TIMING`). **These numbers are from the run while it was still going (about 82,000 tokens per arm); the final numbers of this card
-and of the RTX 5060 Ti replace them when both runs end. The two cards are reported apart, never pooled.**
+**Two builds and engines, reported apart (never pooled): 4B NVFP4 W4A8 · llama.cpp `build-w4a8` (sm_89) · RTX 4070 SUPER, and 4B NVFP4
+W4A8 · llama.cpp `build-w4a8` (sm_89) · RTX 5060 Ti.** Each card ran alone, one after the other: llama-server `-c 262144 -np 13 -kvu -fa
+on -ctk q8_0 -ctv q8_0 --no-cache-idle-slots -cram 0 --prio 2`; tir4b with round 10's General flags (`--inline-calc --mathbackend
+--inline-plain --inline-style general --no-digit-join --guard-progress --loop-close --answer-close --early-cycle --shape-cap 1024
+--cover-cap 32768`), 6 DeepMind arithmetic rows (`dm_mixed_longer`, `dm_mul_div_longer`, `dm_div_big`, 2 each, `r10a` development rows)
+x 2 seeds, two arms at once on the one server (12 answers in flight): `py` computes in Python's `Fraction`; `cuda` sends every + - * / of
+`mathexpr` to the CUDAMathBackend (mode 2, the same card, another process from llama-server). `scripts/pc/pause_latency.sh`,
+`results/cuda-mathbackend/pause_latency.py`; records in `results/cuda-mathbackend/pause/` (one line per request, `TIR4B_TIMING`).
+CUDAMathBackend calls: 3,825 (4070 SUPER) and 2,979 (5060 Ti), 0 mismatches and 0 fallbacks against `Fraction`. A latency measure, not
+an accuracy one (rule score 12/12 and 12/12 on the 4070 SUPER, 11/12 and 11/12 on the 5060 Ti; no reader).
 
-| Per answer, this engine and card | `py` | `cuda` |
-|---|---|---|
-| one token of an answer (12 answers in the batch) | 59.9 ms | 58.9 ms |
-| MIP's host work per request (readers, arithmetic, put, encoding) | median 2.80 ms, p90 8.01 | median 2.89 ms, p90 7.98 |
-| MIP's host work per put | median 2.47 ms, p90 7.68 | median 3.15 ms, p90 8.99 |
-| of it the CUDAMathBackend | 0 | median 0.20 ms, mean 0.38 |
-| MIP's host work per generated token (all of it over all tokens) | **0.20 ms** | 0.21 ms |
-| a request ends every / a stop at `=` every / a put every | 22.7 / 33.0 / 70.6 tokens | 19.4 / 28.5 / 45.0 tokens |
-| after a put: the server reads the added tokens | 5 tokens in 154 ms | 6 tokens in 172 ms |
-| **the pause of a put** (reply back -> next request's first token) | **median 211 ms** | 240 ms |
+| Per answer | 4070 SUPER `py` | 4070 SUPER `cuda` | 5060 Ti `py` | 5060 Ti `cuda` |
+|---|---|---|---|---|
+| one token of an answer (12 answers in the batch) | 60.0 ms | 62.0 ms | 69.0 ms | 67.2 ms |
+| MIP's host work per request (readers, arithmetic, put, encoding) | median 3.46 ms, p90 10.2 | 3.53, p90 9.5 | 2.73, p90 7.6 | 2.87, p90 7.5 |
+| MIP's host work per put | median 3.14 ms, p90 11.2 | 3.61, p90 10.5 | 2.54, p90 8.1 | 2.88, p90 8.5 |
+| of it the CUDAMathBackend | 0 | median 0.20 ms (1.3 calls) | 0 | median 0.20 ms (1.3 calls) |
+| MIP's host work per generated token | **0.247 ms** | 0.255 ms | **0.204 ms** | 0.221 ms |
+| a request ends / a stop at `=` / a put, every | 22.5 / 36.1 / 62.1 tokens | 19.9 / 30.8 / 45.9 | 19.8 / 31.6 / 51.7 | 19.4 / 32.0 / 48.8 |
+| after a put, the server reads the added tokens (5) | 154 ms | 170 ms | 199 ms | 198 ms |
+| HTTP and queueing of that request | 54 ms | 58 ms | 65 ms | 69 ms |
+| **the pause of a put** (reply back -> next request's first token) | **median 218 ms**, p90 327 | 243, p90 357 | **273**, p90 382 | 277, p90 389 |
 
-Read: MIP's own work is about 0.3 % of decode time (0.2 ms a token against ~60 ms); the pause of a put, ~3.5 tokens of that answer's
-time, is the engine's stop and resume: the server reading a few tokens in a busy batch and a new HTTP request, about 70 times MIP's work.
-After a put tir4b asks for one token (`n_predict=1`, the join window): the server samples it from the prompt's last logits, so the first
-token after a put comes with the read, and generation proper resumes one request later. The arithmetic on the CUDAMathBackend across
-processes adds ~0.7 ms a put (the median 2.47 -> 3.15 ms); it does not shorten anything here.
+Read: on both cards MIP's own work is 0.3-0.4 % of decode time (0.20-0.25 ms a token against 60-69 ms), and 1-2 % of a put's pause; the
+pause, 3.5-4 tokens of that answer's time, is the engine's stop and resume: the server reading five tokens in a busy batch and a new HTTP
+request. After a put tir4b asks for one token (`n_predict=1`, the join window): the server samples it from the prompt's last logits, so
+the first token after a put comes with the read, and generation proper resumes one request later. The arithmetic on the CUDAMathBackend
+across processes adds 0.3-0.5 ms a put (medians 3.14 -> 3.61 ms, 2.54 -> 2.88 ms) and shortens nothing. The arms' pauses differ by the
+answers' own paths (they part early, sampled), not by the backend: the server's read and HTTP are most of the gap.
 
 **When MIP becomes the critical path** (from these numbers; MIP's work on this PC's CPU, Python 3.11): if the engine waited on MIP
-directly (MIP inside the engine), 0.2 ms a token slows decode by 0.2 ms / (time of one token of an answer): 2 % at 100 tok/s per answer,
-4 % at 200, 10 % at 500, 20 % at 1,000, and as much again as decode at ~5,000. Per stop, MIP's 2.5-3 ms (p90 ~8) outlasts one token from
-~350 tok/s per answer (~125 at the p90). Across answers, one Python process holds the GIL: 0.2 ms a token caps it near 5,000 tok/s over
-all answers together (the run used ~200). So today the critical path is the engine's stop and resume, not MIP; MIP's work shows from a
-few hundred tok/s per answer, and it is the text readers (`mathexpr`), not the arithmetic. The developer's decision (2026-11-12,
-`AGENTS.md`): integrating and optimising MIP into the inference engine in use is the next stage, not done while MIP's cost does not slow
-the tests.
+directly (MIP inside the engine), 0.20-0.25 ms a token slows decode by that over the time of one token of an answer: 2-2.5 % at 100 tok/s
+per answer, 4-5 % at 200, 10-12 % at 500, 20-25 % at 1,000, and as much again as decode at ~4,000-5,000. Per stop, MIP's 2.5-3.6 ms
+(p90 8-11) outlasts one token from ~280-400 tok/s per answer (~90-125 at the p90). Across answers, one Python process holds the GIL: it
+caps near 4,000-5,000 tok/s over all answers together (these runs used ~150-200). So today the critical path is the engine's stop and
+resume, not MIP; MIP's work shows from a few hundred tok/s per answer, and it is the text readers (`mathexpr`), not the arithmetic. The
+developer's decision (2026-11-12, `AGENTS.md`): integrating and optimising MIP into the inference engine in use is the next stage, not
+done while MIP's cost does not slow the tests.
 
 Found on the way: (1) the Python binding read its output buffer outside its lock, so with several threads a call could return another
 call's answer (5 values and 39 fallbacks in a first run; replaying its 2,584 put expressions one at a time gave 0 differences: the device

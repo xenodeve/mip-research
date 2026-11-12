@@ -1,0 +1,35 @@
+C:\Users\xenod\mip-work\a100\pc\pause-q5060 (commit 66f24ae878d3); server /c/AI/llama.cpp/build-w4a8/bin/llama-server.exe c9f3203a4bc9631f gguf C:/Users/xenod/mip-work/gguf/qwen35-4b-nvfp4-axion.gguf fddcfc7a825b0190 gpu 1 (NVIDIA GeForce RTX 5060 Ti) np 13 args -ctk q8_0 -ctv q8_0 --no-cache-idle-slots -cram 0 --prio 2
+arm py: 12 answers, 5152 requests; device calls 0 (0.00 s in all)
+  stops at = with a put: 1972 pauses
+    total        median   272.64 ms   p10   177.88   p90   382.25   mean   278.52
+    mip_host     median    3.201 ms   mean    4.878   p90    9.157
+    of it device median    0.000 ms   mean    0.000   p90    0.000
+    resume_read  median  198.637 ms   mean  196.316   p90  274.759
+    http         median   64.754 ms   mean   75.078   p90  122.778
+    first_token  median    0.001 ms   mean    2.243   p90    0.001
+    device calls per pause: median 0.0, mean 0.0, max 0; mismatches 0, fallbacks 0; tokens read on resume: median 5.0
+  stops at = without a put: 1251 pauses
+    total        median   225.55 ms   p10   151.92   p90   319.63   mean   232.03
+    mip_host     median    2.529 ms   mean    4.362   p90    8.263
+    of it device median    0.000 ms   mean    0.000   p90    0.000
+    resume_read  median   78.274 ms   mean   87.678   p90  129.441
+    http         median   65.269 ms   mean   73.699   p90  126.599
+    first_token  median   66.787 ms   mean   66.295   p90   86.688
+    device calls per pause: median 0, mean 0.0, max 0; mismatches 0, fallbacks 0; tokens read on resume: median 1
+arm cuda: 12 answers, 5328 requests; device calls 2979 (0.97 s in all)
+  stops at = with a put: 2114 pauses
+    total        median   277.00 ms   p10   174.47   p90   389.37   mean   280.49
+    mip_host     median    3.423 ms   mean    5.552   p90    9.582
+    of it device median    0.203 ms   mean    0.427   p90    0.444
+    resume_read  median  198.026 ms   mean  194.383   p90  271.510
+    http         median   69.398 ms   mean   78.729   p90  130.995
+    first_token  median    0.001 ms   mean    1.827   p90    0.001
+    device calls per pause: median 1.0, mean 1.3, max 8; mismatches 0, fallbacks 0; tokens read on resume: median 5.0
+  stops at = without a put: 1113 pauses
+    total        median   221.18 ms   p10   159.49   p90   312.01   mean   230.74
+    mip_host     median    2.415 ms   mean    3.796   p90    7.596
+    of it device median    0.000 ms   mean    0.058   p90    0.166
+    resume_read  median   78.349 ms   mean   85.975   p90  125.468
+    http         median   67.347 ms   mean   75.457   p90  125.188
+    first_token  median   65.288 ms   mean   65.507   p90   84.015
+    device calls per pause: median 0, mean 0.2, max 4; mismatches 0, fallbacks 0; tokens read on resume: median 1
