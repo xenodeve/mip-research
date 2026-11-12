@@ -20,6 +20,9 @@ The rules agents miss most, all in full in `AGENTS.md`:
    notation, never from a set's frequencies; development sets find bugs, the frozen set measures. The plain value for every model.
    **Never report software's answer as the model's** (2026-11-11): nothing writes the final answer for the model; `--exact-answer`
    is withdrawn (ERRATA MR-35 to MR-37).
+   **A fixed computation is software's** (2026-11-12): a question that is one fixed computation in symbols is computed by software and
+   steered into the thinking; the model still writes the final answer. **Steer only in the thinking, never in the final answer, no
+   hints:** MIP steers the token probabilities of values it computes, never the reasoning (token channel design, 2026-11-12).
    **Fix the case the structure allows, never the test set** (2026-11-11): a test set is only a magnifying glass for cases that can
    occur; state the case without the set's wording, build the detector from that statement, test it on wordings and sets it was not
    written from, count distinct questions, and measure on rows it was not built from ([failures](docs/failures.md)).

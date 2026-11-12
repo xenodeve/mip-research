@@ -16,13 +16,23 @@ bare `#N` written before 2026-11-08 means Strata-xeno #N; read it through the ma
   tools outside the engine; here the engine hands MIP the tokens and MIP puts results into the stream, so the model calls
   nothing. Each engine's developers write the calls into the module. Scope in order: mathematics, then coding (the sandbox: the
   model writes a block in its reasoning, MIP runs it in place, no tool call), then other software that acts on decoding. **Now is research:** no protocol spec and no module refactor until the methods stop
-  changing, and every result says it came from `tir4b`, the reference outside the engine (README, "What MIP is").
+  changing, and every result says it came from `tir4b`, the reference outside the engine (README, "What MIP is"). The engine-to-MIP
+  token channel (developer, 2026-11-12, [design](docs/plans/2026-11-12-mip-token-channel-design.md)) is a research instrument, built
+  under the same rules, with MIP's logic still tir4b's: the engine hands MIP every token and MIP steers the values it computes.
 - **Integrating and optimising MIP into the inference engine in use is the next stage, not this one** (developer, 2026-11-12). It is
   not done while MIP's own cost does not slow the tests. Measured (4B NVFP4 W4A8 · llama.cpp, on the 4070 SUPER and the 5060 Ti apart):
   MIP's host work is 0.20-0.25 ms per generated token (2.5-3.6 ms per put), against 60-69 ms a token per answer, while the pause of a
   put (218-277 ms) is the engine's stop and resume over HTTP
   ([pause measurement](docs/plans/2026-11-11-cuda-mathbackend-design.md), "The pause of an inline put"). Look again when a test's
-  decode gets fast enough for MIP to show (a few hundred tok/s per answer) or the pause itself costs a run's time.
+  decode gets fast enough for MIP to show (a few hundred tok/s per answer) or the pause itself costs a run's time. The token channel
+  is not that step: it moves MIP's interventions to the token for what they can do (act mid-line, lower a wrong value's tokens, steer
+  without inserting text); optimising MIP inside the engine for speed stays the next stage.
+- **Steer in the thinking, never in the final answer; no hints** (developer, 2026-11-12, the next step of the General Style, every arm
+  from now on). MIP sees the whole token stream but steers only what its computers make (arithmetic, MathBackend ops, letter counts,
+  the question's own words), never the model's reasoning (no pressure on re-check words or the choice of method). Steering makes the
+  tokens that can still spell the right value, in any tokenization, the most probable. No inserted notes or invitations. The anti-loop
+  may take the final answer out of the reasoning when it finds a loop with an answer written: the model's own value, right or wrong;
+  a wrong value is fixed upstream or left wrong, never at extraction.
 - **Software computes, the model reasons** (developer, 2026-11-06). Every calculation software can do in the model's place is
   covered, or software is extended until it can: decimals, pi, roots, mod residues, column digits, quotient and remainder. The
   model analyses the question and forms hypotheses.
@@ -64,6 +74,10 @@ The developer, 2026-11-06 (#19): develop the General Style first, model profiles
   answer is the model's: nothing writes or rewrites the final answer for it. A mechanism that does (`--exact-answer`, withdrawn:
   ERRATA MR-35 to MR-37) stays off, outside every arm, and any number with it is reported as answers software wrote. Count, for
   every arm, the answers whose final value was put by software.
+- **A fixed computation is software's, not the model's to reason out** (developer, 2026-11-12): "there is no reason for the model to
+  reason it out itself when software already can". A question that is one fixed computation in symbols (`2 x 240`) is computed by
+  software and steered straight into the thinking (the model writes `2 x 240 = 480` under the channel); the thinking is not closed
+  for it, and the model writes the final answer itself. Such answers are counted and reported apart from the rest.
 - **Fix the case the structure allows, never the test set** (developer, 2026-11-11). A test set is a magnifying glass that finds
   cases where the model can fail; the fix targets the case as it can arise from the structure of the task, the question or the
   model's output, wherever it occurs, in another set of the same kind or in real use. A fix that moves a set's score because it
