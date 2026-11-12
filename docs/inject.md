@@ -238,17 +238,18 @@ replaying round 9's traces, the service plans 29,645 of 29,645 puts with the sam
 independently (`../scripts/pc/gate3_values.py`: exact arithmetic, `q rem r` by its meaning, cut decimals, surds by sympy) is right.
 
 **On development rows** (same build; 10 DeepMind rows, 2 each of `div_big`, `mixed_longer`, `mul_div_longer`, `simplify_surd`,
-`swr_p_sequence`, x 2 seeds, T 0.6, full context; both arms `--think-only` on the same patched binary): the API reader scores 19 / 20
-in both arms, the same answer wrong in both (a rounded decimal boxed), so no pair where only one arm is right. 2,474 values were planned
-and all are right: 2,443 written as planned, 31 not; the shim missed 73 asks at its 50 ms wait, so up to 42 of the 2,443 may be the
-model's own value (events now name their ask, and gate 3 counts misses apart). Records:
-[`../results/token-channel/dev1/`](../results/token-channel/dev1/). [^channel]
+`swr_p_sequence`, x 2 seeds, T 0.6, full context; both arms `--think-only` on the same patched binary): rule and API reader agree on
+every answer, 20 / 20 for text puts and 19 / 20 through the channel. 2,911 values were planned and all are right: 2,910 written as
+steered, 1 not (the shim missed 4 of 7,944 asks at its 50 ms wait). The one pair where only one arm is right is path noise: the two
+texts part at character 172, before the first steered value, and the slip is in the final answer, which nothing steers. The
+fixed-question line was steered on all 12 answers whose question has a rational value, all right in both arms. Records:
+[`../results/token-channel/dev2/`](../results/token-channel/dev2/). [^channel]
 
-[^channel]: หมายเหตุ: 20 answers on development rows find bugs; they do not measure. Tokens: 262,540 with the channel against 324,229, but
-    the median of the 16 answers without a fixed-question line is 12,097 against 10,725 and the channel's answer is shorter on 9 of 20, so
-    the difference is noise. The 4 answers given the fixed-question line used 32,234 tokens against 65,058, all right in both arms. The run
-    was on commit `753b61d`, before the value DAG's character trie (`a831a82`, ~36 ms a value line to under 5 ms) and the request-base fix
-    (`055c05d`); 73 of 5,544 asks missed the 50 ms wait.
+[^channel]: หมายเหตุ: 20 answers on development rows find bugs; they do not measure, and A was right on all 20, so a gain could not show.
+    Tokens: 259,505 through the channel against 291,156; on the 12 answers with a fixed-question line 108,060 against 163,068 (median
+    7,661 against 11,031, shorter on 8 of 12), on the other 8 151,445 against 128,088 (one 81,566-token answer; median 9,857 against
+    13,430, shorter on 6 of 8). Too few to read. The first run on the same rows (`../results/token-channel/dev1/`, commit `753b61d`,
+    before the character trie and the request-base fix) missed 73 of 5,544 asks and had the same answer wrong in both arms.
 
 ## Re-check hold-down
 

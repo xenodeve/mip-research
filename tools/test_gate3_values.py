@@ -36,6 +36,13 @@ class SurdTests(unittest.TestCase):
         self.assertTrue(value_right(inline('P(7, 3)', '210'), ''))
         self.assertIs(value_right(inline('P(15, 4)', '32761'), ''), False)
 
+    def test_division_sign_and_gcd(self):
+        # dev2 left these unchecked: a \div between surds, and the gcd MIP gives at a fraction's reduction
+        self.assertTrue(value_right(inline('\\frac{\\sqrt{153}}{\\sqrt{3}} \\div \\sqrt{3}', '\\sqrt{17}'), ''))
+        self.assertTrue(value_right(inline('gcd(171, 2221234)', '1'), ''))
+        self.assertTrue(value_right(inline('\\gcd(84, 126)', '42'), ''))
+        self.assertIs(value_right(inline('gcd(84, 126)', '21'), ''), False)
+
     def test_a_wrong_surd(self):
         self.assertIs(value_right(inline('\\sqrt{1573}', '11\\sqrt{11}'), ''), False)
         self.assertIs(value_right(inline('-6(-2\\sqrt{204})', '-24\\sqrt{51}'), ''), False)

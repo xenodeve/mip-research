@@ -1,4 +1,4 @@
-gate 3 (token channel): C:\Users\xenod\mip-work\a100\pc\channel-dev1\b
+gate 3 (token channel): results\token-channel\dev1\b
 right/TEXT DIFFERS: 28 right/done: 2359 right/dropped: 28 right/value right: 2387 right/written as steered: 2359 wrong/TEXT DIFFERS: 3 wrong/done: 84 wrong/dropped: 3 wrong/value right: 87 wrong/written as steered: 84
 PASS: every steered value right
 dm_simplify_surd-2773#1 right done inline value: '12 \\cdot 2\\sqrt{51}' = '24\\sqrt{51}'; text ' = -4\\sqrt{51}$.\n    Wait, $-2\\sqrt{204}'

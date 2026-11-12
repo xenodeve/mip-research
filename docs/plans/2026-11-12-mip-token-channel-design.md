@@ -195,26 +195,31 @@ in-process on the A100) and Strata-xeno through the same plan format.
   space), not another value.
 - **Gate 1:** the patched server with no `mip_id` reproduces the stock build's tokens, 6 / 6 (`gate1.txt`).
 - **Gate 2:** on round 9's traces, 29,645 of 29,645 puts planned with the same text, 0 different, none extra (`gate2.txt`).
-- **Gate 3 and the live comparison** (`results/token-channel/dev1/`, launcher `scripts/pc/channel_compare.sh`): 10 development rows x 2
-  seeds, arm A General text puts and arm B General through the channel, both `--think-only` and `MIP_EXPR_DEVICE=cuda` on the same
-  patched binary. API reader 19 / 20 in both arms, the same answer wrong in both (`div_big`, a rounded decimal boxed): 0 pairs where
-  only one arm is right, so 0 right -> wrong caused by a touch. Every touch: 2,474 planned values, on answers that finished right 2,387
-  right and 0 wrong, on the one that finished wrong 87 right and 0 wrong; 2,443 written as planned, 31 not. The shim missed 73 asks at
-  its 50 ms wait, and dev1's events do not name the ask, so up to 42 of the 2,443 may be the model's own value written without the mask
-  (events now carry slot and seq, and gate 3 counts a missed ask apart). Needed: under the mask nothing shows what the model would have written; the probe above
-  is the estimate (the model's own first choice at 92.3 % of puts). Helped: no difference in right answers on 20 answers. Fixed-question
-  lines were steered on 4 answers (`mul_div_longer`), all right in both arms. Tokens are noise at this size (footnote in
-  `docs/inject.md`).
+- **Gate 3 and the live comparison** (`results/token-channel/dev2/`, launcher `scripts/pc/channel_compare.sh`, commit `85f5194`, shim
+  `eae8e9a01`): 10 development rows x 2 seeds, arm A General text puts and arm B General through the channel, both `--think-only` and
+  `MIP_EXPR_DEVICE=cuda` on the same patched binary. Rule and API reader agree on every answer: A 20 / 20, B 19 / 20. Every touch: 2,911
+  planned values, on answers that finished right 2,909 right and 0 wrong, on the one that finished wrong 2 right and 0 wrong; 2,910 written
+  as steered, 1 not (its ask was one of the shim's 4 misses in 7,944 asks at the 50 ms wait). Needed: under the mask nothing shows what
+  the model would have written; the probe above is the estimate (the model's own first choice at 92.3 % of puts). Helped: 1 pair where
+  only one arm is right, and it is A's; a sign test needs more such pairs than 20 answers give, so this run neither shows a gain nor a
+  loss. Its pair was read (`dm_simplify_surd-9937`, sample 0): the two texts part at character 172, before the first steered value (token
+  5,306), so the difference is path noise; B steered 2 values, both right, then spent the thinking re-reading the question's brackets
+  until the loop close (token 13,350), and the slip (`-939940` for `-899940`) is in the final answer, which nothing steers. The
+  fixed-question line was steered on all 12 answers whose question has a rational value (`div_big`, `mixed_longer`, `mul_div_longer`),
+  all right in both arms; surd questions get none (the planner gives a question value only for a rational result). Tokens are noise at
+  this size (footnote in `docs/inject.md`).
 - **Found and fixed while running it:** the value DAG cost ~36 ms a line against the 50 ms wait (a character trie: under 5 ms,
   `a831a82`); an ask read after the driver took the reply double-counted the request and misplaced one event of 2,474 (the value itself
   steered in the right place; `055c05d`); gate 3 now checks surds, powers and `P(n, k)` by sympy (426 values had been left unread).
 - **Found by the whole-branch review and fixed:** a value cut inside by the driver (a loop cut or a close) could be resumed at the
   next request, after `</think>` or after changed text; a resume now needs the text before the value unchanged and the thinking open
   (0 such cases in dev1); `--channel` with `--whole-hint` is refused; a plan replaced before it finished is counted dropped. In the
-  shim (built and tested only after the developer's go-ahead): a reconnect that could hang the server thread, a 2 s blocking connect
-  when the service is down (now 100 ms non-blocking), and a plan's node indexes checked.
-- **Not yet run:** the first experiment's variable (forcing against `--logit-value` +8 at the same positions), and a rerun on the fixed
-  code to see the misses fall.
+  shim (`eae8e9a01`, live test 4 / 4 on the RTX 5060 Ti): a reconnect that could hang the server thread, a ~2 s connect when the
+  service is down (now a 100 ms non-blocking connect; a request then finishes in under 1 s), and a plan's node indexes checked.
+- **Gate 3 itself:** it now reads `gcd(a, b)` and `\div`, and decodes 200 tokens at an event, not 40 (a long question line written a
+  digit a token had been cut short and shown as differing); 0 values unchecked in dev1 and dev2.
+- **Not yet run:** the first experiment's variable (forcing against `--logit-value` +8 at the same positions), and a run on rows the
+  model misses, which is where a gain could show.
 
 ## Coverage of every open item
 

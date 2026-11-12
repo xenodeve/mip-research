@@ -1,0 +1,302 @@
+[
+ {
+  "id": "dm_div_big-9977",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "-70468",
+   "reason": "The reply settles on -70468, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 8529,
+  "gold": "-70468",
+  "rule_value": -70468.0
+ },
+ {
+  "id": "dm_div_big-9977",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "-70468",
+   "reason": "The reply settles on -70468, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 740,
+  "gold": "-70468",
+  "rule_value": -70468.0
+ },
+ {
+  "id": "dm_div_big-2783",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "-171/2221234",
+   "reason": "The reply gives the same exact fraction as the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 24533,
+  "gold": "-171/2221234",
+  "rule_value": 2221234.0
+ },
+ {
+  "id": "dm_div_big-2783",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "-171/2221234",
+   "reason": "The reply settles on the exact fraction -171/2221234, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 8240,
+  "gold": "-171/2221234",
+  "rule_value": 2221234.0
+ },
+ {
+  "id": "dm_mixed_longer-9937",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "142",
+   "reason": "The reply evaluates the expression and concludes with 142, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 7222,
+  "gold": "142",
+  "rule_value": 142.0
+ },
+ {
+  "id": "dm_mixed_longer-9937",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "142",
+   "reason": "The reply computes and settles on 142, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 812,
+  "gold": "142",
+  "rule_value": 142.0
+ },
+ {
+  "id": "dm_mixed_longer-2773",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "245",
+   "reason": "The reply simplifies the expression and settles on 245, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 6047,
+  "gold": "245",
+  "rule_value": 245.0
+ },
+ {
+  "id": "dm_mixed_longer-2773",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "245",
+   "reason": "The reply evaluates the expression and settles on 245, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 7797,
+  "gold": "245",
+  "rule_value": 245.0
+ },
+ {
+  "id": "dm_mul_div_longer-9977",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "117",
+   "reason": "The reply simplifies the expression and settles on 117, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 7524,
+  "gold": "117",
+  "rule_value": 117.0
+ },
+ {
+  "id": "dm_mul_div_longer-9977",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "117",
+   "reason": "The reply simplifies the expression and settles on 117, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 609,
+  "gold": "117",
+  "rule_value": 117.0
+ },
+ {
+  "id": "dm_mul_div_longer-2783",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "130",
+   "reason": "The reply simplifies the expression and concludes with 130, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 19483,
+  "gold": "130",
+  "rule_value": 130.0
+ },
+ {
+  "id": "dm_mul_div_longer-2783",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "130",
+   "reason": "The reply computes and settles on 130, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 16524,
+  "gold": "130",
+  "rule_value": 130.0
+ },
+ {
+  "id": "dm_simplify_surd-9937",
+  "sample": 0,
+  "route": "agreed-wrong",
+  "rule": false,
+  "verdict": {
+   "verdict": "different",
+   "value": "-939940 - 656*sqrt(1573)",
+   "reason": "The reply's rational part is -939940, while the reference is -899940; the radical part matches after simplification, so the values differ."
+  },
+  "finish": "stop",
+  "tokens": 15770,
+  "gold": "-899940 - 7216*sqrt(13)",
+  "rule_value": 1573.0
+ },
+ {
+  "id": "dm_simplify_surd-9937",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "-899940 - 7216*sqrt(13)",
+   "reason": "The reply simplifies to the same value as the reference."
+  },
+  "finish": "stop",
+  "tokens": 81566,
+  "gold": "-899940 - 7216*sqrt(13)",
+  "rule_value": 13.0
+ },
+ {
+  "id": "dm_simplify_surd-2773",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "9817 + 240*sqrt(17)",
+   "reason": "The reply's final answer matches the reference value."
+  },
+  "finish": "stop",
+  "tokens": 11241,
+  "gold": "240*sqrt(17) + 9817",
+  "rule_value": 17.0
+ },
+ {
+  "id": "dm_simplify_surd-2773",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "9817 + 240*sqrt(17)",
+   "reason": "The reply's final answer equals the reference answer, just with terms reordered."
+  },
+  "finish": "stop",
+  "tokens": 12234,
+  "gold": "240*sqrt(17) + 9817",
+  "rule_value": 17.0
+ },
+ {
+  "id": "dm_swr_p_sequence-9937",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "5/273",
+   "reason": "The reply calculates and settles on the same probability as the reference."
+  },
+  "finish": "stop",
+  "tokens": 8472,
+  "gold": "5/273",
+  "rule_value": 273.0
+ },
+ {
+  "id": "dm_swr_p_sequence-9937",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "5/273",
+   "reason": "The reply calculates and finalizes the probability as 5/273, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 7230,
+  "gold": "5/273",
+  "rule_value": 273.0
+ },
+ {
+  "id": "dm_swr_p_sequence-2773",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "2/105",
+   "reason": "The reply calculates and settles on 2/105, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 7157,
+  "gold": "2/105",
+  "rule_value": 105.0
+ },
+ {
+  "id": "dm_swr_p_sequence-2773",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "2/105",
+   "reason": "The reply settles on the same probability as the reference."
+  },
+  "finish": "stop",
+  "tokens": 7775,
+  "gold": "2/105",
+  "rule_value": 105.0
+ }
+]

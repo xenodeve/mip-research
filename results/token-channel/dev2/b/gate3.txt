@@ -1,0 +1,3 @@
+gate 3 (token channel): results\token-channel\dev2\b
+right/TEXT DIFFERS: 1 right/done: 2908 right/missed: 1 right/value right: 2909 right/written as steered: 2908 wrong/done: 2 wrong/value right: 2 wrong/written as steered: 2
+PASS: every steered value right

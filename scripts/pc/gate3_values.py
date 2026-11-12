@@ -20,6 +20,7 @@ sys.path.insert(0, str(ROOT / 'results' / 'round10'))
 
 REM = re.compile(r'^\s*(-?\d+)\s*(?:\\text\{\s*rem\s*\}|rem)\s*(\d+)\s*$')
 DIV = re.compile(r'^\s*\(?\s*(-?\d+)\s*\)?\s*(?:\\div|/|÷|:)\s*\(?\s*(-?\d+)\s*\)?\s*$')
+GCD = re.compile(r'^\s*\\?gcd\s*\(\s*(-?\d+)\s*,\s*(-?\d+)\s*\)\s*$')
 CUT = re.compile(r'^\s*(-?)(\d+)\.(\d+)\.\.\.\s*$')
 
 
@@ -30,7 +31,7 @@ def _sym(text):
     for _ in range(4):
         t = re.sub(r'\\[dt]?frac\{([^{}]*)\}\{([^{}]*)\}', r'((\1)/(\2))', t)
         t = re.sub(r'\\sqrt\{([^{}]*)\}', r'sqrt(\1)', t)
-    t = t.replace(r'\cdot', '*').replace(r'\times', '*').replace(r'\left', '').replace(r'\right', '').replace('{', '(').replace('}', ')')
+    t = t.replace(r'\cdot', '*').replace(r'\times', '*').replace(r'\div', '/').replace(r'\left', '').replace(r'\right', '').replace('{', '(').replace('}', ')')
     if '\\' in t:
         return None
     try:
@@ -64,6 +65,10 @@ def value_right(e, question):
         got = read_exact(question or '')
         return None if got is None else evaluate(e['value']) == Fraction(got[1])
     value = e['value']
+    g = GCD.match(e['expr'])
+    if g:
+        from math import gcd
+        return value.strip().lstrip('-').isdigit() and int(value) == gcd(int(g.group(1)), int(g.group(2)))
     m = REM.match(value)
     if m:
         d = DIV.match(re.sub(r'^.*\$', '', e['expr']))
@@ -98,6 +103,8 @@ def missed_asks(log):
 def main():
     out = Path(sys.argv[1])
     log = out.parent / 'llama.log'
+    if not log.exists():
+        log = out.parent / 'shim_misses.log'   # the copy in results/ keeps only the shim's miss lines
     missed = missed_asks(log.read_text(encoding='utf-8', errors='replace')) if log.exists() else set()
     from transformers import AutoTokenizer
     tok = AutoTokenizer.from_pretrained('C:/Users/xenod/mip-work/q4b-hf')
@@ -123,7 +130,8 @@ def main():
             c[(final, state)] += 1
             ok = value_right(e, rows.get(rec['id'], {}).get('question'))
             c[(final, 'value right' if ok else 'unchecked' if ok is None else 'VALUE WRONG')] += 1
-            written = tok.decode(out_ids[e['at']:e['at'] + 40]) if out_ids else ''
+            # a question line can be long and written a digit a token: 200 tokens, not 40, so the check never cuts it short
+            written = tok.decode(out_ids[e['at']:e['at'] + 200]) if out_ids else ''
             want = (' ' + e['value']) if e.get('what') != 'question value' else e['expr']
             wrote = written.startswith(want) or written.lstrip().startswith(e['value'])
             c[(final, 'written as steered' if wrote else 'TEXT DIFFERS')] += 1

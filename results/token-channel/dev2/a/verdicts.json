@@ -1,0 +1,102 @@
+{
+ "dm_div_big-9977#0": {
+  "verdict": "same",
+  "value": "-70468",
+  "reason": "The reply computes and gives the final answer as -70468, matching the reference."
+ },
+ "dm_div_big-9977#1": {
+  "verdict": "same",
+  "value": "-70468",
+  "reason": "The reply computes and gives the final answer as -70468, matching the reference."
+ },
+ "dm_div_big-2783#0": {
+  "verdict": "same",
+  "value": "-171/2221234",
+  "reason": "The reply gives the exact fraction -171/2221234, matching the reference answer."
+ },
+ "dm_div_big-2783#1": {
+  "verdict": "same",
+  "value": "-171/2221234",
+  "reason": "The reply's final boxed answer matches the reference exactly."
+ },
+ "dm_mixed_longer-9937#0": {
+  "verdict": "same",
+  "value": "142",
+  "reason": "The reply computes and settles on 142, matching the reference answer."
+ },
+ "dm_mixed_longer-9937#1": {
+  "verdict": "same",
+  "value": "142",
+  "reason": "The reply evaluates the expression and gives the final answer as 142, matching the reference."
+ },
+ "dm_mixed_longer-2773#0": {
+  "verdict": "same",
+  "value": "245",
+  "reason": "The reply computes and settles on 245, matching the reference answer."
+ },
+ "dm_mixed_longer-2773#1": {
+  "verdict": "same",
+  "value": "245",
+  "reason": "The reply evaluates the expression and settles on 245, matching the reference answer."
+ },
+ "dm_mul_div_longer-9977#0": {
+  "verdict": "same",
+  "value": "117",
+  "reason": "The reply simplifies the expression and gives the final answer as 117, matching the reference."
+ },
+ "dm_mul_div_longer-9977#1": {
+  "verdict": "same",
+  "value": "117",
+  "reason": "The reply simplifies the expression and gives the final answer as 117, matching the reference."
+ },
+ "dm_mul_div_longer-2783#0": {
+  "verdict": "same",
+  "value": "130",
+  "reason": "The reply evaluates the expression and settles on 130, matching the reference answer."
+ },
+ "dm_mul_div_longer-2783#1": {
+  "verdict": "same",
+  "value": "130",
+  "reason": "The reply simplifies the expression and arrives at 130, matching the reference answer."
+ },
+ "dm_simplify_surd-9937#0": {
+  "verdict": "same",
+  "value": "-899940 - 656*sqrt(1573)",
+  "reason": "sqrt(1573) = 11*sqrt(13), so -656*sqrt(1573) = -7216*sqrt(13), matching the reference."
+ },
+ "dm_simplify_surd-9937#1": {
+  "verdict": "same",
+  "value": "-899940 - 7216*sqrt(13)",
+  "reason": "The reply simplifies to the same value as the reference answer."
+ },
+ "dm_simplify_surd-2773#0": {
+  "verdict": "same",
+  "value": "9817 + 240*sqrt(17)",
+  "reason": "The reply's final answer matches the reference value, just written in a different order."
+ },
+ "dm_simplify_surd-2773#1": {
+  "verdict": "same",
+  "value": "9817 + 240*sqrt(17)",
+  "reason": "The reply simplifies to 9817 + 240√17, which matches the reference answer."
+ },
+ "dm_swr_p_sequence-9937#0": {
+  "verdict": "same",
+  "value": "5/273",
+  "reason": "The reply calculates and settles on the same probability as the reference."
+ },
+ "dm_swr_p_sequence-9937#1": {
+  "verdict": "same",
+  "value": "5/273",
+  "reason": "The reply calculates and settles on the same probability as the reference."
+ },
+ "dm_swr_p_sequence-2773#0": {
+  "verdict": "same",
+  "value": "2/105",
+  "reason": "The reply calculates and finalizes the probability as 2/105, matching the reference."
+ },
+ "dm_swr_p_sequence-2773#1": {
+  "verdict": "same",
+  "value": "2/105",
+  "reason": "The reply calculates and settles on 2/105, matching the reference."
+ }
+}
