@@ -23,6 +23,34 @@ DIV = re.compile(r'^\s*\(?\s*(-?\d+)\s*\)?\s*(?:\\div|/|÷|:)\s*\(?\s*(-?\d+)\s*
 CUT = re.compile(r'^\s*(-?)(\d+)\.(\d+)\.\.\.\s*$')
 
 
+def _sym(text):
+    """A LaTeX value or expression with surds as a sympy number, or None: \sqrt{a}, \frac{a}{b}, \cdot, \times, implicit products."""
+    import sympy
+    t = text.replace('$', '').strip()
+    for _ in range(4):
+        t = re.sub(r'\\[dt]?frac\{([^{}]*)\}\{([^{}]*)\}', r'((\1)/(\2))', t)
+        t = re.sub(r'\\sqrt\{([^{}]*)\}', r'sqrt(\1)', t)
+    t = t.replace(r'\cdot', '*').replace(r'\times', '*').replace(r'\left', '').replace(r'\right', '').replace('{', '(').replace('}', ')')
+    if '\\' in t:
+        return None
+    try:
+        from sympy.parsing.sympy_parser import (parse_expr, standard_transformations, implicit_multiplication_application,
+                                                convert_xor)
+        return parse_expr(t, transformations=standard_transformations + (implicit_multiplication_application, convert_xor),
+                          local_dict={'sqrt': sympy.sqrt, 'P': sympy.ff}, evaluate=True)
+    except Exception:
+        return None
+
+
+def _surd_right(e):
+    """True / False by sympy for a value with a root in it, None when either side cannot be read."""
+    import sympy
+    a, b = _sym(e['expr']), _sym(e['value'])
+    if a is None or b is None or a.free_symbols or b.free_symbols:
+        return None
+    return sympy.simplify(a - b) == 0
+
+
 def value_right(e, question):
     """True / False / None (a form this check cannot read). Each General Style form by its own meaning: `q rem r` is a quotient and a
     remainder (n = q d + r, 0 <= r < d); `x.dddd...` is the value cut to its places; anything else equal in value."""
@@ -44,6 +72,8 @@ def value_right(e, question):
         n, k = int(d.group(1)), int(d.group(2))
         q, r = int(m.group(1)), int(m.group(2))
         return k != 0 and n == q * k + r and 0 <= r < abs(k)
+    if r'\sqrt' in e['expr'] or r'\sqrt' in value or re.match(r'^\s*P\(', e['expr']):
+        return _surd_right(e)
     want = evaluate(e['expr'])
     if want is None:
         return None

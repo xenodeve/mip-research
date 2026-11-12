@@ -95,7 +95,7 @@ class ChannelService:
                 m = json.loads(line)
                 t = m.get('t')
                 if t == 'open':
-                    slots[m['slot']] = dict(mip_id=m['mip_id'], new=[])
+                    slots[m['slot']] = dict(mip_id=m['mip_id'], new=[], base=self._base(m['mip_id']))
                 elif t == 'tok':
                     s = slots.get(m['slot'])
                     if s is not None:
@@ -120,6 +120,13 @@ class ChannelService:
         rollout, planner = hit
         return rollout, planner, self.answers.setdefault(id(rollout), _Answer())
 
+    def _base(self, mip_id):
+        """How many tokens the answer had when this request opened: the driver may take the reply (and grow rollout.out) before the
+        service reads the request's last ask, so a request's text is the answer up to here plus the tokens the shim sent since."""
+        with self.lock:
+            hit = self.ids.get(mip_id)
+            return len(hit[0].out) if hit else 0
+
     def _ask(self, s, seq):
         with self.lock:
             self.counts['asks'] += 1
@@ -135,10 +142,11 @@ class ChannelService:
                 return plan
             new = s['new']
             phase = 'answer' if rollout.phase != 'think' or self.think_close in new else 'think'
-            text = self.tok.decode(rollout.out + new)
+            before = rollout.out[:s['base']]
+            text = self.tok.decode(before + new)
             plan = planner.on_trigger(text, phase)
             if plan is not None:
-                self._begin(rollout, a, plan, len(rollout.out) + len(new))
+                self._begin(rollout, a, plan, len(before) + len(new))
             return plan
 
     def _begin(self, rollout, a, plan, at):

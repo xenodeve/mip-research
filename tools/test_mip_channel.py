@@ -108,6 +108,21 @@ class ChannelTests(unittest.TestCase):
         self.shim.open('a#0#1', 0, PROMPT + r.out)
         self.assertEqual(spell(self.shim.ask(0, 0)['dag']), '2')   # the rest of the value, not the value again
 
+    def test_an_ask_read_after_the_driver_took_the_reply(self):
+        # the request's last token is '=': the shim asks, the server finishes, and the driver may take the reply before the
+        # service reads that ask; the plan must still be read on this request's text, placed where the value starts
+        r = roll()
+        self.svc.register('a#0#0', r, Planner(r, PIECES))
+        self.shim.open('a#0#0', 0, PROMPT)
+        self.shim.toks(0, '$3 \\times 4 =')
+        r.out = TOK.encode('$3 \\times 4 =')                   # the driver took the reply first
+        self.assertEqual(spell(self.shim.ask(0, 1)['dag']), ' 12')
+        ev = [e for e in r.events if e['kind'] == 'steered value']
+        self.assertEqual(ev[0]['at'], len(r.out))
+        self.svc.register('a#0#1', r, Planner(r, PIECES))
+        self.shim.open('a#0#1', 0, PROMPT + r.out)
+        self.assertEqual(spell(self.shim.ask(0, 0)['dag']), ' 12')   # the next request writes it from its start
+
     def test_the_fixed_question_line_at_the_start_only(self):
         r = roll(question='What is 2*240?')
         self.svc.register('b#0#0', r, Planner(r, PIECES))
