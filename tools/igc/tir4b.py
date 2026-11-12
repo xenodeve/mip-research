@@ -165,7 +165,10 @@ class Arm:
                  hint_calc=False, loop_hint=False, inline_plain=False, whole_hint=False, check_hand=False, whole_plain=False, hand_off=False, question_value=False,
                  trust='cort', logit_value=0.0, suppress_recheck=0, mathbackend=False, candidate_close=False, inline_style='general',
                  no_digit_join=False, guard_progress=False, answer_close=False, loop_value=False, early_cycle=False, shape_cap=0, cover_cap=0,
-                 exact_answer=False, approx_put=False, answer_rewind=0, letter_count=False, verify_gate=False, question_quote=False):
+                 exact_answer=False, approx_put=False, answer_rewind=0, letter_count=False, verify_gate=False, question_quote=False,
+                 channel=False, think_only=False):
+        self.channel = channel   # --channel: values reach the model through the token channel (tools/igc/mip_channel.py), not as text
+        self.think_only = think_only   # --think-only: values only in the thinking, none in the answer (the General Style, 2026-11-12)
         self.question_quote = question_quote   # --question-quote: the question's words put back when the model's copy differs (P4, P5)
         self.verify_gate = verify_gate   # --verify-gate: an all-solutions question's candidates are checked by a program before the close (P8)
         self.approx_put = approx_put   # --approx-put: after `X \approx`, X's value to 10 significant digits (round 9 P11)
@@ -1055,9 +1058,11 @@ class Rollout:
         stops = set(self.ids.ends)
         if self.plan is not None:
             return 1, stops   # --logit-value: one token a request, so each carries its own bias
-        if (self.arm.inline_calc or self.arm.logit_value) and self.phase in ('think', 'answer') or self.arm.hint_calc and self.phase == 'think':
+        if self.arm.channel:
+            pass   # the shim streams every token to MIP and steers the value there: no stop at `=` or `\\approx`
+        elif (self.arm.inline_calc or self.arm.logit_value) and self.phase in self.value_phases() or self.arm.hint_calc and self.phase == 'think':
             stops |= self.ids.equals
-        if self.arm.approx_put and self.phase in ('think', 'answer'):
+        if self.arm.approx_put and not self.arm.channel and self.phase in self.value_phases():
             stops |= self.ids.approx
         if self.arm.native_tool and self.phase in ('think', 'answer'):
             stops.add(self.ids.tool_close)
@@ -1127,7 +1132,8 @@ class Rollout:
             return False
         if self.arm.hint_calc and last in self.ids.equals and self.phase == 'think' and self.hint_due():
             return False
-        if (self.arm.inline_calc or self.arm.hint_calc or self.arm.logit_value) and last in self.ids.equals and self.phase in ('think', 'answer'):
+        if (self.arm.inline_calc or self.arm.hint_calc or self.arm.logit_value) and last in self.ids.equals and self.phase in self.value_phases() \
+                and not self.arm.channel:
             text = self.text()
             if self.arm.inline_calc:   # the value the model would have computed, computed: the reasoning goes on from it
                 got = self.put_value(text)
@@ -1154,7 +1160,7 @@ class Rollout:
                 if self.looping_now():
                     self.on_loop()
             return False
-        if self.arm.approx_put and last in self.ids.approx and self.phase in ('think', 'answer'):
+        if self.arm.approx_put and last in self.ids.approx and self.phase in self.value_phases() and not self.arm.channel:
             self.approx_value()
             if self.left() <= 0:
                 self.done('length')
@@ -1247,6 +1253,10 @@ class Rollout:
         if self.looping_now():
             self.on_loop()
         return False
+
+    def value_phases(self):
+        """Where a value is put: the thinking and the answer, or the thinking only (--think-only, the General Style from 2026-11-12)."""
+        return ('think',) if self.arm.think_only else ('think', 'answer')
 
     def put_value(self, text):
         """The inline value's rules for a text that ends at `=`: (expression, value, the text put, whole) or None. inline_found reads it, the
@@ -2022,11 +2032,12 @@ def stop_words(stops, ids, tok):
     return sorted(words)
 
 
-def drive_http(post, tok, ids, rollouts, kernel_factory, live_most=16, on_round=None, drain=None):
+def drive_http(post, tok, ids, rollouts, kernel_factory, live_most=16, on_round=None, drain=None, extra=None):
     """drive() over llama-server's /completion, so the 5060 Ti runs the same rules on Windows, where vLLM does not (developer, 2026-11-04).
     Each answer runs on its own thread and the server batches its slots. The server stops on words and leaves the word out of the text, so
     it is put back and the text encoded again: the same Rollout takes it.
-    drain: when it returns True, no answer starts; the ones in flight end, and the run is continued later with --resume."""
+    drain: when it returns True, no answer starts; the ones in flight end, and the run is continued later with --resume.
+    extra(rollout) -> dict: more fields for each request (--channel: its mip_id, registered with the MIP service first)."""
     import threading
     im_end = tok.convert_tokens_to_ids('<|im_end|>')
     lock = threading.Lock()
@@ -2051,7 +2062,8 @@ def drive_http(post, tok, ids, rollouts, kernel_factory, live_most=16, on_round=
             sent = time.perf_counter()
             reply = post(dict(prompt=r.prompt + r.out, n_predict=most, stop=stop_words(stops, ids, tok), cache_prompt=True,
                               seed=(r.seed + r.reseed + len(r.out)) % 2**31, return_tokens=True, **sampling,
-                              **(dict(logit_bias=[[int(t), float(v)] for t, v in bias.items()]) if bias else {})))
+                              **(dict(logit_bias=[[int(t), float(v)] for t, v in bias.items()]) if bias else {}),
+                              **(extra(r) if extra else {})))
             if reply.get('tokens') is not None:
                 # the ids the model generated, its stop token among them: a stop on '\n' inside the token '\n\n' put back as '\n' fed the
                 # model a text it never wrote, every line (pc-check: 21 of 48 answers ran to the cap against base's 7)
@@ -2136,7 +2148,10 @@ def run(args):
               inline_style=args.inline_style, no_digit_join=args.no_digit_join, guard_progress=args.guard_progress, answer_close=args.answer_close,
               loop_value=args.loop_value, early_cycle=args.early_cycle, shape_cap=args.shape_cap, cover_cap=args.cover_cap,
               exact_answer=args.exact_answer, approx_put=args.approx_put, answer_rewind=args.answer_rewind,
-              letter_count=args.letter_count, verify_gate=args.verify_gate, question_quote=args.question_quote)
+              letter_count=args.letter_count, verify_gate=args.verify_gate, question_quote=args.question_quote,
+              channel=args.channel, think_only=args.think_only)
+    if args.channel and not args.server:
+        raise SystemExit('--channel needs --server: a llama-server built with the MIP channel (build-w4a8-mip), MIP_CHANNEL set to this run')
     if args.verify_gate and not args.execute:
         raise SystemExit('--verify-gate opens a program: it needs --execute (and --box on this PC)')
     if args.answer_rewind and not args.answer_close:
@@ -2230,6 +2245,7 @@ def run(args):
                 for r in done:
                     f.write(json.dumps(dict(id=r.row['id'], sample=r.sample, prompt_ids=r.prompt, out_ids=r.out, spans=r.spans)) + '\n')
         print(f'{len(done)}/{len(rollouts)} done, {sum(x["right"] for x in records)} right, {round(time.monotonic() - began)} s', flush=True)
+    channel_stats = {}
     if args.server:   # llama-server on this PC's 5060 Ti: vLLM does not run on Windows
         import urllib.request
 
@@ -2241,7 +2257,28 @@ def run(args):
         # `touch <out>/drain`: the answers in flight end, no new one starts, the run exits 3 without a report; --resume goes on
         flag = out / 'drain'
         flag.unlink(missing_ok=True)
-        drive_http(post, tok, ids, rollouts, kernel_factory, live_most=args.live, on_round=save, drain=flag.exists)
+        extra, service = None, None
+        if args.channel:   # the token channel: the server's shim streams every token here, the planner answers at each trigger
+            from tools.igc.mip_channel import ChannelService
+            from tools.igc.mip_planner import Planner
+            from tools.igc.token_trie import vocab_pieces
+            pieces = vocab_pieces(tok)
+            service = ChannelService(ids.equals | ids.approx, ids.think_close, pieces, tok, port=args.channel_port)
+            service.start()
+            planners, sent = {}, {}
+
+            def extra(r):
+                key = id(r)
+                if key not in planners:
+                    planners[key] = Planner(r, pieces)
+                n = sent[key] = sent.get(key, -1) + 1
+                mip_id = f"{r.row['id']}#{r.sample}#{n}"
+                service.register(mip_id, r, planners[key])
+                return dict(mip_id=mip_id)
+        drive_http(post, tok, ids, rollouts, kernel_factory, live_most=args.live, on_round=save, drain=flag.exists, extra=extra)
+        if service is not None:
+            channel_stats.update(service.stats())
+            service.stop()
         if flag.exists() and not all(r.finish for r in rollouts):
             save(last=True)
             print(f'DRAINED: {sum(bool(r.finish) for r in rollouts)}/{len(rollouts)} answered; go on with --resume', flush=True)
@@ -2250,10 +2287,11 @@ def run(args):
         drive(llm, rollouts, kernel_factory, live_most=args.live, on_round=save)
     save(last=True)
     records = kept + [r.record(right) for r in rollouts]
+    extra_report = dict(channel=channel_stats) if channel_stats else {}
     (out / 'report.json').write_text(json.dumps(dict(rows=len(rows), samples=args.samples, answers=len(records), right=sum(r['right'] for r in records),
                                                       tokens=sum(r['tokens'] for r in records), seconds=round(time.monotonic() - began, 1),
                                                       runs=sum(r['runs'] for r in records), runs_by_model=sum(r['runs_by_model'] for r in records),
-                                                      length=sum(r['finish'] == 'length' for r in records),
+                                                      length=sum(r['finish'] == 'length' for r in records), **extra_report,
                                                       **(dict(seal_steered=seal_count['steered'], seal_calls=seal_count['calls']) if seal_count else {}))), encoding='utf-8')
     if seal_count:
         print(f'SEAL steered {seal_count["steered"]} positions in {seal_count["calls"]} forward passes', flush=True)
@@ -2378,6 +2416,13 @@ def main(argv=None):
     r.add_argument('--seal-alpha', type=float, default=1.0, help='the strength: the stream gets alpha * S (the paper: 1.0)')
     r.add_argument('--suppress-recheck', type=int, default=0,
                    help="for this many steps after a value software gave (inline or logit), the logits of the re-check words (wait, hmm, verify, check, double, again...) are lowered by 30 (vLLM)")
+    r.add_argument('--channel', action='store_true',
+                   help='values reach the model through the token channel: the llama-server shim (build-w4a8-mip, MIP_CHANNEL=host:port) '
+                        'streams every token to a MIP service in this process, which steers each value it computes in the thinking '
+                        '(docs/plans/2026-11-12-mip-token-channel-design.md); no stop at `=` or `\\approx`')
+    r.add_argument('--channel-port', type=int, default=8095, help='the MIP service port the server reaches (its MIP_CHANNEL)')
+    r.add_argument('--think-only', action='store_true',
+                   help='values only in the thinking, none in the answer (the General Style from 2026-11-12)')
     r.add_argument('--no-digit-join', action='store_true',
                    help="after a put that ends in a digit, the model's next token cannot start with one, so it cannot run the number on (#307: "
                         "80 of 19,990 puts were joined into another number, `-5` then `75`) (vLLM)")
