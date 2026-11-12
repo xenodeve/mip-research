@@ -484,3 +484,53 @@ Speed on `numbers-gcd-s4`, mode 2, median per call (`speed9-numbers-gcd-s4-binar
 | all 101 calls, median | 513 us | **274 us** | 13 us |
 
 Still one GPU thread for everything; what is left is the conversions and Knuth D (serial), next to be split across a block of threads.
+
+### The team: big numbers on a block of threads (2026-11-12)
+
+Every kernel now runs as one block (`MIP_TEAM`, default 256 in modes 0 and 2, 1 in mode 1). Warp 0 is the master: thread 0 runs what
+the single thread ran (polling, the register path, parsing, every decision). Warps 1 and up are workers: thread 0 hands them a job through
+shared memory and two block barriers (`barrier.sync 1`, non-aligned), and they run it with their own barrier (`barrier.sync 2, W`). The
+jobs:
+
+- **multiply**, schoolbook by columns, split into ranges of equal work (closed-form column counts); thread 0 ripples the carries across
+  the ranges;
+- **limbs to decimal and decimal to limbs**, by passes that divide the whole number by 10^9 (or base-10^9 chunks by 2^32): each worker
+  holds its segment in registers for the whole job, a segment hands down (r * W^len + S) mod d, and worker warp 0 composes those maps with
+  a shuffle scan; two barriers a pass;
+- **Lehmer's step**, both cofactor combinations over each worker's limbs, with signed carries rippled by thread 0.
+
+What did not work, measured: thread 0 taking part in the jobs (every call into job code inside its inlined serial path made the compiler
+save registers around it: 255 registers and 1.4-2.4 KB of spills, the single-thread path 15-25 % slower; moving the helpers out of line
+made it 2-3x slower); a block of 1,024 (does not launch: 255 registers a thread); capping registers at 128 (spills in the jobs and the
+serial path); a serial scan of the maps by thread 0 for many segments (the warp scan is 2-3x faster since the spills went); memory-held
+segments (a dependent L2 trip per limb). A pass costs about 1.3-1.9 us whatever the segment length (two barriers and the scan); fewer
+passes would need more digits a pass (128-bit arithmetic), not done. Thresholds: a multiply or Lehmer step from 2,048 limb steps of work
+per worker (`MIP_TEAM_WORK`), the conversions from about 128 limbs (below it the passes cost more than they save: 610-digit calls were
+10-25 % slower with the conversions at 64 limbs).
+
+Correctness, RTX 5060 Ti, modes 1 and 2, default and with `MIP_TEAM_WORK=1` (every case through the team, segments of 2 words): team
+214 / 214 (`numbers-team-s5`, `team_cases.py`: all-ones limbs across segment boundaries, sizes on both sides of each threshold, long
+strings and decimals), gcd 101 / 101, paths 220 / 220, fuzz 4,000 / 4,000, s1 1,816 / 1,816; team 1 the same. Path bits 128 (team
+multiply), 256 (a carry crossing a segment), 512 (team conversion), 1024 (team Lehmer step), each hit (`path_cases.py census`). The time
+guard down to 30 us (`MIP_CALL_US`, `guard.py`): every call came back, 0 wrong. compute-sanitizer synccheck and memcheck 0 errors with
+the team forced; racecheck ran the corpus (0 wrong) but its process did not exit and held the card until ended by hand, so it gave no
+summary: not counted as clean.
+
+Cost of the team where it does nothing: a single call 10.4-10.6 us with team 256 and with team 1 (`ping.py`, ABBA); the medians of
+every corpus unchanged (s1 24.7 us either way).
+
+Speed, mode 2, median per call (`speed10-*`, team 1 against the default):
+
+| Case | Team 1 | Team 256 | Python |
+|---|---|---|---|
+| s1, 20,000-digit integers | 122 ms | **14 ms** | 11-23 us |
+| team, 9,630 digits (add) | 32.4 ms | **8.0 ms** | 6 us |
+| s1, 4,000-character strings | 8.9 ms | **6.3 ms** | 73 us |
+| team, mul of 3,000 digits | 12.6 ms | **5.3 ms** | 106 us |
+| gcd, div of 3,070 digits | 6.4 ms | **4.6 ms** | 56 us |
+| team, 610 digits | 311-381 us | 345-377 us | 5-7 us |
+| team corpus, sum over calls above 300 us | 279 ms | **142 ms** | |
+
+The team takes big numbers 1.4-9x faster; the device is still far behind Python for them (Python's times here exclude reading and
+printing the text, which the device does on every call). Calls the model's text makes (up to a few hundred digits) do not reach the team.
+Not checked on the RTX 4070 SUPER yet.

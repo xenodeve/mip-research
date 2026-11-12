@@ -134,7 +134,7 @@ def census(corpus):
         ok = got == r['out'].encode()
         agree += ok
         for b, name in ((1, 'register'), (2, 'full'), (4, 'Knuth D'), (8, 'add-back'), (16, 'timed out'), (32, 'Lehmer step'),
-                        (64, 'Lehmer full step')):
+                        (64, 'Lehmer full step'), (128, 'team mul'), (256, 'team carry ripple'), (512, 'team conversion'), (1024, 'team Lehmer step')):
             if p & b:
                 bits[name] += 1
                 by_path[(name, ok)] += 1

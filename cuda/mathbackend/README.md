@@ -67,6 +67,9 @@ From C or C++, the ABI is `mipmath.h`: `mip_open(device, mode)`, `mip_call(op, a
 | `MIP_DIAG` | 1 | the register path writes its path bits and device cycles (two PCIe writes; the tests read them) | 0 saves ~0.1 us |
 | `MIP_SYNC` | (mode 0: block) | mode 0's wait: `spin`, `yield` or `block` | comparison only |
 | `MIP_POLL` | 1 | mode 1: the flag read past every cache | debugging only |
+| `MIP_TEAM` | 256 (modes 0, 2), 1 (mode 1) | threads in each kernel's block: thread 0 does what the single thread did, warps 1 and up split the long loops of big numbers (multiply, the decimal conversions, Lehmer's steps); capped at what the kernels can launch with (256 here), at least 64 when above 1 | 1 to compare; above 1 in mode 1 only with no engine in the process (a resident team holds one SM's registers) |
+| `MIP_TEAM_WORK` | 2048 | the least work (limb steps) worth a worker | 1 sends every case through the team (the tests) |
+| `MIP_CALL_US` | (0.4 s) | a shorter per-call time guard | tests of the guard only |
 
 Not knobs: **HAGS stays on** (the developer's requirement); a **locked GPU clock** (`nvidia-smi -lgc`) gained nothing. A 1 ms empty
 kernel (`sparse.py --heartbeat-ms 1`) keeps an otherwise idle card awake (a call every 50 ms: 291 -> 102 us), but only matters with
@@ -80,6 +83,7 @@ nothing else on the card.
 | idle card, back to back, `MIP_LINGER_US=50` | 6.4-6.5 us; **5.8-5.9 us on the 4070 SUPER** (PCIe x16) | |
 | an engine in another process decoding on the card | ~175 us inside the DLL, ~200 us from Python | an empty kernel there: 175 us (the cross-process switch); Python: ~50 us |
 | MIP in the engine's process, mode 1, a call every 5 ms | 7.5 us inside the DLL (35-38 us with the caller's own wake-up) | Python: 33-51 us on that rhythm |
+| big numbers, mode 2, team 256 (2026-11-12) | 20,000 digits 14 ms, 4,000-character strings 6.3 ms, 3,000-digit mul 5.3 ms | team 1: 122, 8.9, 12.6 ms; Python 11-106 us (without reading or printing text) |
 
 So beside another process's engine the device answers slower than Python but takes the arithmetic off the CPU; inside the engine's
 process it is as fast as Python and takes nothing from the engine.
@@ -89,8 +93,8 @@ process it is as fast as Python and takes nothing from the engine.
 - **Integers up to 8,192 limbs (262,144 bits) per part**; past that `NOT_COVERED`, where Python answers ("any size"): open question 3 of
   the design (a bound both sides keep).
 - **A per-call time guard of 0.4 s**: past it `DEVICE_FAILED` (never a value). It keeps every kernel far under Windows' TDR watchdog,
-  whose reset would take down every program using the GPU. One GPU thread does the full path; the 20,000-digit cases of `numbers-s1`
-  finish inside it since the reduction skips the gcd for an integer result (2026-11-12).
+  whose reset would take down every program using the GPU. The guard ends the team's jobs at a barrier, never between them (tested
+  with `MIP_CALL_US` down to 30 us: no hang, no wrong value).
 - Only the four rational operations; `UNKNOWN_OP` for the rest.
 
 ## Check it
@@ -102,12 +106,16 @@ Before using a build, and on both cards for a change to the kernels (`run5060.sh
 sh cuda/mathbackend/run5060.sh out.txt python -m tools.igc.mathbackend.harness check results/cuda-mathbackend/corpus/numbers-fuzz-s2.jsonl --backend cuda
 sh cuda/mathbackend/run5060.sh out.txt python -m tools.igc.mathbackend.harness check results/cuda-mathbackend/corpus/numbers-paths-s3.jsonl --backend cuda
 sh cuda/mathbackend/run5060.sh out.txt python -m tools.igc.mathbackend.harness check results/cuda-mathbackend/corpus/numbers-s1.jsonl --backend cuda
+sh cuda/mathbackend/run5060.sh out.txt python -m tools.igc.mathbackend.harness check results/cuda-mathbackend/corpus/numbers-gcd-s4.jsonl --backend cuda
+sh cuda/mathbackend/run5060.sh out.txt python -m tools.igc.mathbackend.harness check results/cuda-mathbackend/corpus/numbers-team-s5.jsonl --backend cuda
+     (each also with MIP_TEAM_WORK=1, every case through the team; and MIP_CALL_US=30 with results/cuda-mathbackend/guard.py: no hang, 0 wrong)
 sh cuda/mathbackend/run5060.sh out.txt python results/cuda-mathbackend/linger_stress.py --n 20000 --gap-us 120     (with MIP_LINGER_US=50)
 python -m unittest tools.test_mathbackend_harness
 ```
 
-Expected now: fuzz 4,000 / 4,000, paths 220 / 220, s1 1,816 / 1,816, 0 wrong in the stress run, in modes 1 and 2. `compute-sanitizer --tool memcheck` (and initcheck, racecheck, synccheck)
-reported 0 errors on the paths corpus on both cards.
+Expected now: fuzz 4,000 / 4,000, paths 220 / 220, s1 1,816 / 1,816, gcd 101 / 101, team 214 / 214, 0 wrong in the stress run, in modes 1
+and 2. `compute-sanitizer --tool memcheck` (and initcheck, racecheck, synccheck) reported 0 errors on the paths corpus on both cards
+before the team; with the team, synccheck and memcheck 0 errors on the team corpus (racecheck did not finish: its process hung at exit).
 
 Speed: `ping.py` (latency and its split), `floor.py` (the empty-kernel floor), `sparse.py`, `impact.py` (decode tok/s beside the calls,
 ABBA), `under_load.py` (`--empty` for the floor there), `in_process.py` (a stand-in engine in the same process), `speed.py` (per op,

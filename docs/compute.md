@@ -120,8 +120,10 @@ repo).
 
 **Measured** (RTX 5060 Ti and RTX 4070 SUPER, CUDA 13.3, Python 3.11.9 as the reference): `numbers-fuzz-s2` 4,000 / 4,000 and
 `numbers-paths-s3` 220 / 220 byte-identical in every mode on both cards (the paths corpus drives Knuth division and its add-back step);
-`numbers-s1` 1,800 / 1,816, the 16 being 20,000-digit cases past the per-call time guard (`DEVICE_FAILED`, no wrong value);
-compute-sanitizer 0 errors. A call costs 10.3 us inside the DLL on an idle card (an empty kernel: 8.7), 5.8-6.5 us back to back with the
+`numbers-s1` 1,816 / 1,816 (RTX 5060 Ti; the 4070 SUPER ran it at 1,800 before the 2026-11-12 changes); `numbers-gcd-s4` 101 / 101 and
+`numbers-team-s5` 214 / 214 (RTX 5060 Ti, modes 1 and 2, with and without every case forced through the team); compute-sanitizer 0
+errors (before the team; with it, synccheck and memcheck 0 errors). Big numbers run on a block of 256 threads (multiply, decimal
+conversions, Lehmer's gcd steps): 20,000-digit integers 14 ms a call (one thread: 122 ms), still far slower than Python (11-23 us). A call costs 10.3 us inside the DLL on an idle card (an empty kernel: 8.7), 5.8-6.5 us back to back with the
 linger; beside llama-server decoding in another process ~175 us (as an empty kernel there), with decode unchanged (-0.1 to -0.2 %).
 
 **Where it lives / to use it:** mode 2 (`MIP_CUDA_RESIDENT=2`) beside an engine in another process; mode 1 only inside the engine's own
