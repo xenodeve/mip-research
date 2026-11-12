@@ -55,8 +55,9 @@ struct Slot {
 // A kernel that runs past ~2 s is killed by Windows' TDR watchdog and the driver resets for every program on the machine (a game on the
 // other card included). The long loops (schoolbook multiply, long division, gcd, digit conversions) check a deadline set when a call
 // starts; past it the call ends as DEVICE_FAILED, never as a value. It is a clock, so it is not the input-defined step cap the design
-// asks for (open question 3); it only keeps the machine safe until that cap exists. One device thread serves a call at a time, so the
-// state is plain device globals.
+// asks for (open question 3); it only keeps the machine safe until that cap exists. One block serves a call at a time, so the
+// state is plain device globals: thread 0 sets the deadline and owns g_path; the team's workers only read the deadline and may set
+// g_timed_out (always to 1).
 #define MIP_CALL_SECONDS 0.4
 __device__ long long g_deadline = 0x7fffffffffffffffLL;
 __device__ long long g_call_cycles = 0x7fffffffffffffffLL;   // set at open: MIP_CALL_SECONDS of the rated clock

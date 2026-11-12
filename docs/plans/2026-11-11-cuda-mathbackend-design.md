@@ -158,6 +158,25 @@ copied; **linking a library as a dependency needs a conversation with the develo
    Python and breaks refusal identity. The sizes are the developer's to set; the device's memory then follows from the largest input
    the bounds allow. The new bounds pass the gate in point 6 above.
 
+## Current state (2026-11-12; the Progress sections below are dated records, their numbers superseded where this says so)
+
+- **Ported:** `numbers.add`, `sub`, `mul`, `div` (exact rationals, Python's `Fraction(str)` grammar). Everything else `UNKNOWN_OP`.
+- **Correct, RTX 5060 Ti, modes 1 and 2 (and mode 0), default and with every case forced through the team:** `numbers-s1` 1,816 / 1,816
+  (no longer 1,800: the 20,000-digit cases finish inside the time guard), `numbers-fuzz-s2` 4,000 / 4,000, `numbers-paths-s3` 220 / 220,
+  `numbers-gcd-s4` 101 / 101, `numbers-team-s5` 214 / 214. The RTX 4070 SUPER was last checked before 2026-11-12 (fuzz and paths 100 %):
+  the reduction, Lehmer and the team are **not checked there yet**.
+- **How a call runs:** small calls in registers on thread 0 (one launch, 10.3-10.6 us single call, mode 2); the full path on thread 0
+  with an integer result left unreduced, Lehmer's gcd for multi-limb fractions, and big numbers split across worker warps (the team,
+  `MIP_TEAM`, default 256 in modes 0 and 2, 1 in mode 1): multiply, decimal conversions, Lehmer steps.
+- **Speed against Python:** small calls equal or slower; calls of 20-25 digits 34-45 us on the device (serial latency of one thread, not
+  touched by the team); big numbers 1.4-9x faster than before the team and still 100-1000x slower than Python (20,000 digits 14 ms vs
+  9-23 us). Mode 1 beside an engine in the same process costs it 2-3 % (kernels at 255 registers); mode 2 beside another process's
+  engine costs it nothing measurable while idle.
+- **Checks:** synccheck and memcheck 0 errors with the team; racecheck 0 hazards in mode 0 (in mode 2 racecheck's process never exits,
+  also on the build before the team; end it with `Invoke-CimMethod ... Terminate` if it holds the card).
+- **Open:** the 4070 SUPER run; a 128-bit register path for parts up to ~38 digits (where the model's calls spend their time); the
+  other 383 operations and open questions 1-3 above; tir4b does not call the device yet.
+
 ## Progress (2026-11-11)
 
 **Build:** `cuda/mathbackend/mipmath.cu` on branch `cuda-mathbackend` (the commit of this section), CUDA 13.3, sm_89 + sm_120; RTX 5060 Ti alone, no
@@ -348,7 +367,7 @@ Inside one process there is no context switch: the resident worker answers a spa
 being the calling thread waking from its 5 ms sleep (Python's own MathBackend pays the same on that rhythm: 33-51 us sparse against 7-12
 warm). Stream priority and the engine's step length did not move mode 2, whose cost is the launch queued behind the engine thread's
 driver calls. So in the end shape the resident worker on a low-priority stream is the mode: sparse calls at the caller's own wake-up
-cost, the engine within 2 %. Across processes (today's PC layer) it is the opposite (resident -44 to -59 % decode), and mode 2 is used.
+cost, the engine within 2 % (on that build; with the team's 255-register kernels -2 to -3 %, 2026-11-12). Across processes (today's PC layer) it is the opposite (resident -44 to -59 % decode), and mode 2 is used.
 
 ### RTX 4070 SUPER (sm_89, PCIe gen4 x16), 2026-11-11 (the developer's go-ahead; a game was using the card, ~46 %)
 
@@ -483,7 +502,7 @@ Speed on `numbers-gcd-s4`, mode 2, median per call (`speed9-numbers-gcd-s4-binar
 | div, 300 digits | 381 us | **195 us** | 12 us |
 | all 101 calls, median | 513 us | **274 us** | 13 us |
 
-Still one GPU thread for everything; what is left is the conversions and Knuth D (serial), next to be split across a block of threads.
+Still one GPU thread for everything; what is left is the conversions and Knuth D (serial), next to be split across a block of threads. (Done for the conversions and Lehmer's steps the same day: "The team" below; Knuth D is still serial.)
 
 ### The team: big numbers on a block of threads (2026-11-12)
 
