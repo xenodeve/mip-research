@@ -127,7 +127,7 @@ conversions, Lehmer's gcd steps): 20,000-digit integers 14 ms a call (one thread
 In a live run (tir4b General flags, 12 answers in flight, 2026-11-12) the pause of an inline put is 218 ms (4B NVFP4 W4A8 · llama.cpp
 · RTX 4070 SUPER) and 273 ms (4B NVFP4 W4A8 · llama.cpp · RTX 5060 Ti) at the median, almost all the engine's stop and resume; MIP's host
 work is 2.5-3.1 ms a put, 0.20-0.25 ms per generated token, and the CUDAMathBackend across processes adds 0.3-0.5 ms a put rather than
-saving any (design, "The pause of an inline put"). A call costs 10.3 us inside the DLL on an idle card (an empty kernel: 8.7), 5.8-6.5 us back to back with the
+saving any (design, "The pause of an inline put"; [mip-research#25](https://github.com/xenodeve/mip-research/issues/25)). A call costs 10.3 us inside the DLL on an idle card (an empty kernel: 8.7), 5.8-6.5 us back to back with the
 linger; beside llama-server decoding in another process ~175 us (as an empty kernel there), with decode unchanged (-0.1 to -0.2 %).
 
 **Where it lives / to use it:** mode 2 (`MIP_CUDA_RESIDENT=2`) beside an engine in another process; mode 1 only inside the engine's own

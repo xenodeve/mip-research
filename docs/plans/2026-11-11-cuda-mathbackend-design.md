@@ -160,6 +160,8 @@ copied; **linking a library as a dependency needs a conversation with the develo
 
 ## Current state (2026-11-12; the Progress sections below are dated records, their numbers superseded where this says so)
 
+Tracker: [mip-research#25](https://github.com/xenodeve/mip-research/issues/25) (bilingual summary of this state and the pause measurement).
+
 - **Ported:** `numbers.add`, `sub`, `mul`, `div` (exact rationals, Python's `Fraction(str)` grammar). Everything else `UNKNOWN_OP`.
 - **Correct, RTX 5060 Ti, modes 1 and 2 (and mode 0), default and with every case forced through the team:** `numbers-s1` 1,816 / 1,816
   (no longer 1,800: the 20,000-digit cases finish inside the time guard), `numbers-fuzz-s2` 4,000 / 4,000, `numbers-paths-s3` 220 / 220,
@@ -570,6 +572,8 @@ DEVICE_FAILED, not a value); `MIP_TEAM=1024` clamps to 256 and agrees; mode 0 s1
 Mode 1 beside the stand-in engine on the final build (`in_process.py`, two runs each): the engine -2.9 / -3.1 % with team 1 and -2.0 / -2.7 % with team 256, against -0.9 to -2.0 % before the team: the kernels now take 255 registers (128 before), whatever the team size. The `speed10-*` records were run again on the final build (conversions from about 128 limbs); the table above matches them.
 
 ## The pause of an inline put, end to end (2026-11-12)
+
+Reported in [mip-research#25](https://github.com/xenodeve/mip-research/issues/25).
 
 **Two builds and engines, reported apart (never pooled): 4B NVFP4 W4A8 · llama.cpp `build-w4a8` (sm_89) · RTX 4070 SUPER, and 4B NVFP4
 W4A8 · llama.cpp `build-w4a8` (sm_89) · RTX 5060 Ti.** Each card ran alone, one after the other: llama-server `-c 262144 -np 13 -kvu -fa
