@@ -534,3 +534,18 @@ Speed, mode 2, median per call (`speed10-*`, team 1 against the default):
 The team takes big numbers 1.4-9x faster; the device is still far behind Python for them (Python's times here exclude reading and
 printing the text, which the device does on every call). Calls the model's text makes (up to a few hundred digits) do not reach the team.
 Not checked on the RTX 4070 SUPER yet.
+
+**Where the calls the model makes spend their time (2026-11-12).** Fractions with parts of 20-25 digits (two or three limbs, the
+`numbers-s1` cases above 18 digits) take 34-45 us on the device against 5 us for the register path, by stage (mode 2, measurement-only
+build): reading the two arguments 3-9 us, the reduction 9-24 us (Lehmer on 4-6 limbs, then 64-bit Euclid), printing 5-10 us. The shared
+arena in mode 2 (`MIP_PARAM_SMEM=1`) changed nothing (20 digits 34 vs 35 us), so it is not memory: it is one thread's instruction latency
+through serial code (byte-by-byte JSON, the Unicode checks, a dependent chain per limb). Neither Lehmer nor the team moves this range;
+what would is a wider register path (parts up to ~38 digits in 128-bit words, and a 128-bit gcd) or a cheaper parse. Not built.
+
+Two more checks of the team: `MIP_TEAM=64` (where numbers past 32 x 32 limbs use the memory-held conversion) s1 and team corpora
+1,816 / 1,816 and 214 / 214 in modes 1 and 2, default and forced (one forced s1 run gave 1,815 while a racecheck run shared the card;
+four reruns 1,816, the 20,000-digit calls 41-46 ms against the 0.4 s guard, so most likely a guard trip under contention, which answers
+DEVICE_FAILED, not a value); `MIP_TEAM=1024` clamps to 256 and agrees; mode 0 s1 and team 1,816 and 214; `linger_stress.py` 20,000 calls
+0 wrong, and the team corpus with linger and the team forced 214 / 214.
+
+Mode 1 beside the stand-in engine on the final build (`in_process.py`, two runs each): the engine -2.9 / -3.1 % with team 1 and -2.0 / -2.7 % with team 256, against -0.9 to -2.0 % before the team: the kernels now take 255 registers (128 before), whatever the team size. The `speed10-*` records were run again on the final build (conversions from about 128 limbs); the table above matches them.

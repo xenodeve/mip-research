@@ -2039,13 +2039,6 @@ extern "C" MIP_API int mip_open(int device, int resident) {
         if (g_team > lim) g_team = lim;
         if (g_team > 32) g_team -= g_team % 32;
         if (g_team > 1 && g_team < 64) g_team = 64;   // a team is the master's warp and at least one warp of workers
-        if (const char *e = getenv("MIP_CARVEOUT")) {   // the preferred shared-memory share of the SM's L1 (percent; 0: most L1)
-            int v = atoi(e);
-            cudaFuncSetAttribute(once_param<64>, cudaFuncAttributePreferredSharedMemoryCarveout, v);
-            cudaFuncSetAttribute(once_mapped, cudaFuncAttributePreferredSharedMemoryCarveout, v);
-            cudaFuncSetAttribute(once, cudaFuncAttributePreferredSharedMemoryCarveout, v);
-            cudaFuncSetAttribute(worker, cudaFuncAttributePreferredSharedMemoryCarveout, v);
-        }
     }
     int clock_khz = 0;
     cudaDeviceGetAttribute(&clock_khz, cudaDevAttrClockRate, device);

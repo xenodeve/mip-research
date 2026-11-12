@@ -46,7 +46,7 @@ From C or C++, the ABI is `mipmath.h`: `mip_open(device, mode)`, `mip_call(op, a
 | Value | Mode | Use it when |
 |---|---|---|
 | **`2`** (recommended) | one launch per call, zero copy: the kernel reads the request from mapped memory (small arguments ride in the launch parameters) and raises the answer's flag itself | **the engine is another process** (tir4b over llama-server, the PC layer): it costs decode nothing while idle (-0.1 to -0.2 %) and -8 % only under a flood of ~5,200 calls/s |
-| `1` | a resident worker kernel polls for requests, relaunched every ~1 s (under Windows' 2 s TDR) | **MIP inside the engine's own process** (the module's end shape): sparse calls 7.5 us inside the DLL, the engine within 2 % (stand-in engine). **Never beside an engine in another process**: there it halves decode (-44 to -59 %), even idle |
+| `1` | a resident worker kernel polls for requests, relaunched every ~1 s (under Windows' 2 s TDR) | **MIP inside the engine's own process** (the module's end shape): sparse calls 6.8-7.0 us inside the DLL, the engine -2 to -3 % (stand-in engine; -0.9 to -2.0 % before the kernels grew to 255 registers with the team, 2026-11-12). **Never beside an engine in another process**: there it halves decode (-44 to -59 %), even idle |
 | `0` | one launch per call with copies and a blocking sync | comparison only (240 us a call) |
 
 `MIP_CUDA_DEVICE`: the CUDA device index after `CUDA_VISIBLE_DEVICES` (default 0). On this PC, select the card with
@@ -114,8 +114,11 @@ python -m unittest tools.test_mathbackend_harness
 ```
 
 Expected now: fuzz 4,000 / 4,000, paths 220 / 220, s1 1,816 / 1,816, gcd 101 / 101, team 214 / 214, 0 wrong in the stress run, in modes 1
-and 2. `compute-sanitizer --tool memcheck` (and initcheck, racecheck, synccheck) reported 0 errors on the paths corpus on both cards
-before the team; with the team, synccheck and memcheck 0 errors on the team corpus (racecheck did not finish: its process hung at exit).
+and 2 (and `MIP_TEAM=64`, which also runs the memory-held conversion of numbers past 32 x 32 limbs). `compute-sanitizer --tool memcheck`
+(and initcheck, racecheck, synccheck) reported 0 errors on the paths corpus on both cards before the team; with the team, synccheck and
+memcheck 0 errors (mode 2) and racecheck 0 hazards (mode 0; in mode 2 racecheck's process does not exit, with or without the team,
+and holds the card until ended by hand). **The team is checked on the RTX 5060 Ti only**: run the list above on the 4070 SUPER
+(`MIP_PCI=0`, with the developer's go-ahead) before relying on it there.
 
 Speed: `ping.py` (latency and its split), `floor.py` (the empty-kernel floor), `sparse.py`, `impact.py` (decode tok/s beside the calls,
 ABBA), `under_load.py` (`--empty` for the floor there), `in_process.py` (a stand-in engine in the same process), `speed.py` (per op,
