@@ -123,7 +123,10 @@ repo).
 `numbers-s1` 1,816 / 1,816 (RTX 5060 Ti; the 4070 SUPER ran it at 1,800 before the 2026-11-12 changes); `numbers-gcd-s4` 101 / 101 and
 `numbers-team-s5` 214 / 214 (RTX 5060 Ti, modes 1 and 2, with and without every case forced through the team); compute-sanitizer 0
 errors (before the team; with it, synccheck and memcheck 0 errors). Big numbers run on a block of 256 threads (multiply, decimal
-conversions, Lehmer's gcd steps): 20,000-digit integers 14 ms a call (one thread: 122 ms), still far slower than Python (11-23 us). A call costs 10.3 us inside the DLL on an idle card (an empty kernel: 8.7), 5.8-6.5 us back to back with the
+conversions, Lehmer's gcd steps): 20,000-digit integers 14 ms a call (one thread: 122 ms), still far slower than Python (11-23 us).
+In a live run (4B NVFP4 W4A8 · llama.cpp · RTX 4070 SUPER, tir4b General flags, 12 answers in flight; partial, 2026-11-12) the
+pause of an inline put is ~210 ms, almost all the engine's stop and resume; MIP's host work is 2.5-3 ms a put, 0.2 ms per generated
+token, and the CUDAMathBackend across processes adds ~0.7 ms a put rather than saving any (design, "The pause of an inline put"). A call costs 10.3 us inside the DLL on an idle card (an empty kernel: 8.7), 5.8-6.5 us back to back with the
 linger; beside llama-server decoding in another process ~175 us (as an empty kernel there), with decode unchanged (-0.1 to -0.2 %).
 
 **Where it lives / to use it:** mode 2 (`MIP_CUDA_RESIDENT=2`) beside an engine in another process; mode 1 only inside the engine's own
