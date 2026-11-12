@@ -1,0 +1,3 @@
+gate 3 (token channel): C:\Users\xenod\mip-work\a100\pc\channel-miss1\b
+right/cut: 1 right/done: 3517 right/unchecked: 1 right/value right: 3517 right/written as steered: 3517 wrong/cut: 33 wrong/done: 2148 wrong/unchecked: 1 wrong/value right: 2180 wrong/written as steered: 2148
+PASS: every steered value right

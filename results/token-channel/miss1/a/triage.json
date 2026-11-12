@@ -1,0 +1,482 @@
+[
+ {
+  "id": "dm_div_big-5070",
+  "sample": 0,
+  "route": "agreed-wrong",
+  "rule": false,
+  "verdict": {
+   "verdict": "different",
+   "value": "0.00456222",
+   "reason": "The reply's final boxed answer is a decimal approximation, not exactly equal to the reference fraction 5647/1237763."
+  },
+  "finish": "stop",
+  "tokens": 26895,
+  "gold": "5647/1237763",
+  "rule_value": 0.00456222
+ },
+ {
+  "id": "dm_mul_div_longer-1505",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "-198",
+   "reason": "The reply simplifies the expression and settles on -198, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 11372,
+  "gold": "-198",
+  "rule_value": -198.0
+ },
+ {
+  "id": "dm_mul_div_longer-1505",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "-198",
+   "reason": "The reply simplifies the expression and concludes with -198, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 11727,
+  "gold": "-198",
+  "rule_value": -198.0
+ },
+ {
+  "id": "dm_simplify_surd-3480",
+  "sample": 0,
+  "route": "agreed-wrong",
+  "rule": false,
+  "verdict": {
+   "verdict": "different",
+   "value": "1036800000",
+   "reason": "The reply settles on 1036800000, which does not equal the reference answer -103680*sqrt(3) + 884016."
+  },
+  "finish": "stop",
+  "tokens": 12510,
+  "gold": "-103680*sqrt(3) + 884016",
+  "rule_value": 1036800000.0
+ },
+ {
+  "id": "dm_swr_p_sequence-3480",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "1/78",
+   "reason": "The reply calculates and settles on 1/78, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 5657,
+  "gold": "1/78",
+  "rule_value": 78.0
+ },
+ {
+  "id": "dm_swr_p_sequence-3480",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "1/78",
+   "reason": "The reply calculates and settles on 1/78, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 9516,
+  "gold": "1/78",
+  "rule_value": 78.0
+ },
+ {
+  "id": "stdmath-e3263989",
+  "sample": 0,
+  "route": "agreed-wrong",
+  "rule": false,
+  "verdict": {
+   "verdict": "different",
+   "value": "-3-2√2, -3+2√2, 3-2√2, 3+2√2",
+   "reason": "The reply gives four solutions, while the reference answer gives only 3±2√2."
+  },
+  "finish": "stop",
+  "tokens": 31412,
+  "gold": "3\\pm2\\sqrt{2}",
+  "rule_value": 2.0
+ },
+ {
+  "id": "stdmath-e3263989",
+  "sample": 1,
+  "route": "agreed-wrong",
+  "rule": false,
+  "verdict": {
+   "verdict": "different",
+   "value": "3-2√2, 3+2√2, -3+2√2, -3-2√2",
+   "reason": "The reference answer is only 3±2√2, but the reply includes additional negative solutions."
+  },
+  "finish": "stop",
+  "tokens": 30096,
+  "gold": "3\\pm2\\sqrt{2}",
+  "rule_value": 2.0
+ },
+ {
+  "id": "dm_div_big-1395",
+  "sample": 0,
+  "route": "disagree",
+  "rule": true,
+  "verdict": {
+   "verdict": "different",
+   "value": "-1.9887",
+   "reason": "The reply settles on a rounded decimal approximation, not the exact fraction -73388/36903."
+  },
+  "finish": "stop",
+  "tokens": 16876,
+  "gold": "-73388/36903",
+  "rule_value": -1.9887
+ },
+ {
+  "id": "dm_div_big-1395",
+  "sample": 1,
+  "route": "disagree",
+  "rule": true,
+  "verdict": {
+   "verdict": "different",
+   "value": "-1.9887",
+   "reason": "The reply gives a rounded decimal approximation, not the exact value -73388/36903."
+  },
+  "finish": "stop",
+  "tokens": 25981,
+  "gold": "-73388/36903",
+  "rule_value": -1.9887
+ },
+ {
+  "id": "dm_div_big-2783",
+  "sample": 0,
+  "route": "disagree",
+  "rule": false,
+  "verdict": {
+   "verdict": "same",
+   "value": "-171/2221234",
+   "reason": "The reply gives the exact fraction -171/2221234, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 62093,
+  "gold": "-171/2221234",
+  "rule_value": 2221234.0
+ },
+ {
+  "id": "dm_div_big-2783",
+  "sample": 1,
+  "route": "agreed-wrong",
+  "rule": false,
+  "verdict": {
+   "verdict": "different",
+   "value": "-0.000077",
+   "reason": "The reply settles on an approximate decimal, not the exact fraction -171/2221234."
+  },
+  "finish": "stop",
+  "tokens": 18202,
+  "gold": "-171/2221234",
+  "rule_value": -7.7e-05
+ },
+ {
+  "id": "dm_div_big-5070",
+  "sample": 1,
+  "route": "agreed-wrong",
+  "rule": false,
+  "verdict": {
+   "verdict": "different",
+   "value": "0.004562374",
+   "reason": "The reply settles on a decimal approximation rather than the exact fraction 5647/1237763."
+  },
+  "finish": "stop",
+  "tokens": 45294,
+  "gold": "5647/1237763",
+  "rule_value": 0.004562374
+ },
+ {
+  "id": "dm_simplify_surd-3480",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "884016 - 103680*sqrt(3)",
+   "reason": "The reply's final value equals the reference answer, just with terms reordered."
+  },
+  "finish": "stop",
+  "tokens": 38050,
+  "gold": "-103680*sqrt(3) + 884016",
+  "rule_value": 3.0
+ },
+ {
+  "id": "stdmath-370853d3",
+  "sample": 0,
+  "route": "agreed-wrong",
+  "rule": false,
+  "verdict": {
+   "verdict": "different",
+   "value": "7",
+   "reason": "The reply settles on 7, while the reference answer is 14/3."
+  },
+  "finish": "stop",
+  "tokens": 40995,
+  "gold": "\\frac{14}{3}",
+  "rule_value": 7.0
+ },
+ {
+  "id": "stdmath-370853d3",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "14/3",
+   "reason": "The reply concludes with the same value as the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 22305,
+  "gold": "\\frac{14}{3}",
+  "rule_value": 3.0
+ },
+ {
+  "id": "stdmath-97b18f58",
+  "sample": 0,
+  "route": "agreed-wrong",
+  "rule": false,
+  "verdict": {
+   "verdict": "different",
+   "value": "64",
+   "reason": "The reply settles on 64, while the reference answer is 0."
+  },
+  "finish": "stop",
+  "tokens": 38064,
+  "gold": "0",
+  "rule_value": 64.0
+ },
+ {
+  "id": "stdmath-97b18f58",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "0",
+   "reason": "The reply concludes the maximum value is 0, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 33197,
+  "gold": "0",
+  "rule_value": 0.0
+ },
+ {
+  "id": "dm_div_big-4138",
+  "sample": 0,
+  "route": "agreed-wrong",
+  "rule": false,
+  "verdict": {
+   "verdict": "hedged",
+   "value": null,
+   "reason": "The reply offers multiple possible answers (exact fraction, decimal approximation, integer truncation/floor) and does not definitively choose one; the final boxed decimal is approximate and incomplete."
+  },
+  "finish": "stop",
+  "tokens": 13994,
+  "gold": "-139241497/13",
+  "rule_value": -10710884.384615384
+ },
+ {
+  "id": "dm_div_big-4138",
+  "sample": 1,
+  "route": "disagree",
+  "rule": false,
+  "verdict": {
+   "verdict": "same",
+   "value": "-139241497/13",
+   "reason": "The reply gives the exact fraction -139241497/13, matching the reference, and its decimal is an equivalent representation."
+  },
+  "finish": "stop",
+  "tokens": 13517,
+  "gold": "-139241497/13",
+  "rule_value": -10710884.384615384
+ },
+ {
+  "id": "dm_div_big-9991",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "-551216.052631579",
+   "reason": "The decimal value equals -10473105/19."
+  },
+  "finish": "stop",
+  "tokens": 14819,
+  "gold": "-10473105/19",
+  "rule_value": -551216.052631579
+ },
+ {
+  "id": "dm_div_big-9991",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "-10473105/19",
+   "reason": "The reply's final decimal equals the reference fraction -10473105/19."
+  },
+  "finish": "stop",
+  "tokens": 11306,
+  "gold": "-10473105/19",
+  "rule_value": -551216.052631579
+ },
+ {
+  "id": "dm_mixed_longer-9951",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "313",
+   "reason": "The reply simplifies the expression and arrives at 313, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 9981,
+  "gold": "313",
+  "rule_value": 313.0
+ },
+ {
+  "id": "dm_mixed_longer-9951",
+  "sample": 1,
+  "route": "agreed-wrong",
+  "rule": false,
+  "verdict": {
+   "verdict": "different",
+   "value": "6574.4",
+   "reason": "The reply settles on 6574.4, not the reference answer 313."
+  },
+  "finish": "stop",
+  "tokens": 8778,
+  "gold": "313",
+  "rule_value": 6574.4
+ },
+ {
+  "id": "dm_mul_div_longer-9991",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "-136",
+   "reason": "The reply simplifies the expression and settles on -136, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 22420,
+  "gold": "-136",
+  "rule_value": -136.0
+ },
+ {
+  "id": "dm_mul_div_longer-9991",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "-136",
+   "reason": "The reply simplifies to -136, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 5297,
+  "gold": "-136",
+  "rule_value": -136.0
+ },
+ {
+  "id": "dm_swr_p_sequence-9951",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "56/495",
+   "reason": "The reply calculates and settles on 56/495, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 15726,
+  "gold": "56/495",
+  "rule_value": 495.0
+ },
+ {
+  "id": "dm_swr_p_sequence-9951",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "56/495",
+   "reason": "The reply computes and settles on 56/495, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 13402,
+  "gold": "56/495",
+  "rule_value": 495.0
+ },
+ {
+  "id": "stdmath-45fa3ef2",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "32348",
+   "reason": "The reply calculates and rounds to 32348, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 13195,
+  "gold": "32348",
+  "rule_value": 32348.0
+ },
+ {
+  "id": "stdmath-45fa3ef2",
+  "sample": 1,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "32348",
+   "reason": "The reply calculates and rounds to 32348, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 7041,
+  "gold": "32348",
+  "rule_value": 32348.0
+ },
+ {
+  "id": "stdmath-fbf10ed4",
+  "sample": 0,
+  "route": "agreed-right",
+  "rule": true,
+  "verdict": {
+   "verdict": "same",
+   "value": "7",
+   "reason": "The reply computes the distance and settles on 7, matching the reference answer."
+  },
+  "finish": "stop",
+  "tokens": 15762,
+  "gold": "7",
+  "rule_value": 7.0
+ },
+ {
+  "id": "stdmath-fbf10ed4",
+  "sample": 1,
+  "route": "agreed-wrong",
+  "rule": false,
+  "verdict": {
+   "verdict": "different",
+   "value": "sqrt(3689/89)",
+   "reason": "The reply computes a distance of sqrt(3689/89), not 7."
+  },
+  "finish": "stop",
+  "tokens": 17492,
+  "gold": "7",
+  "rule_value": 89.0
+ }
+]

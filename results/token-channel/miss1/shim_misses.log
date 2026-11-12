@@ -1,0 +1,11 @@
+0.45.895.410 I mip-channel: connected to 127.0.0.1:8095, 5 trigger tokens
+69.37.579.718 W mip-channel: no plan for slot 268 seq 13 in 50 ms (1 missed)
+80.01.227.118 W mip-channel: no plan for slot 284 seq 0 in 50 ms (2 missed)
+116.47.220.132 W mip-channel: the service closed the connection; requests go on unsteered
+0.26.063.621 I mip-channel: connected to 127.0.0.1:8095, 5 trigger tokens
+11.24.360.131 W mip-channel: no plan for slot 54 seq 0 in 50 ms (1 missed)
+12.15.412.702 W mip-channel: no plan for slot 57 seq 0 in 50 ms (2 missed)
+20.09.583.425 W mip-channel: no plan for slot 82 seq 0 in 50 ms (3 missed)
+25.35.282.246 W mip-channel: no plan for slot 98 seq 0 in 50 ms (4 missed)
+111.39.271.332 W mip-channel: no plan for slot 302 seq 18 in 50 ms (5 missed)
+147.09.286.421 W mip-channel: the service closed the connection; requests go on unsteered

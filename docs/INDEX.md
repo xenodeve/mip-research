@@ -105,7 +105,7 @@ The mechanisms most worth carrying over, with what each needs. Every one has its
 | Forced block + close after a print | [sandbox](sandbox.md#forced-block--close-after-a-print) | 0.508x tokens on 49 questions | engine `--igc-sandbox --igc-sandbox-after 512 --igc-sandbox-close`; off for coding |
 | Tool route (`run_python`) | [sandbox](sandbox.md#tool-route-the-models-own-run_python) | 0.71-0.81x tokens at equal right answers | engine or `external_bench --tool-loop` |
 | Predictive probes and router | [detect](detect.md#predictive-probes-and-the-moe-router) | 83-89 % seen 2 tokens ahead | wire `UnifiedDetector` into a runner; signals may only arm, the exact parse acts |
-| Token channel (llama.cpp shim + MIP service) | [inject](inject.md#token-channel---channel) | gates 1-3 pass; development rows 19 / 20 through the channel against 20 / 20 text puts (rule and API reader; the one differing pair is path noise), 2,911 steered values all right | the patched llama.cpp (`third_party/llama.cpp/mip-channel.patch`), `MIP_CHANNEL`, tir4b `--channel --think-only`; phase 2 coverage next |
+| Token channel (llama.cpp shim + MIP service) | [inject](inject.md#token-channel---channel) | gates 1-3 pass; development rows 19 / 20 through the channel against 20 / 20 text puts (rule and API reader; the one differing pair is path noise), 2,911 steered values all right; on 16 missed rows 5,699 steered values, none wrong, no gain beyond noise (footnote) | the patched llama.cpp (`third_party/llama.cpp/mip-channel.patch`), `MIP_CHANNEL`, tir4b `--channel --think-only`; phase 2 coverage next |
 | Engine closes (`in_cycle` 4,096, third-repeat close, repeat note) | [anti-loop](antiloop.md) | threshold scans of 7,000-12,000 stored runs | part of the engine build; not timed with the best-config closers |
 
 ## Notes
@@ -204,6 +204,7 @@ MIP รันอยู่สองที่ ใช้กฎชุดเดีย
 - **ตัวปิด loop ของ engine**
 - **Token channel:** llama.cpp ที่ patch แล้วส่งทุก token ให้ MIP แล้ว MIP บังคับค่าที่คำนวณได้ในส่วนคิด ผ่าน gate 1-3 แล้ว บน development rows
   ผ่าน channel ได้ 19 / 20 ส่วน put ข้อความได้ 20 / 20 (ทั้งตามกฎและ API reader) คู่ที่ต่างกันคู่เดียวเป็น path noise และค่าที่บังคับลงไปถูกทั้ง 2,911 ค่า
+  บน 16 ข้อที่โมเดลเคยพลาด บังคับไป 5,699 ค่า ไม่มีค่าไหนผิด ส่วนจำนวนข้อที่ตอบถูกยังไม่ต่างจาก put ข้อความเกินระดับ noise (อยู่ในหมายเหตุ)
 
 [^th-port]: หมายเหตุ: เกณฑ์ของตัวปิดตั้งจาก trace ของ Qwen3.5-4B บน vLLM ยังไม่เคยรันบน engine และ vLLM ไม่ให้ผลซ้ำแบบ token ต่อ token
     ข้ามรอบ (mip-research#21) ส่วน engine ของ Strata บน A100 ให้ผลซ้ำ 49/49 ตอนรันแบบ greedy (Strata-xeno#283) แต่ยังไม่ได้วัดว่ารันแบบ sampled

@@ -89,6 +89,13 @@ card fell to 6-14 tok/s over a run (llama-server cleared idle slots on every new
 Round 9's timings ran with that default (2,068 of 2,293 slot picks by LRU in the smoke, 7-17 % in round 9's own logs), so they are
 not a guide to a round's length now.[^np4cpu]
 
+**Under `-kvu`, `-c` is one KV pool for every slot, not a window per answer** (2026-11-13). Every answer in flight has to fit in it
+together; when it fills, the server answers the requests in flight with "Context size has been exceeded" (HTTP 500) and tir4b stops.
+The token channel's `miss1` run hit it with 12 long answers in flight on 262,144 (one at 84k tokens, minute 47). Each answer keeps its
+full 262,144 tokens either way: tir4b caps an answer there (`CONTEXT`) and the server reports `n_ctx_slot = 262144` with a bigger pool.
+On the RTX 5060 Ti (4B NVFP4 W4A8, KV q8_0, np 13) a pool costs about 21.5 KB a token: 393,216 loads at 12.4 GB, 524,288 at 15.2 GB of
+16.3. Size the pool and the answers in flight together: long answers want a bigger pool or fewer in flight.
+
 **Server flags** (2026-11-11, `scripts/pc/flag_test.sh`, `-np 4`, same rows and arms, 8 minutes each, both cards run at once):
 
 | Config (on top of `--no-cache-idle-slots`) | RTX 4070 SUPER | RTX 5060 Ti |

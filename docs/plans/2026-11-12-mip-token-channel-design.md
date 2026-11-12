@@ -218,8 +218,33 @@ in-process on the A100) and Strata-xeno through the same plan format.
   service is down (now a 100 ms non-blocking connect; a request then finishes in under 1 s), and a plan's node indexes checked.
 - **Gate 3 itself:** it now reads `gcd(a, b)` and `\div`, and decodes 200 tokens at an event, not 40 (a long question line written a
   digit a token had been cut short and shown as differing); 0 values unchecked in dev1 and dev2.
-- **Not yet run:** the first experiment's variable (forcing against `--logit-value` +8 at the same positions), and a run on rows the
-  model misses, which is where a gain could show.
+- **On rows the model misses** (`results/token-channel/miss1/`, 2026-11-13, same binary, flags and launcher; development rows): 16 rows
+  where round 9's PC-layer General arm was wrong on at least one seed (`frozen9a-stay`, `frozen9b`; 4 dropped where the API reader judged
+  every miss right), x 2 seeds: DeepMind `div_big` 5, `mul_div_longer` 2, `swr_p_sequence` 2, `simplify_surd` 1, `mixed_longer` 1, and
+  5 MATH-500 level 5. Rule: A 19 / 32, B 18 / 32. API reader: A 19 / 32, B 21 / 32; the two disagree on 7 answers, all read, and the reader
+  is right on each (a boxed `-1.9887` the rule took; exact fractions and 40-digit repeating decimals the rule refused). Pairs where only one
+  arm is right: reader B 7, A 5, one-sided sign test p = 0.39; rule B 7, A 8, p = 0.50. **No gain beyond noise.** Where the texts part:
+  8 of the reader's 12 such pairs part before B's first steered value (path noise: all 5 of A's, 3 of B's). The other 4 part at
+  character 0, all B's, all on the 16 answers whose question has a rational value, where B's first steer is the fixed-question line:
+  there the reader gives A 9 / 16 and B 13 / 16, 4 to 0 (p = 0.06). Arm A has no question line (`--question-value` off), so these 4
+  measure the question line and the channel together. After the question line the model closed its thinking itself on 4 of the 16
+  (34-49 thinking tokens): 3 right, 1 boxed a rounded decimal (`div_big-5070` sample 1). Tokens: on the 16 question-line answers B
+  249,601 against A 318,552 (median 11,557 against 14,407, B shorter on 11); on the other 16, B 368,750 against A 344,420.
+- **Every touch in miss1:** 5,699 steered values. On answers that finished right, 3,517 checked right and 0 wrong; on answers that
+  finished wrong, 2,180 right and 0 wrong; 2 not read by gate 3, checked by hand: `\sqrt{11.7^2 - 9^2} = \frac{9\sqrt{69}}{10}` is right,
+  and `\sin(45) = \frac{\sqrt{2}}{2}` is true in degrees (the model's next line writes `\sin(45^\circ)`) but not if the bare 45 is read as
+  radians. MIP reads an angle with no unit as degrees when the text works in degrees (`tools/igc/unified_detect.py:348`); whether that
+  holds the General Style's "true under every reading" is open for the developer. 5,665 values were written as steered; the other 34 are
+  `cut`: steered into looping text that the loop close then cut and replaced with `</think>` and the answer (2 answers); nothing was
+  steered after the close. 7 asks missed the 50 ms wait (2 in the first attempt, 5 of 11,933 after the resume), none at a steered value.
+- **Found while running miss1:** under `-kvu` the server's `-c` is one KV pool shared by every slot, not a window per answer. With 12
+  answers in flight (one at 84k tokens) the 262,144 pool filled at minute 47, the server answered 12 requests with "Context size has been
+  exceeded" (HTTP 500) and both arms stopped. The launcher now takes `CTX` (a 393,216 pool is 12.4 GB on the RTX 5060 Ti, ~21.5 KB a
+  token); tir4b still caps each answer at 262,144 (`CONTEXT`), and the server reports `n_ctx_slot = 262144`. The run went on with
+  `--resume` (A kept 12 finished answers, B 10) at 3 answers per arm in flight. Gate 3 now reads pi, trig, `\pm` and tuples by sympy,
+  leaves a trig function of a bare number unread, and counts values at or past a loop close as `cut`; dev1 and dev2 read as before.
+- **Not yet run:** the first experiment's variable (forcing against `--logit-value` +8 at the same positions), an arm with the
+  fixed-question line as text (to tell the question line from the channel), and a frozen set.
 
 ## Coverage of every open item
 

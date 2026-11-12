@@ -17,9 +17,12 @@ SRV=C:/AI/llama.cpp/build-w4a8-mip/bin/llama-server.exe
 GGUF=$G/gguf/qwen35-4b-nvfp4-axion.gguf
 PORT=8093; MIP_PORT=8095
 NP=$((LIVE * 2 + 1))
+# under -kvu, -c is ONE KV pool shared by every slot, not a window per answer: every answer in flight must fit in it together. tir4b
+# caps each answer at 262,144 itself (CONTEXT), so a bigger pool keeps full context. miss1 overflowed 262,144 with 12 answers in flight.
+CTX=${CTX:-262144}
 export PATH="/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.3/bin/x64:/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.3/bin:$PATH"
-echo "server $SRV $(sha256sum $SRV | cut -c1-16) gguf $GGUF gpu 1 (RTX 5060 Ti) np $NP args -c 262144 -kvu -fa on -ctk q8_0 -ctv q8_0 --no-cache-idle-slots -cram 0 --prio 2; MIP_CHANNEL 127.0.0.1:$MIP_PORT; llama.cpp $(git -C C:/AI/llama.cpp rev-parse --short HEAD)" > $OUT/setup
-CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1 MIP_CHANNEL=127.0.0.1:$MIP_PORT $SRV -m $GGUF -ngl 999 -c 262144 -np $NP -kvu -fa on \
+echo "server $SRV $(sha256sum $SRV | cut -c1-16) gguf $GGUF gpu 1 (RTX 5060 Ti) np $NP args -c $CTX -kvu -fa on -ctk q8_0 -ctv q8_0 --no-cache-idle-slots -cram 0 --prio 2; MIP_CHANNEL 127.0.0.1:$MIP_PORT; llama.cpp $(git -C C:/AI/llama.cpp rev-parse --short HEAD)" > $OUT/setup
+CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1 MIP_CHANNEL=127.0.0.1:$MIP_PORT $SRV -m $GGUF -ngl 999 -c $CTX -np $NP -kvu -fa on \
   -ctk q8_0 -ctv q8_0 --no-cache-idle-slots -cram 0 --prio 2 --host 127.0.0.1 --port $PORT --no-webui > $OUT/llama.log 2>&1 &
 SP=$!
 for i in $(seq 1 90); do curl -s -m 2 http://127.0.0.1:$PORT/health | grep -q ok && break; sleep 2; done

@@ -243,13 +243,21 @@ every answer, 20 / 20 for text puts and 19 / 20 through the channel. 2,911 value
 steered, 1 not (the shim missed 4 of 7,944 asks at its 50 ms wait). The one pair where only one arm is right is path noise: the two
 texts part at character 172, before the first steered value, and the slip is in the final answer, which nothing steers. The
 fixed-question line was steered on all 12 answers whose question has a rational value, all right in both arms. Records:
-[`../results/token-channel/dev2/`](../results/token-channel/dev2/). [^channel]
+[`../results/token-channel/dev2/`](../results/token-channel/dev2/). On 16 rows round 9's General arm missed (x 2 seeds, MATH-500 level 5
+and DeepMind), 5,699 values were steered and none checked wrong (5,697 right by gate 3 or by hand; one, `\sin(45)` read in degrees
+from its text, is true only in that unit); 34 sat in looping text the loop close later cut and are counted apart. Records:
+[`../results/token-channel/miss1/`](../results/token-channel/miss1/). [^channel]
 
 [^channel]: หมายเหตุ: 20 answers on development rows find bugs; they do not measure, and A was right on all 20, so a gain could not show.
     Tokens: 259,505 through the channel against 291,156; on the 12 answers with a fixed-question line 108,060 against 163,068 (median
     7,661 against 11,031, shorter on 8 of 12), on the other 8 151,445 against 128,088 (one 81,566-token answer; median 9,857 against
     13,430, shorter on 6 of 8). Too few to read. The first run on the same rows (`../results/token-channel/dev1/`, commit `753b61d`,
     before the character trie and the request-base fix) missed 73 of 5,544 asks and had the same answer wrong in both arms.
+    On the missed rows (`miss1`, development rows, 32 answers an arm) the channel shows no gain beyond noise: API reader 21 / 32
+    through the channel against 19 / 32 (pairs right in one arm only 7 to 5, one-sided sign test p = 0.39), rule 18 / 32 against 19 / 32
+    (7 to 8). Eight of the reader's 12 such pairs part before the first steered value. The other 4, all the channel's, part at
+    character 0 on answers that start with the fixed-question line, which the text arm does not have, so they do not separate the
+    question line from the channel. Details: [design, Phase 1 results](plans/2026-11-12-mip-token-channel-design.md#phase-1-results-2026-11-12-4b-nvfp4-w4a8--llamacpp--rtx-5060-ti).
 
 ## Re-check hold-down
 

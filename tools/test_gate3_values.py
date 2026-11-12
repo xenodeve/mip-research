@@ -48,5 +48,43 @@ class SurdTests(unittest.TestCase):
         self.assertIs(value_right(inline('-6(-2\\sqrt{204})', '-24\\sqrt{51}'), ''), False)
 
 
+class PiTrigTests(unittest.TestCase):
+    # miss1 (MATH-500 level 5) left 146 values unchecked: pi, trig, plus-minus, tuples
+    def test_pi_and_trig(self):
+        self.assertTrue(value_right(inline('-\\pi/2 + \\pi', '\\frac{\\pi}{2}'), ''))
+        self.assertTrue(value_right(inline('\\cos(\\pi/3)', '0.5'), ''))
+        self.assertTrue(value_right(inline('|\\cos(2\\pi/3)|', '0.5'), ''))
+        self.assertTrue(value_right(inline('2 \\cos \\frac{\\pi/3 - 2\\pi/3}{2}', '\\sqrt{3}'), ''))
+        self.assertTrue(value_right(inline('\\sin(45^\\circ)', '\\frac{\\sqrt{2}}{2}'), ''))
+        self.assertIs(value_right(inline('\\cos(\\pi/3)', '1'), ''), False)
+
+    def test_a_cut_decimal_with_pi(self):
+        self.assertTrue(value_right(inline('\\pi - 1.107', '2.0345...'), ''))
+        self.assertIs(value_right(inline('\\pi - 1.107', '2.0346...'), ''), False)
+
+    def test_plus_minus_and_tuples(self):
+        self.assertTrue(value_right(inline('\\frac{6 \\pm \\sqrt{36 - 4}}{2}', '3 \\pm 2\\sqrt{2}'), ''))
+        self.assertIs(value_right(inline('\\frac{6 \\pm \\sqrt{36 - 4}}{2}', '3 \\pm \\sqrt{2}'), ''), False)
+        self.assertTrue(value_right(inline('(-5-3, -3+10, 6-1)', '(-8, 7, 5)'), ''))
+        self.assertIs(value_right(inline('(-5-3, -3+10, 6-1)', '(-8, 7, 4)'), ''), False)
+
+    def test_a_bare_angle_is_not_read(self):
+        # no unit: true in degrees, false in radians; MIP reads it by the text's unit (unified_detect), this check does not decide
+        self.assertIsNone(value_right(inline('\\sin(45)', '\\frac{\\sqrt{2}}{2}'), ''))
+
+
+class StateTests(unittest.TestCase):
+    def test_values_past_a_loop_close_are_cut(self):
+        # miss1 dm_div_big-9991#0: the loop close cut the text at 5219; the 33 values steered into the looping text past it were
+        # replaced with the close and the answer, never steered there
+        from gate3_values import steer_state
+        closes = [5219]
+        self.assertEqual(steer_state(dict(at=5205, done=True), set(), closes), 'done')
+        self.assertEqual(steer_state(dict(at=5235, done=True), set(), closes), 'cut')
+        self.assertEqual(steer_state(dict(at=5219, done=True), set(), closes), 'cut')
+        self.assertEqual(steer_state(dict(at=10, done=True, slot=3, seq=1), {(3, 1)}, closes), 'missed')
+        self.assertEqual(steer_state(dict(at=10, dropped=True), set(), []), 'dropped')
+
+
 if __name__ == '__main__':
     unittest.main()

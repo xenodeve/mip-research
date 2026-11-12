@@ -1,0 +1,1 @@
+server C:/AI/llama.cpp/build-w4a8-mip/bin/llama-server.exe 7ce2b898af4c9a7a gguf C:/Users/xenod/mip-work/gguf/qwen35-4b-nvfp4-axion.gguf gpu 1 (RTX 5060 Ti) np 7 args -c 393216 -kvu -fa on -ctk q8_0 -ctv q8_0 --no-cache-idle-slots -cram 0 --prio 2; MIP_CHANNEL 127.0.0.1:8095; llama.cpp eae8e9a01 (resumed with --resume after try1, see try1/)

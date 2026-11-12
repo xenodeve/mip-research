@@ -1,0 +1,162 @@
+{
+ "dm_div_big-5070#0": {
+  "verdict": "same",
+  "value": "5647/1237763",
+  "reason": "The reply gives the exact fraction 5647/1237763, matching the reference; the decimal is an equivalent form."
+ },
+ "dm_div_big-5070#1": {
+  "verdict": "different",
+  "value": "0.0045617",
+  "reason": "The reply settles on an approximate decimal, not the exact fraction 5647/1237763."
+ },
+ "dm_mul_div_longer-1505#0": {
+  "verdict": "same",
+  "value": "-198",
+  "reason": "The reply evaluates the expression and settles on -198, matching the reference answer."
+ },
+ "dm_mul_div_longer-1505#1": {
+  "verdict": "same",
+  "value": "-198",
+  "reason": "The reply simplifies the expression and concludes with -198, matching the reference answer."
+ },
+ "dm_simplify_surd-3480#0": {
+  "verdict": "same",
+  "value": "884016 - 103680*sqrt(3)",
+  "reason": "The reply's final answer matches the reference answer in equivalent form."
+ },
+ "dm_simplify_surd-3480#1": {
+  "verdict": "same",
+  "value": "884016 - 103680*sqrt(3)",
+  "reason": "The reply's final value equals the reference answer, just with terms in a different order."
+ },
+ "dm_swr_p_sequence-3480#0": {
+  "verdict": "different",
+  "value": "1/13",
+  "reason": "The reply settles on 1/13, not the reference 1/78."
+ },
+ "dm_swr_p_sequence-3480#1": {
+  "verdict": "different",
+  "value": "1/91",
+  "reason": "The reply settles on 1/91, while the reference answer is 1/78."
+ },
+ "dm_div_big-1395#0": {
+  "verdict": "different",
+  "value": "-1.4466938243",
+  "reason": "The reply settles on a decimal that is not equal to -73388/36903; the correct value is approximately -1.98867."
+ },
+ "dm_div_big-1395#1": {
+  "verdict": "same",
+  "value": "-73388/36903",
+  "reason": "The reply gives the same exact fraction as the reference answer."
+ },
+ "stdmath-370853d3#0": {
+  "verdict": "different",
+  "value": "\\frac{7}{3}",
+  "reason": "The reply settles on 7/3, while the reference answer is 14/3."
+ },
+ "stdmath-370853d3#1": {
+  "verdict": "different",
+  "value": "70√2 - 98",
+  "reason": "The reply settles on 70√2 - 98, not the reference 14/3."
+ },
+ "stdmath-97b18f58#0": {
+  "verdict": "same",
+  "value": "0",
+  "reason": "The reply concludes the maximum value is 0, matching the reference answer."
+ },
+ "stdmath-97b18f58#1": {
+  "verdict": "same",
+  "value": "0",
+  "reason": "The reply settles on the maximum value 0, matching the reference answer."
+ },
+ "stdmath-e3263989#0": {
+  "verdict": "different",
+  "value": "3-2√2, 3+2√2, -3+2√2, -3-2√2",
+  "reason": "The reference answer only includes 3±2√2, while the reply adds the negative counterparts."
+ },
+ "stdmath-e3263989#1": {
+  "verdict": "different",
+  "value": "-3-2√2, -3+2√2, 3-2√2, 3+2√2",
+  "reason": "The reply includes four solutions, while the reference answer is only 3±2√2."
+ },
+ "dm_div_big-2783#0": {
+  "verdict": "same",
+  "value": "-171/2221234",
+  "reason": "The reply gives the exact fraction -171/2221234, matching the reference answer."
+ },
+ "dm_div_big-2783#1": {
+  "verdict": "same",
+  "value": "-171/2221234",
+  "reason": "The reply gives the exact fraction -171/2221234, matching the reference answer."
+ },
+ "dm_div_big-4138#0": {
+  "verdict": "different",
+  "value": "-10710884",
+  "reason": "The reply settles on the integer -10710884, while the reference answer is the exact fraction -139241497/13, which is not equal to that integer."
+ },
+ "dm_div_big-4138#1": {
+  "verdict": "same",
+  "value": "-10710884.384615...",
+  "reason": "The reply's final boxed decimal equals the reference fraction -139241497/13."
+ },
+ "dm_div_big-9991#0": {
+  "verdict": "same",
+  "value": "-10473105/19",
+  "reason": "The reply settles on the exact fraction -10473105/19 and its decimal equivalent, which equals the reference."
+ },
+ "dm_div_big-9991#1": {
+  "verdict": "same",
+  "value": "-10473105/19",
+  "reason": "The reply's final decimal equals the reference fraction -10473105/19."
+ },
+ "dm_mixed_longer-9951#0": {
+  "verdict": "same",
+  "value": "313",
+  "reason": "The reply simplifies the expression and arrives at 313, matching the reference answer."
+ },
+ "dm_mixed_longer-9951#1": {
+  "verdict": "same",
+  "value": "313",
+  "reason": "The reply simplifies the expression and concludes with 313, matching the reference answer."
+ },
+ "dm_mul_div_longer-9991#0": {
+  "verdict": "same",
+  "value": "-136",
+  "reason": "The reply simplifies the expression and settles on -136, matching the reference answer."
+ },
+ "dm_mul_div_longer-9991#1": {
+  "verdict": "same",
+  "value": "-136",
+  "reason": "The reply computes and settles on -136, matching the reference answer."
+ },
+ "dm_swr_p_sequence-9951#0": {
+  "verdict": "same",
+  "value": "56/495",
+  "reason": "The reply calculates and settles on the same probability as the reference."
+ },
+ "dm_swr_p_sequence-9951#1": {
+  "verdict": "different",
+  "value": "7/55",
+  "reason": "The reply settles on 7/55, which is not equal to the reference 56/495."
+ },
+ "stdmath-45fa3ef2#0": {
+  "verdict": "different",
+  "value": "32277",
+  "reason": "The reply calculates and settles on 32277, while the reference answer is 32348."
+ },
+ "stdmath-45fa3ef2#1": {
+  "verdict": "same",
+  "value": "32348",
+  "reason": "The reply calculates and rounds to 32348, matching the reference answer."
+ },
+ "stdmath-fbf10ed4#0": {
+  "verdict": "same",
+  "value": "7",
+  "reason": "The reply computes and settles on the distance 7, matching the reference answer."
+ },
+ "stdmath-fbf10ed4#1": {
+  "verdict": "same",
+  "value": "7",
+  "reason": "The reply computes and settles on the distance 7, matching the reference."
+ }
+}
