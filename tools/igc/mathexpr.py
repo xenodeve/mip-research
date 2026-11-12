@@ -8,11 +8,52 @@ mixed number (`2\\frac{1}{3}` is ambiguous), a root or power that is not exact, 
 evaluate(text) -> Fraction | None            the value of the whole text, or None
 expression_before(text) -> (expr, value)     the longest arithmetic expression that ends the text (what precedes an `=`), or None
 simple_quotient(expr) -> bool                an integer over an integer and nothing else (a long division's piece)"""
+import os
 import re
+import threading
+import time
 from contextlib import contextmanager
 from contextvars import ContextVar
 from fractions import Fraction
 from math import factorial, isqrt
+
+# MIP_EXPR_DEVICE=cuda (a measurement, 2026-11-12): the parser's + - * / go to the CUDAMathBackend (numbers.add/sub/mul/div, canonical bytes
+# through the C ABI), one call per operation, the way the device would serve this reader today. The device's value is used when it is a
+# value; a refusal or a device status falls back to Fraction's. Every call is compared with Fraction and counted per thread in DEVICE
+# (calls, seconds, mismatches, fallbacks), so a run reports what the device cost and whether it ever differed. Unset: Fraction only.
+_DEVICE = os.environ.get('MIP_EXPR_DEVICE', '') == 'cuda'
+DEVICE = threading.local()
+_DEVICE_OPS = {'+': 'numbers.add', '-': 'numbers.sub', '*': 'numbers.mul', '/': 'numbers.div'}
+
+
+def device_stats():
+    """this thread's device counters (calls, seconds, mismatches, fallbacks), created at zero"""
+    if not hasattr(DEVICE, 'calls'):
+        DEVICE.calls, DEVICE.seconds, DEVICE.mismatches, DEVICE.fallbacks = 0, 0.0, 0, 0
+    return DEVICE
+
+
+def _arith(op, a, b):
+    py = a + b if op == '+' else a - b if op == '-' else a * b if op == '*' else a / b
+    if not _DEVICE:
+        return py
+    from tools.igc.mathbackend import canon, cuda_backend
+    st = device_stats()
+    t = time.perf_counter()
+    out = cuda_backend.call(_DEVICE_OPS[op], canon.encode([a, b]))
+    st.seconds += time.perf_counter() - t
+    st.calls += 1
+    try:
+        got = canon.decode(out)
+    except Exception:
+        got = None
+    if isinstance(got, (int, Fraction)) and not isinstance(got, bool):
+        got = Fraction(got)
+        if got != py:
+            st.mismatches += 1
+        return got
+    st.fallbacks += 1
+    return py
 
 # wide(): the size limits below keep a put at `=` to a value a step can hold; a put after `\approx` is spelled to 10 significant digits,
 # so `(1.01)^{30}` (a 61-digit exact fraction) is read there (round 9 stdmath-45fa3ef2#0: the model wrote 1.3448888 for 1.3478489)
@@ -117,7 +158,7 @@ class _Parser:
             op = self.take()[1]
             right = self.term()
             loose = loose if self.loose is None else self.loose
-            value = value + right if op == '+' else value - right
+            value = _arith('+' if op == '+' else '-', value, right)
         if self.peek()[1] == 'pmod':
             # `9 + 54 \pmod{10}` is (9 + 54) mod 10 = 3, not 9 + (54 mod 10) = 13: \pmod takes all that comes before (#306, held-out)
             self.take()
@@ -147,18 +188,18 @@ class _Parser:
                 if v == 'mod':
                     value = self.mod(value, right)
                 else:
-                    value = value * right if v == MUL else value / right
+                    value = _arith('*' if v == MUL else '/', value, right)
             elif kind == 'num' and self.i and self.t[self.i - 1][1] == '!':
-                value = value * self.unary()   # \frac{9!}{4! 3! 2!}
+                value = _arith('*', value, self.unary())   # \frac{9!}{4! 3! 2!}
             elif v in ('(', 'frac', 'sqrt', '{', 'binom') and self.i and self.t[self.i - 1][1] in (')', '}', '!', '%') or \
                     v in ('(', 'sqrt') and self.i and self.t[self.i - 1][0] == 'num' and self.i not in self.spaced or \
                     v == 'binom' and self.i and self.t[self.i - 1][0] == 'num':
                 # 2(3 + 4), (2)(3), \binom{9}{6} \binom{3}{2}, 3\binom{4}{2}
-                value = value * self.unary()   # 2(3 + 4), (2)(3), (a)\frac{..}{..}
+                value = _arith('*', value, self.unary())   # 2(3 + 4), (2)(3), (a)\frac{..}{..}
             elif v == 'frac' and self.i and self.t[self.i - 1][0] == 'num':
                 raise _NotExact('a mixed number: 2\\frac{1}{3} is 2 1/3 or 2/3')
             elif kind == 'num' and self.i and self.t[self.i - 1][1] == ')':
-                value = value * self.unary()   # (2)3
+                value = _arith('*', value, self.unary())   # (2)3
             else:
                 self.loose = loose   # read by expr(), whose terms these are; a bracket inside set its own and is done
                 return value

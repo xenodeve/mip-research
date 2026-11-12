@@ -2011,16 +2011,22 @@ def drive_http(post, tok, ids, rollouts, kernel_factory, live_most=16, on_round=
     sampling = dict(temperature=SAMPLING['temperature'], top_p=SAMPLING['top_p'], top_k=SAMPLING['top_k'], min_p=SAMPLING['min_p'],
                     presence_penalty=SAMPLING['presence_penalty'], repeat_penalty=SAMPLING['repetition_penalty'])
 
+    timing = os.environ.get('TIR4B_TIMING')   # a measurement (2026-11-12): one line per request, the pause split by where its time goes
+    if timing:
+        from tools.igc import mathexpr
+
     def one(r):
         if drain and drain():
             return
         r.started = time.monotonic()
+        back = None   # when the previous reply came back (perf_counter)
         while True:
             ask = r.request()
             if not ask:
                 break
             most, stops = ask
             bias = r.bias()   # --no-digit-join's digit bias: llama-server takes it as [[id, bias], ...], like vLLM's dict
+            sent = time.perf_counter()
             reply = post(dict(prompt=r.prompt + r.out, n_predict=most, stop=stop_words(stops, ids, tok), cache_prompt=True,
                               seed=(r.seed + r.reseed + len(r.out)) % 2**31, return_tokens=True, **sampling,
                               **(dict(logit_bias=[[int(t), float(v)] for t, v in bias.items()]) if bias else {})))
@@ -2036,8 +2042,27 @@ def drive_http(post, tok, ids, rollouts, kernel_factory, live_most=16, on_round=
             if not new:
                 r.done('length')   # nothing came back at the limit: no answer can come
                 break
+            if timing:
+                got = time.perf_counter()
+                st = mathexpr.device_stats()
+                c0, s0, m0, f0 = st.calls, st.seconds, st.mismatches, st.fallbacks
+                ev0 = len(r.events)
             if r.take(new):
                 r.run_pending(kernel_factory)
+            if timing:
+                done = time.perf_counter()
+                tm_ = reply.get('timings') or {}
+                kinds = [e.get('kind') for e in r.events[ev0:]]
+                rec = dict(row=r.row.get('id'), sample=r.sample, seed=r.seed, n_out=len(r.out),
+                           stop_type=reply.get('stop_type'), stopping_word=reply.get('stopping_word'),
+                           http_s=got - sent, host_before_s=(sent - back) if back is not None else None, take_s=done - got,
+                           prompt_n=tm_.get('prompt_n'), prompt_ms=tm_.get('prompt_ms'), predicted_n=tm_.get('predicted_n'),
+                           predicted_ms=tm_.get('predicted_ms'), events=kinds,
+                           dev_calls=st.calls - c0, dev_s=st.seconds - s0, dev_mismatch=st.mismatches - m0, dev_fallback=st.fallbacks - f0)
+                with lock:
+                    with open(timing, 'a', encoding='utf-8') as f:
+                        f.write(json.dumps(rec) + '\n')
+                back = done
         if on_round:
             with lock:
                 on_round()
