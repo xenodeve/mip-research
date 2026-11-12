@@ -2265,6 +2265,11 @@ def run(args):
             pieces = vocab_pieces(tok)
             service = ChannelService(ids.equals | ids.approx, ids.think_close, pieces, tok, port=args.channel_port)
             service.start()
+            # warm what the first plan needs before the first request: the readers' imports and, with MIP_EXPR_DEVICE=cuda, the DLL's open
+            # (the shim waits MIP_CHANNEL_MS for a plan; the cold first ask missed the fixed-question line in the smoke, 2026-11-12)
+            from tools.igc import approx_put, mathexpr, question_read  # noqa: F401
+            mathexpr.evaluate('1+1')
+            question_read.read_exact('What is 1+1?')
             planners, sent = {}, {}
 
             def extra(r):

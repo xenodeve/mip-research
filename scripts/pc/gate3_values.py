@@ -7,6 +7,7 @@ wrote is what was steered); (3) whether the steering finished, was dropped, or t
 finished right and wrong. Writes OUT/gate3.txt.  python scripts/pc/gate3_values.py <run dir>
 """
 import json
+import re
 import sys
 from collections import Counter
 from fractions import Fraction
@@ -17,7 +18,14 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / 'results' / 'round10'))
 
 
+REM = re.compile(r'^\s*(-?\d+)\s*(?:\\text\{\s*rem\s*\}|rem)\s*(\d+)\s*$')
+DIV = re.compile(r'^\s*\(?\s*(-?\d+)\s*\)?\s*(?:\\div|/|÷|:)\s*\(?\s*(-?\d+)\s*\)?\s*$')
+CUT = re.compile(r'^\s*(-?)(\d+)\.(\d+)\.\.\.\s*$')
+
+
 def value_right(e, question):
+    """True / False / None (a form this check cannot read). Each General Style form by its own meaning: `q rem r` is a quotient and a
+    remainder (n = q d + r, 0 <= r < d); `x.dddd...` is the value cut to its places; anything else equal in value."""
     from tools.igc.mathexpr import evaluate
     kind = e.get('what')
     if kind == 'approx value':
@@ -26,9 +34,27 @@ def value_right(e, question):
     if kind == 'question value':
         from tools.igc.question_read import read_exact
         got = read_exact(question or '')
-        return got is not None and evaluate(e['value']) == Fraction(got[1])
+        return None if got is None else evaluate(e['value']) == Fraction(got[1])
+    value = e['value']
+    m = REM.match(value)
+    if m:
+        d = DIV.match(re.sub(r'^.*\$', '', e['expr']))
+        if not d:
+            return None
+        n, k = int(d.group(1)), int(d.group(2))
+        q, r = int(m.group(1)), int(m.group(2))
+        return k != 0 and n == q * k + r and 0 <= r < abs(k)
     want = evaluate(e['expr'])
-    return want is not None and evaluate(e['value']) == want
+    if want is None:
+        return None
+    m = CUT.match(value)
+    if m:
+        places = len(m.group(3))
+        sign = -1 if want < 0 else 1
+        cut = Fraction(int(abs(want) * 10 ** places), 10 ** places) * sign
+        return cut == Fraction(evaluate(f'{m.group(1)}{m.group(2)}.{m.group(3)}'))
+    got = evaluate(value)
+    return None if got is None else got == want
 
 
 def main():
@@ -55,12 +81,12 @@ def main():
             state = 'done' if e.get('done') else 'dropped' if e.get('dropped') else 'open'
             c[(final, state)] += 1
             ok = value_right(e, rows.get(rec['id'], {}).get('question'))
-            c[(final, 'value right' if ok else 'VALUE WRONG')] += 1
+            c[(final, 'value right' if ok else 'unchecked' if ok is None else 'VALUE WRONG')] += 1
             written = tok.decode(out_ids[e['at']:e['at'] + 40]) if out_ids else ''
             want = (' ' + e['value']) if e.get('what') != 'question value' else e['expr']
             wrote = written.startswith(want) or written.lstrip().startswith(e['value'])
             c[(final, 'written as steered' if wrote else 'TEXT DIFFERS')] += 1
-            if not ok or (state == 'done' and not wrote):
+            if ok is False or (state == 'done' and not wrote):
                 bad.append(f"{rec['id']}#{rec.get('sample', 0)} {final} {state} {e.get('what')}: {e['expr'][:60]!r} = {e['value']!r}; "
                            f"text {written[:40]!r}")
     lines = [f'gate 3 (token channel): {out}', ' '.join(f'{k[0]}/{k[1]}: {n}' for k, n in sorted(c.items()))]
