@@ -1,7 +1,7 @@
 # llama.cpp: the MIP token channel patch
 
 `mip-channel.patch` applies to llama.cpp at commit `1deefcca395743049c3820ab8f9b15043f3e9446` (https://github.com/ggml-org/llama.cpp,
-MIT). On this PC it is the branch `mip-channel` of `C:/AI/llama.cpp` (commit `704279085`), built by `scripts/pc/build-w4a8-mip.cmd` into
+MIT). On this PC it is the branch `mip-channel` of `C:/AI/llama.cpp` (commits `704279085`, `eae8e9a01`), built by `scripts/pc/build-w4a8-mip.cmd` into
 `build-w4a8-mip` (sm_89 only, the flags of `build-w4a8`). Build label: **4B NVFP4 W4A8 · llama.cpp+MIP · PC layer**.
 
 What it adds (design: `docs/plans/2026-11-12-mip-token-channel-design.md`):

@@ -36,10 +36,10 @@ index d8a16897b..ac7110389 100644
      int32_t n_prev             = 64;     // number of previous tokens to remember
 diff --git a/common/mip-channel.cpp b/common/mip-channel.cpp
 new file mode 100644
-index 000000000..356d6974f
+index 000000000..ee1f4eca1
 --- /dev/null
 +++ b/common/mip-channel.cpp
-@@ -0,0 +1,411 @@
+@@ -0,0 +1,461 @@
 +// MIP token channel shim: see mip-channel.h. One loopback connection per server process, one JSON object a line.
 +//   service -> shim: {"t":"hello","triggers":[ids],"think_close":id}   {"t":"plan","slot":k,"seq":n,"dag":{"edges":[[[tok,node],..],..],"end":e}|null,"after_ban":[ids]}
 +//   shim -> service: {"t":"open","mip_id":s,"slot":k,"prompt":[ids]}   {"t":"tok","slot":k,"id":tok}   {"t":"ask","slot":k,"seq":n}
@@ -76,6 +76,7 @@ index 000000000..356d6974f
 +static void mip_close(mip_socket s) { closesocket(s); }
 +#else
 +#    include <arpa/inet.h>
++#    include <fcntl.h>
 +#    include <netinet/in.h>
 +#    include <netinet/tcp.h>
 +#    include <sys/socket.h>
@@ -164,7 +165,9 @@ index 000000000..356d6974f
 +        }
 +    }
 +    std::lock_guard<std::mutex> lk(c.m);
-+    c.ok = false;
++    if (c.s == s) {   // a reader of an old socket that ends late must not mark a newer connection down
++        c.ok = false;
++    }
 +    c.cv.notify_all();
 +    LOG_WRN("mip-channel: the service closed the connection; requests go on unsteered\n");
 +}
@@ -175,7 +178,9 @@ index 000000000..356d6974f
 +    } catch (const std::exception & e) {
 +        auto & c = conn();
 +        std::lock_guard<std::mutex> lk(c.m);
-+        c.ok = false;
++        if (c.s == s) {
++            c.ok = false;
++        }
 +        c.cv.notify_all();
 +        LOG_ERR("mip-channel: the reader failed (%s) on line %s; requests go on unsteered\n", e.what(), last_line().c_str());
 +    }
@@ -209,6 +214,20 @@ index 000000000..356d6974f
 +        wsa = WSAStartup(MAKEWORD(2, 2), &d) == 0;
 +    }
 +#endif
++    // the old connection first: shut it so its reader's recv returns, and join that reader without holding the lock it may wait on
++    if (c.s != MIP_BAD_SOCKET) {
++        shutdown(c.s, 2);   // SD_BOTH / SHUT_RDWR
++    }
++    if (c.reader.joinable()) {
++        std::thread old = std::move(c.reader);
++        lk.unlock();
++        old.join();
++        lk.lock();
++    }
++    if (c.s != MIP_BAD_SOCKET) {
++        mip_close(c.s);
++        c.s = MIP_BAD_SOCKET;
++    }
 +    mip_socket s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
 +    if (s == MIP_BAD_SOCKET) {
 +        return false;
@@ -217,27 +236,50 @@ index 000000000..356d6974f
 +    a.sin_family = AF_INET;
 +    a.sin_port = htons((unsigned short) atoi(hp.c_str() + colon + 1));
 +    inet_pton(AF_INET, hp.substr(0, colon).c_str(), &a.sin_addr);
-+    if (connect(s, (sockaddr *) &a, sizeof(a)) != 0) {
++    // a non-blocking connect with a short wait: Windows retries a refused loopback connect for about 2 s, and this runs on the
++    // server's thread, so a service that is down must cost a request at most this wait, not a stall of every slot
++#ifdef _WIN32
++    u_long nb = 1;
++    ioctlsocket(s, FIONBIO, &nb);
++#else
++    fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) | O_NONBLOCK);
++#endif
++    bool up = connect(s, (sockaddr *) &a, sizeof(a)) == 0;
++    if (!up) {
++        fd_set w, e;
++        FD_ZERO(&w);
++        FD_ZERO(&e);
++        FD_SET(s, &w);
++        FD_SET(s, &e);
++        timeval tv{0, 100 * 1000};
++        if (select((int) s + 1, nullptr, &w, &e, &tv) > 0 && FD_ISSET(s, &w) && !FD_ISSET(s, &e)) {
++            int err = 0;
++            socklen_t len = sizeof(err);
++            up = getsockopt(s, SOL_SOCKET, SO_ERROR, (char *) &err, &len) == 0 && err == 0;
++        }
++    }
++#ifdef _WIN32
++    nb = 0;
++    ioctlsocket(s, FIONBIO, &nb);
++#else
++    fcntl(s, F_SETFL, fcntl(s, F_GETFL, 0) & ~O_NONBLOCK);
++#endif
++    if (!up) {
 +        mip_close(s);
 +        LOG_WRN("mip-channel: cannot reach the service at %s; requests go on unsteered\n", where);
 +        return false;
 +    }
 +    int one = 1;
 +    setsockopt(s, IPPROTO_TCP, TCP_NODELAY, (const char *) &one, sizeof(one));
-+    if (c.reader.joinable()) {
-+        c.reader.join();
-+    }
-+    if (c.s != MIP_BAD_SOCKET) {
-+        mip_close(c.s);
-+    }
 +    c.s = s;
 +    c.ok = true;
 +    c.hello = false;
 +    c.plans.clear();
 +    c.reader = std::thread(read_loop, s);
-+    c.cv.wait_for(lk, std::chrono::seconds(2), [&] { return c.hello || !c.ok; });
++    c.cv.wait_for(lk, std::chrono::milliseconds(500), [&] { return c.hello || !c.ok; });
 +    if (!c.hello) {
 +        c.ok = false;
++        shutdown(s, 2);   // its reader ends; the next try joins it
 +        return false;
 +    }
 +    LOG_INF("mip-channel: connected to %s, %zu trigger tokens\n", where, c.triggers.size());
@@ -305,8 +347,16 @@ index 000000000..356d6974f
 +    for (const auto & t : m["after_ban"]) {
 +        sh.plan.after_ban.push_back(t.get<llama_token>());
 +    }
++    // every node a step can reach must be a node of the plan, or the end: a bad index is no plan, never an out-of-range read
++    const int n_nodes = (int) sh.plan.edges.size();
++    bool sound = sh.plan.end >= 0 && sh.plan.end <= n_nodes;
++    for (const auto & e : sh.plan.edges) {
++        for (const auto & kv : e) {
++            sound = sound && kv.second >= 0 && (kv.second < n_nodes || kv.second == sh.plan.end);
++        }
++    }
 +    sh.node = 0;
-+    sh.active = !sh.plan.edges.empty() && !sh.plan.edges[0].empty();
++    sh.active = sound && !sh.plan.edges.empty() && !sh.plan.edges[0].empty();
 +    if (sh.active) {
 +        c.applied++;
 +    }

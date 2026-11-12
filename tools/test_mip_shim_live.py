@@ -101,6 +101,12 @@ class ShimLive(unittest.TestCase):
         r = post(dict(prompt=PROMPT, n_predict=6, temperature=0, mip_id='t1', cache_prompt=False))
         self.assertFalse(r['content'].startswith(' 999'), r['content'])
         self.assertLess(time.monotonic() - t, 30)
+        # a later request tries to reconnect (at most once a second): a refused connect must cost it about 100 ms, not the ~2 s
+        # Windows spends retrying a refused loopback connect, which would stall every slot of the server
+        time.sleep(1.2)
+        t = time.monotonic()
+        post(dict(prompt=PROMPT, n_predict=6, temperature=0, mip_id='t1', cache_prompt=False))
+        self.assertLess(time.monotonic() - t, 1.0)
 
 
 if __name__ == '__main__':
