@@ -11,7 +11,6 @@ ValueDag.build(text, pieces) -> ValueDag | None
 dag.allowed(node) -> list[int]; dag.step(node, token) -> int | None; dag.end; dag.to_json() -> {"edges": [[[token, node], ...]], "end"}
 """
 import re
-from collections import defaultdict
 
 _SPECIAL = re.compile(r'^<\|.*\|>$')
 _PIECES = {}
@@ -26,20 +25,27 @@ def vocab_pieces(tokenizer):
 
 
 _INDEX = {}
+_END = None   # the key under which a trie node keeps the ids whose text ends there
 
 
 def _index(pieces):
-    """Token ids grouped by their first character, special tokens and empty pieces left out; cached per pieces list."""
+    """A character trie of the pieces, special tokens and empty pieces left out; cached per pieces list. Walking the text from an offset
+    finds every token that starts there in time of the longest token, not of the vocabulary (the first-character index cost ~36 ms a
+    value line on Qwen's 248k pieces, against the shim's 50 ms wait)."""
     key = id(pieces)
     hit = _INDEX.get(key)
     if hit is not None and hit[0] is pieces:
         return hit[1]
-    by_first = defaultdict(list)
+    root = {}
     for t, p in enumerate(pieces):
-        if p and not _SPECIAL.match(p):
-            by_first[p[0]].append(t)
-    _INDEX[key] = (pieces, by_first)
-    return by_first
+        if not p or _SPECIAL.match(p):
+            continue
+        node = root
+        for ch in p:
+            node = node.setdefault(ch, {})
+        node.setdefault(_END, []).append(t)
+    _INDEX[key] = (pieces, root)
+    return root
 
 
 class ValueDag:
@@ -50,14 +56,17 @@ class ValueDag:
     def build(cls, text, pieces):
         if not text:
             return None
-        by_first = _index(pieces)
+        root = _index(pieces)
         n = len(text)
         out = [dict() for _ in range(n + 1)]
         for i in range(n):
-            for t in by_first.get(text[i], ()):
-                p = pieces[t]
-                if text.startswith(p, i):
-                    out[i][t] = i + len(p)
+            node = root
+            for j in range(i, n):
+                node = node.get(text[j])
+                if node is None:
+                    break
+                for t in node.get(_END, ()):
+                    out[i][t] = j + 1
         # keep only nodes that reach the end, walking back from it
         live = [False] * (n + 1)
         live[n] = True

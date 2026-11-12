@@ -2270,6 +2270,8 @@ def run(args):
             from tools.igc import approx_put, mathexpr, question_read  # noqa: F401
             mathexpr.evaluate('1+1')
             question_read.read_exact('What is 1+1?')
+            from tools.igc.token_trie import ValueDag
+            ValueDag.build(' 1', pieces)   # the vocabulary's index, built at the first DAG: ~0.5 s, over the shim's wait
             planners, sent = {}, {}
 
             def extra(r):

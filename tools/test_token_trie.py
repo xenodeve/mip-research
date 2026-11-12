@@ -58,5 +58,18 @@ class ValueDagTests(unittest.TestCase):
         self.assertEqual(out, ' 480')
 
 
+    @unittest.skipUnless(os.path.isdir(HF), 'the HF tokenizer is not on disk')
+    def test_a_value_line_builds_fast(self):
+        # the shim waits MIP_CHANNEL_MS (50) for a plan: a DAG over a value line must cost a small part of it
+        import time
+        from transformers import AutoTokenizer
+        pieces = vocab_pieces(AutoTokenizer.from_pretrained(HF))
+        ValueDag.build(' 1', pieces)   # the index, once
+        t = time.perf_counter()
+        for _ in range(10):
+            ValueDag.build('(-4181571120)/(59340) = -70467.9...\n', pieces)
+        self.assertLess((time.perf_counter() - t) / 10, 0.005)
+
+
 if __name__ == '__main__':
     unittest.main()
