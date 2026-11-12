@@ -1129,19 +1129,12 @@ class Rollout:
             return False
         if (self.arm.inline_calc or self.arm.hint_calc or self.arm.logit_value) and last in self.ids.equals and self.phase in ('think', 'answer'):
             text = self.text()
-            whole = self.whole_pending
-            found = inline_found(text[:text.rstrip().rfind('=')], whole=whole, use_mathbackend=self.arm.mathbackend,
-                                 custom_ops=self.custom_ops(text), style=self.arm.inline_style) if self.arm.inline_calc or self.arm.logit_value else None
-            if found is not None and self.arm.logit_value and not self.arm.inline_calc:
-                self.start_plan(*found)   # the value is not put in: the model writes it, its prediction of each token raised
-            elif found is not None:   # the value the model would have computed, computed: the reasoning goes on from it
-                expr, value = found
-                if not self.echoing(re.sub(r'[\s()]', '', expr)):
-                    if whole:
-                        value = self.question_value(value)
+            if self.arm.inline_calc:   # the value the model would have computed, computed: the reasoning goes on from it
+                got = self.put_value(text)
+                if got is not None:
+                    expr, value, put, whole = got
                     self.whole_pending = False
-                    # the whole value ends its line: left open, an integer drew `.000...` from the model until the guard stopped it (pc4-whole dm div_big 7815)
-                    self.inject((f' {value}' if self.arm.inline_plain else f' {value} (exact)') + ('\n' if whole else ''), 'inline value')
+                    self.inject(put, 'inline value')
                     self.open_window()
                     if self.arm.no_digit_join and self.arm.inline_plain and not whole and value[-1:].isdigit():
                         self.join_guard = True   # `-5` then the model's own `75` read `-575` on the page (#307, 80 of 19,990 puts)
@@ -1149,6 +1142,11 @@ class Rollout:
                     self.events[-1].update(expr=expr[:200], value=value, whole=whole)
                     if whole:
                         self.give(value)
+            elif self.arm.logit_value:
+                found = inline_found(text[:text.rstrip().rfind('=')], whole=self.whole_pending, use_mathbackend=self.arm.mathbackend,
+                                     custom_ops=self.custom_ops(text), style=self.arm.inline_style)
+                if found is not None:
+                    self.start_plan(*found)   # the value is not put in: the model writes it, its prediction of each token raised
             if self.left() <= 0:
                 self.done('length')
             elif len(self.out) - self.checked >= CHUNK:   # a request that ends at `=` skips the checks below: a loop of equations would run on
@@ -1250,6 +1248,41 @@ class Rollout:
             self.on_loop()
         return False
 
+    def put_value(self, text):
+        """The inline value's rules for a text that ends at `=`: (expression, value, the text put, whole) or None. inline_found reads it, the
+        echo guard may skip it, a whole value may be the question's; take() puts the text, the token channel (tools/igc/mip_planner.py) steers
+        the model to write it."""
+        whole = self.whole_pending
+        found = inline_found(text[:text.rstrip().rfind('=')], whole=whole, use_mathbackend=self.arm.mathbackend,
+                             custom_ops=self.custom_ops(text), style=self.arm.inline_style)
+        if found is None:
+            return None
+        expr, value = found
+        if self.echoing(re.sub(r'[\s()]', '', expr)):
+            return None
+        if whole:
+            value = self.question_value(value)
+        # the whole value ends its line: left open, an integer drew `.000...` from the model until the guard stopped it (pc4-whole dm div_big 7815)
+        return expr, value, (f' {value}' if self.arm.inline_plain else f' {value} (exact)') + ('\n' if whole else ''), whole
+
+    def approx_put_value(self, text):
+        """--approx-put's rules for a text that ends at `\\approx` or `≈`: (expression, value, the text put) or None."""
+        bare = text.rstrip()
+        if bare.endswith('\\approx'):
+            before = bare[:-len('\\approx')]
+        elif bare.endswith('≈'):
+            before = bare[:-1]
+        else:
+            return None
+        from tools.igc.approx_put import approx_found
+        found = approx_found(before)
+        if found is None:
+            return None
+        expr, value = found
+        if self.echoing(re.sub(r'[\s()]', '', expr) + '~'):
+            return None
+        return expr, value, f' {value}'
+
     def echoing(self, expr):
         """True when software's value for `expr` would be the ECHO_RUN-th back to back (no other value between, each within ECHO_GAP model
         tokens of the last): `= 15/13 (exact) = 15/13 (exact) = ...`. The value is then left to the model, and whether the thinking loops is
@@ -1348,22 +1381,11 @@ class Rollout:
     def approx_value(self):
         """--approx-put (round 9 P11): the text ends `X \\approx` (or `≈`) and X is arithmetic: its value to 10 significant digits is put,
         a true approximation under every reading of `\\approx`. Nothing when X is not read (a symbol, a word, pi)."""
-        text = self.text()
-        bare = text.rstrip()
-        if bare.endswith('\\approx'):
-            before = bare[:-len('\\approx')]
-        elif bare.endswith('≈'):
-            before = bare[:-1]
-        else:
+        got = self.approx_put_value(self.text())
+        if got is None:
             return
-        from tools.igc.approx_put import approx_found
-        found = approx_found(before)
-        if found is None:
-            return
-        expr, value = found
-        if self.echoing(re.sub(r'[\s()]', '', expr) + '~'):
-            return
-        self.inject(f' {value}', 'approx value')
+        expr, value, put = got
+        self.inject(put, 'approx value')
         self.open_window()
         if self.arm.no_digit_join and self.arm.inline_plain:
             self.join_guard = 'approx'
