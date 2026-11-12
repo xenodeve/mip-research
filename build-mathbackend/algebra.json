@@ -1,0 +1,728 @@
+{
+ "module": "algebra",
+ "seed": 1,
+ "n_per_operation": 60,
+ "seconds": 9.7,
+ "registered": 70,
+ "ops": {
+  "algebra.poly_from_str": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.005543708801269531
+  },
+  "algebra.poly_to_str": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.051044464111328125
+  },
+  "algebra.poly_add": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0009853839874267578
+  },
+  "algebra.poly_sub": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0010066032409667969
+  },
+  "algebra.poly_mul": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0015246868133544922
+  },
+  "algebra.poly_pow": {
+   "generated": 62,
+   "answered": 62,
+   "agree": 62,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.008283376693725586
+  },
+  "algebra.poly_divmod": {
+   "generated": 61,
+   "answered": 61,
+   "agree": 61,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0020110607147216797
+  },
+  "algebra.poly_gcd": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0010266304016113281
+  },
+  "algebra.poly_lcm": {
+   "generated": 61,
+   "answered": 61,
+   "agree": 61,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.005102396011352539
+  },
+  "algebra.poly_gcdex": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.017718076705932617
+  },
+  "algebra.poly_compose": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0009925365447998047
+  },
+  "algebra.poly_derivative": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0015022754669189453
+  },
+  "algebra.poly_antiderivative": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0005166530609130859
+  },
+  "algebra.poly_integral": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0015337467193603516
+  },
+  "algebra.poly_eval": {
+   "generated": 70,
+   "answered": 70,
+   "agree": 70,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.014524459838867188
+  },
+  "algebra.poly_taylor_shift": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0010008811950683594
+  },
+  "algebra.poly_content_primitive": {
+   "generated": 61,
+   "answered": 61,
+   "agree": 61,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.002003192901611328
+  },
+  "algebra.poly_squarefree_part": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.017061471939086914
+  },
+  "algebra.poly_squarefree_decomposition": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.05696511268615723
+  },
+  "algebra.poly_from_roots": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0031113624572753906
+  },
+  "algebra.poly_transform_roots": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.00099945068359375
+  },
+  "algebra.rational_roots": {
+   "generated": 61,
+   "answered": 61,
+   "agree": 61,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.007952451705932617
+  },
+  "algebra.sturm_sequence": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0542149543762207
+  },
+  "algebra.count_real_roots": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.009012460708618164
+  },
+  "algebra.isolate_real_roots": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.07271528244018555
+  },
+  "algebra.real_roots": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.27726006507873535
+  },
+  "algebra.complex_roots": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.11617374420166016
+  },
+  "algebra.quadratic_roots": {
+   "generated": 61,
+   "answered": 61,
+   "agree": 61,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.015583515167236328
+  },
+  "algebra.solve_polynomial": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.23103761672973633
+  },
+  "algebra.solve_polynomial_str": {
+   "generated": 61,
+   "answered": 61,
+   "agree": 61,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.21593761444091797
+  },
+  "algebra.factor_z": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.4364151954650879
+  },
+  "algebra.is_irreducible_z": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.024478673934936523
+  },
+  "algebra.resultant": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.00613093376159668
+  },
+  "algebra.discriminant": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.00901031494140625
+  },
+  "algebra.vieta": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0005128383636474609
+  },
+  "algebra.power_sums": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0015518665313720703
+  },
+  "algebra.roots_power_poly": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.005424022674560547
+  },
+  "algebra.interpolate": {
+   "generated": 61,
+   "answered": 61,
+   "agree": 61,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.024222612380981445
+  },
+  "algebra.interpolate_eval": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.004004240036010742
+  },
+  "algebra.finite_differences": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0015113353729248047
+  },
+  "algebra.cyclotomic": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0379786491394043
+  },
+  "algebra.polymod_mul": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0020012855529785156
+  },
+  "algebra.polymod_divmod": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.001996755599975586
+  },
+  "algebra.polymod_gcd": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0015177726745605469
+  },
+  "algebra.polymod_powmod": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.00840616226196289
+  },
+  "algebra.polymod_inverse": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.003092050552368164
+  },
+  "algebra.polymod_roots": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.004708051681518555
+  },
+  "algebra.polymod_factor": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.013584375381469727
+  },
+  "algebra.polymod_irreducible": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.007492542266845703
+  },
+  "algebra.mat_mul": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.003632068634033203
+  },
+  "algebra.mat_trace": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0
+  },
+  "algebra.mat_det": {
+   "generated": 61,
+   "answered": 61,
+   "agree": 61,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0030045509338378906
+  },
+  "algebra.mat_inverse": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.03232383728027344
+  },
+  "algebra.mat_rank": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0040187835693359375
+  },
+  "algebra.mat_rref": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.005460023880004883
+  },
+  "algebra.mat_nullspace": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.03837442398071289
+  },
+  "algebra.mat_solve": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.01291513442993164
+  },
+  "algebra.mat_charpoly": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.03912472724914551
+  },
+  "algebra.mat_minpoly": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.09906888008117676
+  },
+  "algebra.mat_eigen": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.09092950820922852
+  },
+  "algebra.mat_pow": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.01845073699951172
+  },
+  "algebra.mat_lu": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.02025914192199707
+  },
+  "algebra.solve_linear_str": {
+   "generated": 62,
+   "answered": 61,
+   "agree": 61,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 1,
+   "disagree": 0,
+   "seconds": 0.020682573318481445
+  },
+  "algebra.recurrence_char_poly": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0
+  },
+  "algebra.recurrence_nth": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.011931896209716797
+  },
+  "algebra.recurrence_closed_form": {
+   "generated": 60,
+   "answered": 41,
+   "agree": 41,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 19,
+   "disagree": 0,
+   "seconds": 0.27085328102111816
+  },
+  "algebra.recurrence_guess": {
+   "generated": 61,
+   "answered": 55,
+   "agree": 55,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 6,
+   "disagree": 0,
+   "seconds": 0.1476583480834961
+  },
+  "algebra.match_polynomial_square": {
+   "generated": 63,
+   "answered": 63,
+   "agree": 63,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.0009846687316894531
+  },
+  "algebra.piecewise_linear_intersections": {
+   "generated": 64,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 4,
+   "disagree": 0,
+   "seconds": 0.010582685470581055
+  },
+  "algebra.quartic_double_tangent_k": {
+   "generated": 64,
+   "answered": 40,
+   "agree": 40,
+   "refused": 0,
+   "refusals": {},
+   "expected_refusals_ok": 24,
+   "disagree": 0,
+   "seconds": 0.049056291580200195
+  }
+ },
+ "no_case": [],
+ "disagreements": [],
+ "totals": {
+  "generated": 4234,
+  "answered": 4180,
+  "agree": 4180,
+  "refused": 0,
+  "disagree": 0
+ },
+ "not_covered": {
+  "exact roots of an irreducible polynomial of degree 3 or more (radicals)": "only isolating rational intervals and decimals are given; Cardano/Ferrari/Galois-group tests are not written",
+  "factorisation over an extension field, over R or over C": "factor_z factors over Z (Q) only; quadratics are split by quadratic_roots into surds",
+  "polynomials in several variables (factor, gcd, resultant, Groebner bases)": "the backend is univariate; a system that is not linear and not one-variable is refused",
+  "nonlinear systems of equations": "no elimination: only linear systems and one-variable polynomial equations",
+  "Jordan form, Smith form, irrational or complex eigenvalues": "mat_eigen gives the rational eigenvalues, their eigenvectors and the characteristic factor left over",
+  "matrices with symbolic entries": "entries are exact numbers only",
+  "recurrence closed forms with complex roots or several different irrational roots": "recurrence_closed_form handles rational roots (with multiplicity) and at most one real quadratic pair",
+  "factor_z past its bounds": "degree 120, 40 000 recombination tests (a polynomial with very many modular factors is refused, not guessed)"
+ }
+}

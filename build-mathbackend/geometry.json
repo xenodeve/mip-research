@@ -1,0 +1,1673 @@
+{
+ "module": "geometry",
+ "seed": 1,
+ "n": 60,
+ "seconds": 85.6,
+ "ops": {
+  "geometry.angle_cos": {
+   "generated": 75,
+   "answered": 70,
+   "agree": 70,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 5,
+   "expected_bad_input_ok": 5,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.1,
+   "oracles": [
+    "EDGE[bad-input] a float",
+    "EDGE[bad-input] mixed dimensions",
+    "EDGE[boundary] mpmath dot / (|u||v|): 135 degrees"
+   ],
+   "failures": []
+  },
+  "geometry.angle_degrees_exact": {
+   "generated": 83,
+   "answered": 40,
+   "agree": 40,
+   "refused": 0,
+   "refused_expected": 40,
+   "expected_refusals_ok": 40,
+   "bad_input_expected": 3,
+   "expected_bad_input_ok": 3,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.13,
+   "oracles": [
+    "EDGE[bad-input] a float",
+    "EDGE[bad-input] mixed dimensions",
+    "EDGE[boundary] mpmath atan2 in degrees, matched to the table within 1e-35 (else the backend must refuse)"
+   ],
+   "failures": []
+  },
+  "geometry.angle_degrees_numeric": {
+   "generated": 74,
+   "answered": 70,
+   "agree": 70,
+   "refused": 0,
+   "refused_expected": 1,
+   "expected_refusals_ok": 1,
+   "bad_input_expected": 3,
+   "expected_bad_input_ok": 3,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.06,
+   "oracles": [
+    "EDGE[bad-input] mixed dimensions",
+    "EDGE[bad-input] negative digits",
+    "EDGE[boundary] mpmath atan2(|u x v|, u.v) at 50 digits: 3D"
+   ],
+   "failures": []
+  },
+  "geometry.centroid": {
+   "generated": 71,
+   "answered": 68,
+   "agree": 68,
+   "refused": 0,
+   "refused_expected": 1,
+   "expected_refusals_ok": 1,
+   "bad_input_expected": 2,
+   "expected_bad_input_ok": 2,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.02,
+   "oracles": [
+    "EDGE[bad-input] mixed dimensions",
+    "EDGE[bad-input] no points",
+    "EDGE[boundary] 3D, the third coordinate counts"
+   ],
+   "failures": []
+  },
+  "geometry.circle_angle": {
+   "generated": 80,
+   "answered": 73,
+   "agree": 73,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 7,
+   "expected_bad_input_ok": 7,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] a negative arc",
+    "EDGE[bad-input] a non-numeric arc",
+    "EDGE[bad-input] an arc past 360"
+   ],
+   "failures": []
+  },
+  "geometry.circle_circle_intersection": {
+   "generated": 73,
+   "answered": 64,
+   "agree": 64,
+   "refused": 0,
+   "refused_expected": 7,
+   "expected_refusals_ok": 7,
+   "bad_input_expected": 2,
+   "expected_bad_input_ok": 2,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.02,
+   "oracles": [
+    "EDGE[bad-input] a 3D centre",
+    "EDGE[bad-input] a negative squared radius",
+    "EDGE[boundary] centres on a vertical line (the radical line is horizontal)"
+   ],
+   "failures": []
+  },
+  "geometry.circle_circle_overlap_area_numeric": {
+   "generated": 75,
+   "answered": 71,
+   "agree": 71,
+   "refused": 0,
+   "refused_expected": 1,
+   "expected_refusals_ok": 1,
+   "bad_input_expected": 3,
+   "expected_bad_input_ok": 3,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "EDGE[bad-input] a zero squared radius",
+    "EDGE[bad-input] digits must be an integer",
+    "EDGE[bad-input] negative digits"
+   ],
+   "failures": []
+  },
+  "geometry.circle_circle_relation": {
+   "generated": 84,
+   "answered": 81,
+   "agree": 81,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 3,
+   "expected_bad_input_ok": 3,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] a 3D centre",
+    "EDGE[bad-input] a negative squared radius",
+    "EDGE[bad-input] a zero squared radius"
+   ],
+   "failures": []
+  },
+  "geometry.circle_line_intersection": {
+   "generated": 74,
+   "answered": 71,
+   "agree": 71,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 3,
+   "expected_bad_input_ok": 3,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.02,
+   "oracles": [
+    "EDGE[bad-input] a 3D centre",
+    "EDGE[bad-input] a negative squared radius",
+    "EDGE[boundary] a rational centre and squared radius"
+   ],
+   "failures": []
+  },
+  "geometry.circle_through3": {
+   "generated": 70,
+   "answered": 64,
+   "agree": 64,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 6,
+   "expected_bad_input_ok": 6,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] 3D points",
+    "EDGE[bad-input] a float",
+    "EDGE[boundary] a very obtuse triangle: the centre is far below the base"
+   ],
+   "failures": []
+  },
+  "geometry.circumcenter": {
+   "generated": 67,
+   "answered": 64,
+   "agree": 64,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 3,
+   "expected_bad_input_ok": 3,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] 3D points",
+    "EDGE[boundary] a tall needle",
+    "EDGE[boundary] fractions"
+   ],
+   "failures": []
+  },
+  "geometry.circumradius": {
+   "generated": 68,
+   "answered": 66,
+   "agree": 66,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 2,
+   "expected_bad_input_ok": 2,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "EDGE[boundary] 3D right isosceles with legs 1: R = sqrt(2)/2",
+    "EDGE[boundary] R^2 = 169: R = 13",
+    "EDGE[boundary] R^2 has a prime factor of size 10^16 (answered since 2026-11-06: _squarefree factors past its 10^6 trial division by Pollard rho and Miller-Rabin; was a refusal)"
+   ],
+   "failures": []
+  },
+  "geometry.circumradius_sq": {
+   "generated": 69,
+   "answered": 65,
+   "agree": 65,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 4,
+   "expected_bad_input_ok": 4,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "EDGE[bad-input] mixed dimensions",
+    "EDGE[boundary] 3D right triangle: R^2 = 1/2",
+    "EDGE[boundary] a face of the unit simplex: R^2 = 2/3"
+   ],
+   "failures": []
+  },
+  "geometry.collinear": {
+   "generated": 71,
+   "answered": 68,
+   "agree": 68,
+   "refused": 0,
+   "refused_expected": 1,
+   "expected_refusals_ok": 1,
+   "bad_input_expected": 2,
+   "expected_bad_input_ok": 2,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.09,
+   "oracles": [
+    "EDGE[bad-input] mixed dimensions",
+    "EDGE[bad-input] two points are not enough",
+    "EDGE[boundary] 3D, off by one in z"
+   ],
+   "failures": []
+  },
+  "geometry.concyclic": {
+   "generated": 68,
+   "answered": 67,
+   "agree": 67,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 1,
+   "expected_bad_input_ok": 1,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] 3D points",
+    "EDGE[boundary] a quadrilateral with unequal diagonals is not cyclic (Ptolemy fails)",
+    "EDGE[boundary] four lattice points of x^2 + y^2 = 25"
+   ],
+   "failures": []
+  },
+  "geometry.convex_hull": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "sympy convex_hull"
+   ],
+   "failures": []
+  },
+  "geometry.convex_polygon_intersection": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.25,
+   "oracles": [
+    "brute: vertex set from pairs of bounding lines that satisfy every half-plane"
+   ],
+   "failures": []
+  },
+  "geometry.coplanar": {
+   "generated": 70,
+   "answered": 67,
+   "agree": 67,
+   "refused": 0,
+   "refused_expected": 1,
+   "expected_refusals_ok": 1,
+   "bad_input_expected": 2,
+   "expected_bad_input_ok": 2,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.06,
+   "oracles": [
+    "EDGE[bad-input] 2D points: the operation is for space",
+    "EDGE[bad-input] three points are not enough",
+    "EDGE[boundary] five points, the fourth is off the plane of the others"
+   ],
+   "failures": []
+  },
+  "geometry.cross": {
+   "generated": 67,
+   "answered": 66,
+   "agree": 66,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 1,
+   "expected_bad_input_ok": 1,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] mixed dimensions",
+    "EDGE[boundary] 2D scalar is x1 y2 - x2 y1 = -2 (sign)",
+    "EDGE[boundary] 3D (-3, 6, -3), sympy cross"
+   ],
+   "failures": []
+  },
+  "geometry.disphenoid_inradius_from_edges_sq": {
+   "generated": 65,
+   "answered": 51,
+   "agree": 51,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 14,
+   "expected_bad_input_ok": 14,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.34,
+   "oracles": [
+    "AIME 2024 I/14: r = 20 sqrt 21 / 63, sum 104",
+    "a right-angled face 1 + 4 = 5: degenerate",
+    "a zero edge"
+   ],
+   "failures": []
+  },
+  "geometry.dist": {
+   "generated": 72,
+   "answered": 69,
+   "agree": 69,
+   "refused": 0,
+   "refused_expected": 1,
+   "expected_refusals_ok": 1,
+   "bad_input_expected": 2,
+   "expected_bad_input_ok": 2,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.21,
+   "oracles": [
+    "EDGE[bad-input] a float",
+    "EDGE[bad-input] mixed dimensions",
+    "EDGE[boundary] 2 sqrt(2): the square factor is taken out"
+   ],
+   "failures": []
+  },
+  "geometry.dist2": {
+   "generated": 74,
+   "answered": 66,
+   "agree": 66,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 8,
+   "expected_bad_input_ok": 8,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] None is no point",
+    "EDGE[bad-input] a 2D point and a 3D point",
+    "EDGE[bad-input] a bool is no coordinate"
+   ],
+   "failures": []
+  },
+  "geometry.dist_point_line": {
+   "generated": 67,
+   "answered": 65,
+   "agree": 65,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 2,
+   "expected_bad_input_ok": 2,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.05,
+   "oracles": [
+    "EDGE[bad-input] a float",
+    "EDGE[boundary] 3D, sqrt(2)",
+    "EDGE[boundary] a rational distance (3)"
+   ],
+   "failures": []
+  },
+  "geometry.dist_point_line2": {
+   "generated": 71,
+   "answered": 67,
+   "agree": 67,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 4,
+   "expected_bad_input_ok": 4,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] a float",
+    "EDGE[bad-input] mixed dimensions",
+    "EDGE[boundary] 3D: distance to the z axis = 5"
+   ],
+   "failures": []
+  },
+  "geometry.dist_point_plane2": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "sympy Plane.distance squared"
+   ],
+   "failures": []
+  },
+  "geometry.dot": {
+   "generated": 66,
+   "answered": 64,
+   "agree": 64,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 2,
+   "expected_bad_input_ok": 2,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] a float",
+    "EDGE[bad-input] mixed dimensions",
+    "EDGE[boundary] 3D perpendicular, the third coordinate is the only non-zero product"
+   ],
+   "failures": []
+  },
+  "geometry.incenter": {
+   "generated": 71,
+   "answered": 43,
+   "agree": 43,
+   "refused": 0,
+   "refused_expected": 25,
+   "expected_refusals_ok": 25,
+   "bad_input_expected": 3,
+   "expected_bad_input_ok": 3,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "EDGE[bad-input] 3D points: the incentre is for the plane",
+    "EDGE[boundary] sympy Triangle.incenter at 55 digits: a 3-4-5 triangle far from the origin",
+    "EDGE[boundary] sympy Triangle.incenter at 55 digits: a right triangle with fractions"
+   ],
+   "failures": []
+  },
+  "geometry.incenter_numeric": {
+   "generated": 71,
+   "answered": 66,
+   "agree": 66,
+   "refused": 0,
+   "refused_expected": 1,
+   "expected_refusals_ok": 1,
+   "bad_input_expected": 4,
+   "expected_bad_input_ok": 4,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "EDGE[bad-input] 3D points",
+    "EDGE[bad-input] negative digits",
+    "EDGE[boundary] sympy Triangle.incenter at 70 digits: clockwise"
+   ],
+   "failures": []
+  },
+  "geometry.inradius": {
+   "generated": 71,
+   "answered": 32,
+   "agree": 32,
+   "refused": 0,
+   "refused_expected": 36,
+   "expected_refusals_ok": 36,
+   "bad_input_expected": 3,
+   "expected_bad_input_ok": 3,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "EDGE[bad-input] mixed dimensions",
+    "EDGE[boundary] mpmath Heron r = area / s at 50 digits; 3D right triangle 3-4-5",
+    "EDGE[boundary] mpmath Heron r = area / s at 50 digits; 5-12-13: r = 2"
+   ],
+   "failures": []
+  },
+  "geometry.inradius_numeric": {
+   "generated": 72,
+   "answered": 67,
+   "agree": 67,
+   "refused": 0,
+   "refused_expected": 1,
+   "expected_refusals_ok": 1,
+   "bad_input_expected": 4,
+   "expected_bad_input_ok": 4,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "EDGE[bad-input] digits as a float",
+    "EDGE[bad-input] negative digits",
+    "EDGE[boundary] 3D triangle"
+   ],
+   "failures": []
+  },
+  "geometry.is_convex": {
+   "generated": 61,
+   "answered": 61,
+   "agree": 61,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "clockwise polygon with collinear vertex on bottom edge: convex",
+    "sympy Polygon.is_convex (polygon construction fails for intersecting sides) and the orientation-test simplicity check below"
+   ],
+   "failures": []
+  },
+  "geometry.is_simple_polygon": {
+   "generated": 62,
+   "answered": 62,
+   "agree": 62,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "brute: orientation tests on every pair of edges",
+    "degenerate all-same: not simple",
+    "repeated vertex: not simple"
+   ],
+   "failures": []
+  },
+  "geometry.lattice_points_in_circle": {
+   "generated": 61,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 1,
+   "expected_refusals_ok": 1,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "brute: every integer point of a 61 x 61 box, exact comparison (centre shift is a translation of the box)",
+    "literature: Gauss circle N(10) = 317",
+    "literature: Gauss circle N(100) = 31417"
+   ],
+   "failures": []
+  },
+  "geometry.lattice_points_in_convex_polygon": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.03,
+   "oracles": [
+    "brute: bounding box, exact half-plane signs"
+   ],
+   "failures": []
+  },
+  "geometry.lattice_points_in_triangle": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "brute: bounding box, exact half-plane signs"
+   ],
+   "failures": []
+  },
+  "geometry.lattice_points_on_segment": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "brute: bounding box and exact collinearity"
+   ],
+   "failures": []
+  },
+  "geometry.lattice_polygon_stats": {
+   "generated": 61,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 1,
+   "expected_bad_input_ok": 1,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "brute: bounding box, exact edge tests for the boundary, winding number (atan2 sum) for the inside; area by sympy",
+    "self-crossing bowtie"
+   ],
+   "failures": []
+  },
+  "geometry.line_intersection": {
+   "generated": 70,
+   "answered": 67,
+   "agree": 67,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 3,
+   "expected_bad_input_ok": 3,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] 3D points",
+    "EDGE[bad-input] the first line has one point",
+    "EDGE[bad-input] the second line has one point"
+   ],
+   "failures": []
+  },
+  "geometry.line_plane_intersection": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "sympy Plane.intersection(Line3D)"
+   ],
+   "failures": []
+  },
+  "geometry.line_through": {
+   "generated": 69,
+   "answered": 65,
+   "agree": 65,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 4,
+   "expected_bad_input_ok": 4,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] 3D points",
+    "EDGE[bad-input] one coordinate",
+    "EDGE[boundary] horizontal: y = 3 -> (0, 1, 3)"
+   ],
+   "failures": []
+  },
+  "geometry.midpoint": {
+   "generated": 68,
+   "answered": 65,
+   "agree": 65,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 3,
+   "expected_bad_input_ok": 3,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] a float",
+    "EDGE[bad-input] mixed dimensions",
+    "EDGE[bad-input] one coordinate"
+   ],
+   "failures": []
+  },
+  "geometry.orthocenter": {
+   "generated": 68,
+   "answered": 65,
+   "agree": 65,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 3,
+   "expected_bad_input_ok": 3,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] 3D points",
+    "EDGE[boundary] fractions",
+    "EDGE[boundary] huge coordinates"
+   ],
+   "failures": []
+  },
+  "geometry.pick_area": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "sympy Polygon.area for a polygon whose I and B were counted by brute force"
+   ],
+   "failures": []
+  },
+  "geometry.plane_through": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "sympy Plane.normal_vector, then normalised here"
+   ],
+   "failures": []
+  },
+  "geometry.point_in_polygon": {
+   "generated": 61,
+   "answered": 61,
+   "agree": 61,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "horizontal collinear with bottom edge outside",
+    "sympy Segment.contains for the boundary, Polygon.encloses_point for the inside"
+   ],
+   "failures": []
+  },
+  "geometry.polygon_area": {
+   "generated": 61,
+   "answered": 61,
+   "agree": 61,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.02,
+   "oracles": [
+    "5000-gon exactly the bound",
+    "sympy Polygon.area"
+   ],
+   "failures": []
+  },
+  "geometry.polygon_centroid": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "sympy Polygon.centroid"
+   ],
+   "failures": []
+  },
+  "geometry.polygon_perimeter": {
+   "generated": 61,
+   "answered": 22,
+   "agree": 22,
+   "refused": 0,
+   "refused_expected": 39,
+   "expected_refusals_ok": 39,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "diamond with 4*sqrt(2) sides",
+    "sympy Polygon.perimeter (more than one radical atom: the backend must refuse)"
+   ],
+   "failures": []
+  },
+  "geometry.polygon_perimeter_numeric": {
+   "generated": 62,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 1,
+   "expected_refusals_ok": 1,
+   "bad_input_expected": 1,
+   "expected_bad_input_ok": 1,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "negative digits",
+    "past-bound: digits > 2000",
+    "sympy Polygon.perimeter at 70 digits"
+   ],
+   "failures": []
+  },
+  "geometry.polygon_perimeter_terms": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "sympy Polygon.perimeter at 55 digits"
+   ],
+   "failures": []
+  },
+  "geometry.polygon_signed_area": {
+   "generated": 61,
+   "answered": 61,
+   "agree": 61,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.03,
+   "oracles": [
+    "5000-gon exactly the bound",
+    "sympy Polygon.area (signed)"
+   ],
+   "failures": []
+  },
+  "geometry.polygons_intersection_area": {
+   "generated": 61,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 1,
+   "expected_bad_input_ok": 1,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.07,
+   "oracles": [
+    "brute: half-plane vertex enumeration",
+    "brute: sum over fan-triangle tuples of half-plane intersections",
+    "brute: unit cells covered by every rectangle"
+   ],
+   "failures": []
+  },
+  "geometry.polygons_union_area": {
+   "generated": 61,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 1,
+   "expected_refusals_ok": 1,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.07,
+   "oracles": [
+    "brute: inclusion-exclusion over fan triangles, each convex intersection by half-plane vertex enumeration",
+    "brute: inclusion-exclusion, each convex intersection by half-plane vertex enumeration",
+    "brute: unit cells covered by any rectangle"
+   ],
+   "failures": []
+  },
+  "geometry.polyline_intersections": {
+   "generated": 75,
+   "answered": 69,
+   "agree": 69,
+   "refused": 0,
+   "refused_expected": 4,
+   "expected_refusals_ok": 4,
+   "bad_input_expected": 2,
+   "expected_bad_input_ok": 2,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 1.69,
+   "oracles": [
+    "EDGE[bad-input] a polyline needs two vertices",
+    "EDGE[bad-input] mixed dimensions",
+    "EDGE[degenerate] sympy Segment.intersection on every pair: a closed zigzag crossing itself and the other twice"
+   ],
+   "failures": []
+  },
+  "geometry.power_of_point": {
+   "generated": 68,
+   "answered": 66,
+   "agree": 66,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 2,
+   "expected_bad_input_ok": 2,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] a 3D centre",
+    "EDGE[bad-input] a non-numeric squared radius",
+    "EDGE[boundary] a huge distance"
+   ],
+   "failures": []
+  },
+  "geometry.reflect_point_line": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "sympy Point.reflect(Line)"
+   ],
+   "failures": []
+  },
+  "geometry.reflect_point_point": {
+   "generated": 61,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 1,
+   "expected_bad_input_ok": 1,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "mixed dimensions",
+    "sympy Point.scale(-1, -1, about c)"
+   ],
+   "failures": []
+  },
+  "geometry.reflect_points_line": {
+   "generated": 61,
+   "answered": 61,
+   "agree": 61,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.13,
+   "oracles": [
+    "5000 points exactly the bound",
+    "sympy Point.reflect(Line)"
+   ],
+   "failures": []
+  },
+  "geometry.regular_ngon_angle": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "mpmath: angle between the vectors from vertex j"
+   ],
+   "failures": []
+  },
+  "geometry.regular_ngon_area_exact": {
+   "generated": 60,
+   "answered": 38,
+   "agree": 38,
+   "refused": 0,
+   "refused_expected": 22,
+   "expected_refusals_ok": 22,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "mpmath (n/2) R^2 sin(2 pi / n)",
+    "nested radicals / cubic irrationality: no Surd"
+   ],
+   "failures": []
+  },
+  "geometry.regular_ngon_basic": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "sympy RegularPolygon angles; diagonals and diameters by brute enumeration of coordinates"
+   ],
+   "failures": []
+  },
+  "geometry.regular_ngon_chord_angle": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "mpmath: acute angle between the two chord vectors"
+   ],
+   "failures": []
+  },
+  "geometry.regular_ngon_chords_by_direction": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "brute: chord directions from float64 coordinates, grouped by angle",
+    "brute: chord directions from mpmath 50 digits coordinates, grouped by angle"
+   ],
+   "failures": []
+  },
+  "geometry.regular_ngon_chords_by_length": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "brute: chord lengths from float64 coordinates, grouped by length",
+    "brute: chord lengths from mpmath 50 digits coordinates, grouped by length"
+   ],
+   "failures": []
+  },
+  "geometry.regular_ngon_diagonal_intersections": {
+   "generated": 62,
+   "answered": 58,
+   "agree": 58,
+   "refused": 0,
+   "refused_expected": 2,
+   "expected_refusals_ok": 2,
+   "bad_input_expected": 2,
+   "expected_bad_input_ok": 2,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 24.09,
+   "oracles": [
+    "bad-input: n < 3",
+    "brute: line intersections from float64 coordinates, clustered by distance; regions by Euler on the same points",
+    "brute: line intersections from mpmath 50 digits coordinates, clustered by distance; regions by Euler on the same points"
+   ],
+   "failures": []
+  },
+  "geometry.regular_ngon_quadrilaterals": {
+   "generated": 60,
+   "answered": 54,
+   "agree": 54,
+   "refused": 0,
+   "refused_expected": 3,
+   "expected_refusals_ok": 3,
+   "bad_input_expected": 3,
+   "expected_bad_input_ok": 3,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 1.62,
+   "oracles": [
+    "bad-input: n < 4",
+    "brute: every 4 vertices from float64 coordinates, parallel sides by cross products",
+    "brute: every 4 vertices from mpmath 50 digits coordinates, parallel sides by cross products"
+   ],
+   "failures": []
+  },
+  "geometry.regular_ngon_rectangles_on_lines": {
+   "generated": 63,
+   "answered": 47,
+   "agree": 47,
+   "refused": 0,
+   "refused_expected": 14,
+   "expected_refusals_ok": 14,
+   "bad_input_expected": 2,
+   "expected_bad_input_ok": 2,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 1.15,
+   "oracles": [
+    "argument: no two chord directions of an odd n-gon are perpendicular",
+    "bad-input: n < 3",
+    "brute: every pair of parallel chord lines and perpendicular pair, corners by Cramer (float64), inside by the n half-planes"
+   ],
+   "failures": []
+  },
+  "geometry.regular_ngon_side_numeric": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "mpmath 2 R sin(pi/n)"
+   ],
+   "failures": []
+  },
+  "geometry.regular_ngon_triangles": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "brute: every triple of vertices from float64 coordinates, angles by dot products",
+    "brute: every triple of vertices from mpmath 50 digits coordinates, angles by dot products"
+   ],
+   "failures": []
+  },
+  "geometry.regular_ngon_vertex_rectangles": {
+   "generated": 62,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 1,
+   "expected_refusals_ok": 1,
+   "bad_input_expected": 1,
+   "expected_bad_input_ok": 1,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "bad-input: n < 3",
+    "brute: every 4 vertices from float64 coordinates",
+    "brute: every 4 vertices from mpmath 50 digits coordinates"
+   ],
+   "failures": []
+  },
+  "geometry.regular_ngon_vertices_numeric": {
+   "generated": 61,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 1,
+   "expected_refusals_ok": 1,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.06,
+   "oracles": [
+    "mpmath cos/sin at 50 digits",
+    "past-bound: n > 10^4"
+   ],
+   "failures": []
+  },
+  "geometry.rotate_point_90": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "sympy Point.rotate(q pi/2, about c)"
+   ],
+   "failures": []
+  },
+  "geometry.rotate_point_cos": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "mpmath rotation by dir * acos(cos) at 50 digits"
+   ],
+   "failures": []
+  },
+  "geometry.rotate_point_cs": {
+   "generated": 60,
+   "answered": 54,
+   "agree": 54,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 6,
+   "expected_bad_input_ok": 6,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "cos^2 + sin^2 != 1",
+    "sympy Matrix product"
+   ],
+   "failures": []
+  },
+  "geometry.rotate_points_90": {
+   "generated": 61,
+   "answered": 61,
+   "agree": 61,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.11,
+   "oracles": [
+    "5000 points 4 turns: exactly the bound",
+    "sympy Point.rotate(q pi/2, about c)"
+   ],
+   "failures": []
+  },
+  "geometry.segment_intersection": {
+   "generated": 80,
+   "answered": 79,
+   "agree": 79,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 1,
+   "expected_bad_input_ok": 1,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] 3D points",
+    "EDGE[degenerate] a zero-length segment off the other",
+    "EDGE[degenerate] a zero-length segment on the other (sympy Segment.contains: True)"
+   ],
+   "failures": []
+  },
+  "geometry.skew_lines_dist2": {
+   "generated": 61,
+   "answered": 61,
+   "agree": 61,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "parallel lines in 3D: dist^2 = 1",
+    "sympy: minimise |p1 + t d1 - p3 - s d2|^2 over t, s (calculus)"
+   ],
+   "failures": []
+  },
+  "geometry.sphere_through4": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "sympy solve of the three difference equations (linear), centre then radius"
+   ],
+   "failures": []
+  },
+  "geometry.tangent_length": {
+   "generated": 69,
+   "answered": 64,
+   "agree": 64,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 5,
+   "expected_bad_input_ok": 5,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] a 3D centre",
+    "EDGE[boundary] 2 sqrt(2)",
+    "EDGE[boundary] fractions"
+   ],
+   "failures": []
+  },
+  "geometry.tetrahedron_volume": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 0,
+   "expected_bad_input_ok": 0,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "sympy Matrix.det / 6"
+   ],
+   "failures": []
+  },
+  "geometry.tetrahedron_volume_from_edges_sq": {
+   "generated": 64,
+   "answered": 45,
+   "agree": 45,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 19,
+   "expected_bad_input_ok": 19,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.01,
+   "oracles": [
+    "a face with sides 1, 1, 2: degenerate",
+    "a zero edge",
+    "coplanar points: volume 0, no tetrahedron"
+   ],
+   "failures": []
+  },
+  "geometry.triangle_angles_numeric": {
+   "generated": 69,
+   "answered": 66,
+   "agree": 66,
+   "refused": 0,
+   "refused_expected": 1,
+   "expected_refusals_ok": 1,
+   "bad_input_expected": 2,
+   "expected_bad_input_ok": 2,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.02,
+   "oracles": [
+    "EDGE[bad-input] mixed dimensions",
+    "EDGE[boundary] mpmath at each vertex: 3D",
+    "EDGE[boundary] mpmath at each vertex: a sliver: two angles near 0"
+   ],
+   "failures": []
+  },
+  "geometry.triangle_area": {
+   "generated": 69,
+   "answered": 67,
+   "agree": 67,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 2,
+   "expected_bad_input_ok": 2,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] 3D points (use triangle_area_sq)",
+    "EDGE[bad-input] a float",
+    "EDGE[boundary] a sliver of height 10^-20"
+   ],
+   "failures": []
+  },
+  "geometry.triangle_area_sq": {
+   "generated": 69,
+   "answered": 67,
+   "agree": 67,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 2,
+   "expected_bad_input_ok": 2,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] four coordinates",
+    "EDGE[bad-input] mixed dimensions",
+    "EDGE[boundary] 3D right triangle: 1/4"
+   ],
+   "failures": []
+  },
+  "geometry.triangle_from_sides": {
+   "generated": 73,
+   "answered": 63,
+   "agree": 63,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 10,
+   "expected_bad_input_ok": 10,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.05,
+   "oracles": [
+    "EDGE[bad-input] a float",
+    "EDGE[bad-input] a negative side",
+    "EDGE[bad-input] a non-numeric side"
+   ],
+   "failures": []
+  },
+  "geometry.triangle_from_sides_sq": {
+   "generated": 72,
+   "answered": 65,
+   "agree": 65,
+   "refused": 0,
+   "refused_expected": 0,
+   "expected_refusals_ok": 0,
+   "bad_input_expected": 7,
+   "expected_bad_input_ok": 7,
+   "disagree": 0,
+   "reasons": {},
+   "refusal_reasons": {},
+   "seconds": 0.0,
+   "oracles": [
+    "EDGE[bad-input] a negative squared side",
+    "EDGE[bad-input] a non-numeric argument",
+    "EDGE[boundary] equilateral: area^2 = 3/16"
+   ],
+   "failures": []
+  }
+ },
+ "no_case": []
+}

@@ -1,0 +1,519 @@
+{
+ "module": "symbolic",
+ "seed": 1,
+ "n": 60,
+ "seconds": 35.5,
+ "operations_registered": 18,
+ "operations_without_case": [],
+ "ops": {
+  "symbolic.apart": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.26,
+   "oracles": {
+    "sympy-exact": 60
+   }
+  },
+  "symbolic.canon": {
+   "generated": 80,
+   "answered": 80,
+   "agree": 80,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.21,
+   "oracles": {
+    "sympy-numeric": 80
+   }
+  },
+  "symbolic.diff": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.18,
+   "oracles": {
+    "sympy-numeric": 60
+   }
+  },
+  "symbolic.equal": {
+   "generated": 60,
+   "answered": 50,
+   "agree": 50,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 10,
+   "disagree": 0,
+   "seconds": 0.21,
+   "oracles": {
+    "sympy-exact": 60
+   }
+  },
+  "symbolic.evaluate": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.22,
+   "oracles": {
+    "sympy-exact": 60
+   }
+  },
+  "symbolic.evaluate_numeric": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.14,
+   "oracles": {
+    "sympy-numeric": 60
+   }
+  },
+  "symbolic.expand": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.08,
+   "oracles": {
+    "sympy-exact": 60
+   }
+  },
+  "symbolic.integrate": {
+   "generated": 60,
+   "answered": 56,
+   "agree": 56,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 4,
+   "disagree": 0,
+   "seconds": 0.41,
+   "oracles": {
+    "certificate": 60
+   }
+  },
+  "symbolic.integrate_definite": {
+   "generated": 60,
+   "answered": 52,
+   "agree": 52,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 8,
+   "disagree": 0,
+   "seconds": 1.49,
+   "oracles": {
+    "certificate": 60
+   }
+  },
+  "symbolic.limit": {
+   "generated": 60,
+   "answered": 54,
+   "agree": 54,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 6,
+   "disagree": 0,
+   "seconds": 0.16,
+   "oracles": {
+    "sympy-limit": 60
+   }
+  },
+  "symbolic.rational_form": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.14,
+   "oracles": {
+    "sympy-exact": 60
+   }
+  },
+  "symbolic.series_coefficients": {
+   "generated": 65,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 5,
+   "disagree": 0,
+   "seconds": 0.31,
+   "oracles": {
+    "sympy-numeric": 65
+   }
+  },
+  "symbolic.simplify": {
+   "generated": 60,
+   "answered": 58,
+   "agree": 58,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 2,
+   "disagree": 0,
+   "seconds": 0.21,
+   "oracles": {
+    "sympy-exact": 60
+   }
+  },
+  "symbolic.solve": {
+   "generated": 60,
+   "answered": 56,
+   "agree": 56,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 4,
+   "disagree": 0,
+   "seconds": 0.22,
+   "oracles": {
+    "sympy-solveset": 60
+   }
+  },
+  "symbolic.substitute": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.09,
+   "oracles": {
+    "sympy-numeric": 60
+   }
+  },
+  "symbolic.sum_closed": {
+   "generated": 60,
+   "answered": 51,
+   "agree": 51,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 9,
+   "disagree": 0,
+   "seconds": 0.32,
+   "oracles": {
+    "brute-force": 60
+   }
+  },
+  "symbolic.sum_range": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.17,
+   "oracles": {
+    "brute-force": 60
+   }
+  },
+  "symbolic.taylor": {
+   "generated": 65,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 5,
+   "disagree": 0,
+   "seconds": 0.35,
+   "oracles": {
+    "sympy-numeric": 65
+   }
+  }
+ },
+ "per_operation": {
+  "symbolic.apart": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.26,
+   "oracles": {
+    "sympy-exact": 60
+   }
+  },
+  "symbolic.canon": {
+   "generated": 80,
+   "answered": 80,
+   "agree": 80,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.21,
+   "oracles": {
+    "sympy-numeric": 80
+   }
+  },
+  "symbolic.diff": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.18,
+   "oracles": {
+    "sympy-numeric": 60
+   }
+  },
+  "symbolic.equal": {
+   "generated": 60,
+   "answered": 50,
+   "agree": 50,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 10,
+   "disagree": 0,
+   "seconds": 0.21,
+   "oracles": {
+    "sympy-exact": 60
+   }
+  },
+  "symbolic.evaluate": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.22,
+   "oracles": {
+    "sympy-exact": 60
+   }
+  },
+  "symbolic.evaluate_numeric": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.14,
+   "oracles": {
+    "sympy-numeric": 60
+   }
+  },
+  "symbolic.expand": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.08,
+   "oracles": {
+    "sympy-exact": 60
+   }
+  },
+  "symbolic.integrate": {
+   "generated": 60,
+   "answered": 56,
+   "agree": 56,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 4,
+   "disagree": 0,
+   "seconds": 0.41,
+   "oracles": {
+    "certificate": 60
+   }
+  },
+  "symbolic.integrate_definite": {
+   "generated": 60,
+   "answered": 52,
+   "agree": 52,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 8,
+   "disagree": 0,
+   "seconds": 1.49,
+   "oracles": {
+    "certificate": 60
+   }
+  },
+  "symbolic.limit": {
+   "generated": 60,
+   "answered": 54,
+   "agree": 54,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 6,
+   "disagree": 0,
+   "seconds": 0.16,
+   "oracles": {
+    "sympy-limit": 60
+   }
+  },
+  "symbolic.rational_form": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.14,
+   "oracles": {
+    "sympy-exact": 60
+   }
+  },
+  "symbolic.series_coefficients": {
+   "generated": 65,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 5,
+   "disagree": 0,
+   "seconds": 0.31,
+   "oracles": {
+    "sympy-numeric": 65
+   }
+  },
+  "symbolic.simplify": {
+   "generated": 60,
+   "answered": 58,
+   "agree": 58,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 2,
+   "disagree": 0,
+   "seconds": 0.21,
+   "oracles": {
+    "sympy-exact": 60
+   }
+  },
+  "symbolic.solve": {
+   "generated": 60,
+   "answered": 56,
+   "agree": 56,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 4,
+   "disagree": 0,
+   "seconds": 0.22,
+   "oracles": {
+    "sympy-solveset": 60
+   }
+  },
+  "symbolic.substitute": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.09,
+   "oracles": {
+    "sympy-numeric": 60
+   }
+  },
+  "symbolic.sum_closed": {
+   "generated": 60,
+   "answered": 51,
+   "agree": 51,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 9,
+   "disagree": 0,
+   "seconds": 0.32,
+   "oracles": {
+    "brute-force": 60
+   }
+  },
+  "symbolic.sum_range": {
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 0,
+   "disagree": 0,
+   "seconds": 0.17,
+   "oracles": {
+    "brute-force": 60
+   }
+  },
+  "symbolic.taylor": {
+   "generated": 65,
+   "answered": 60,
+   "agree": 60,
+   "unchecked": 0,
+   "refused": {},
+   "refused_total": 0,
+   "expected_refusals_ok": 5,
+   "disagree": 0,
+   "seconds": 0.35,
+   "oracles": {
+    "sympy-numeric": 65
+   }
+  }
+ },
+ "refused_cases": [],
+ "unchecked": [],
+ "disagreements": []
+}

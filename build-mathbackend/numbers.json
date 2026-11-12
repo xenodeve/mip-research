@@ -1,0 +1,1971 @@
+{
+ "module": "numbers",
+ "seed": 1,
+ "n_per_op": 60,
+ "sympy": "1.14.0",
+ "ops": {
+  "numbers.add": {
+   "kind": "exact arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy Rational": 56,
+    "float refused": 1,
+    "bool refused": 1,
+    "exponent string refused": 1,
+    "not a number": 1
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.base_convert": {
+   "kind": "digits and bases",
+   "bound": "bases 2..36, at most 200,000 bits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "known": 1,
+    "digit 2 in base 2": 1,
+    "base 1": 1,
+    "empty": 1,
+    "sim long division, upper-case digits": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.bell": {
+   "kind": "combinatorial numbers",
+   "bound": "n up to 1500",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 3,
+    "domain": 1,
+    "SymPy bell": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.02
+  },
+  "numbers.best_approx": {
+   "kind": "continued fractions",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "brute force": 1,
+    "max_den 0": 1,
+    "brute force over denominators": 58
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.binomial": {
+   "kind": "combinatorial numbers",
+   "bound": "n (or k - n - 1 for negative n) up to 10**6",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 4,
+    "SymPy binomial": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.binomial_mod": {
+   "kind": "modular arithmetic",
+   "bound": "m factors; a prime power at most 10**6, or a larger prime with each base-p digit of k (or n-k) at most 2,000,000; n any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "exact comb": 1,
+    "k > n": 1,
+    "mod 1": 1,
+    "SymPy binomial then mod (exact)": 28,
+    "Lucas' theorem written in the sim (small prime)": 29
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.11
+  },
+  "numbers.carmichael": {
+   "kind": "number theory",
+   "bound": "as factorint",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 4,
+    "zero": 1,
+    "SymPy reduced_totient": 55
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.catalan": {
+   "kind": "combinatorial numbers",
+   "bound": "n up to 50,000",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 3,
+    "domain": 1,
+    "SymPy catalan": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.1
+  },
+  "numbers.cf_convergents": {
+   "kind": "continued fractions",
+   "bound": "at most 100,000 terms",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "SymPy continued_fraction_convergents": 58
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.cf_rational": {
+   "kind": "continued fractions",
+   "bound": "numerator and denominator up to 2,000,000 bits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 3,
+    "SymPy continued_fraction": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.cf_sqrt": {
+   "kind": "continued fractions",
+   "bound": "d up to 10**18, period up to 2,000,000",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "perfect square": 1,
+    "d = 0": 1,
+    "SymPy continued_fraction_periodic": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 39.0
+  },
+  "numbers.cf_sqrt_convergents": {
+   "kind": "continued fractions",
+   "bound": "d up to 10**18, count up to 100,000",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 1,
+    "perfect square": 2,
+    "SymPy continued_fraction_iterator of sqrt(d)": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 1.56
+  },
+  "numbers.cf_value": {
+   "kind": "continued fractions",
+   "bound": "at most 100,000 terms",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 1,
+    "empty": 1,
+    "zero term": 1,
+    "SymPy continued_fraction_reduce / the rational itself": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.crt": {
+   "kind": "modular arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "empty": 1,
+    "SymPy solve_congruence": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.decimal_digit": {
+   "kind": "decimal expansion",
+   "bound": "position up to 10**30",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "cycle": 1,
+    "k = 0": 1,
+    "long division with remainder-cycle detection, indexed through the cycle": 58
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.17
+  },
+  "numbers.decimal_expansion": {
+   "kind": "decimal expansion",
+   "bound": "at most 100,000 digits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "long division": 2,
+    "negative digits": 1,
+    "schoolbook long division in the sim": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.decimal_period": {
+   "kind": "decimal expansion",
+   "bound": "denominator factors as factorint",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "known": 3,
+    "long division remainder cycle": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.decimal_preperiod": {
+   "kind": "decimal expansion",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "known": 3,
+    "long division remainder cycle": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.digit_sum": {
+   "kind": "digits and bases",
+   "bound": "n up to 200,000 bits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 1,
+    "known": 1,
+    "SymPy digits then sum": 58
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.digital_root": {
+   "kind": "digits and bases",
+   "bound": "n up to 200,000 bits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "convention": 1,
+    "known": 1,
+    "repeated digit sum with SymPy digits": 58
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.digits": {
+   "kind": "digits and bases",
+   "bound": "n up to 200,000 bits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "base 1": 1,
+    "negative": 1,
+    "SymPy digits": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.discrete_log": {
+   "kind": "modular arithmetic",
+   "bound": "n up to 10**12 (baby-step giant-step)",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 1,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "brute": 1,
+    "past the 10**12 bound": 1,
+    "brute force over exponents 0..2n+2": 35,
+    "SymPy discrete_log (prime modulus)": 23
+   },
+   "expected_refusals_ok": 1,
+   "seconds": 0.19
+  },
+  "numbers.div": {
+   "kind": "exact arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy Rational": 56,
+    "float refused": 1,
+    "bool refused": 1,
+    "exponent string refused": 1,
+    "not a number": 1
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.divisors": {
+   "kind": "number theory",
+   "bound": "as factorint; at most 10**6 divisors",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 1,
+    "zero": 1,
+    "SymPy divisors": 58
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.double_factorial": {
+   "kind": "combinatorial numbers",
+   "bound": "n up to 100,000",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 3,
+    "domain": 2,
+    "SymPy factorial2": 55
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.factorial": {
+   "kind": "combinatorial numbers",
+   "bound": "n up to 100,000",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 3,
+    "domain": 1,
+    "SymPy factorial": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.factorial_trailing_zeros": {
+   "kind": "number theory",
+   "bound": "base factors as factorint",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "known": 1,
+    "exact factorial": 1,
+    "divide the exact factorial by the base until it stops": 58
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.11
+  },
+  "numbers.factorial_valuation": {
+   "kind": "number theory",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "p not prime": 1,
+    "SymPy multiplicity in the exact factorial": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.02
+  },
+  "numbers.factorint": {
+   "kind": "primes",
+   "bound": "n < 2**240; trial division to 5000, Pollard p-1 (B=20000), Brent rho 2 x 250,000 steps; else refused",
+   "generated": 60,
+   "answered": 54,
+   "agree": 54,
+   "refused": 6,
+   "refused_expected": 1,
+   "refused_reasons": {
+    "could not factor completely: cofactor # left": 6
+   },
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "zero": 1,
+    "negative": 1,
+    "past 2**240": 1,
+    "SymPy factorint": 32,
+    "certificate": 23
+   },
+   "expected_refusals_ok": 1,
+   "seconds": 1.41
+  },
+  "numbers.factorint_partial": {
+   "kind": "primes",
+   "bound": "as factorint; never refuses for lack of a factor",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "certificate": 60
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 2.69
+  },
+  "numbers.falling_factorial": {
+   "kind": "combinatorial numbers",
+   "bound": "n up to 100,000",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "negative n": 1,
+    "SymPy rf/ff": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.fibonacci": {
+   "kind": "combinatorial numbers",
+   "bound": "|n| up to 2,000,000 exactly; any n below 2**100000 with a modulus",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 1,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 4,
+    "modulus 0": 1,
+    "past the exact bound": 1,
+    "SymPy fibonacci": 24,
+    "2x2 matrix power written in the sim": 30
+   },
+   "expected_refusals_ok": 1,
+   "seconds": 0.0
+  },
+  "numbers.floor_sum": {
+   "kind": "floor sum",
+   "bound": "n, m, a, b up to 2,000,000 bits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "direct": 1,
+    "empty sum": 1,
+    "m = 0": 1,
+    "n < 0": 1,
+    "direct summation of the floors": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.02
+  },
+  "numbers.four_squares": {
+   "kind": "sums of squares",
+   "bound": "n up to 10**18; at most 200,000 candidates",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "cert": 2,
+    "negative": 1,
+    "certificate": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.02
+  },
+  "numbers.frac_part": {
+   "kind": "exact arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 1,
+    "SymPy x - floor(x)": 59
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.frobenius": {
+   "kind": "Frobenius",
+   "bound": "two coins any size; more coins: the least coin up to 100,000",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "DP": 3,
+    "gcd": 1,
+    "zero coin": 1,
+    "dynamic programming over reachable amounts": 46,
+    "common factor: infinitely many gaps": 9
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 1.16
+  },
+  "numbers.frobenius_count": {
+   "kind": "Frobenius",
+   "bound": "two coins any size; more coins: the least coin up to 100,000",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "DP": 3,
+    "dynamic programming over reachable amounts": 47,
+    "common factor: infinitely many gaps": 10
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 1.17
+  },
+  "numbers.from_digits": {
+   "kind": "digits and bases",
+   "bound": "at most 200,000 digits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "Horner": 1,
+    "digit out of range": 1,
+    "empty is 0": 1,
+    "Horner in the sim": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.gcd": {
+   "kind": "modular arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "no arguments": 1,
+    "SymPy": 2,
+    "SymPy igcd/ilcm": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.iroot": {
+   "kind": "exact arithmetic",
+   "bound": "n up to 2,000,000 bits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "negative n": 1,
+    "exact": 1,
+    "SymPy integer_nthroot": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.is_perfect_power": {
+   "kind": "exact arithmetic",
+   "bound": "|n| up to 20,000 bits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 3,
+    "SymPy perfect_power": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.is_prime": {
+   "kind": "primes",
+   "bound": "deterministic Miller-Rabin below 3.3e24; above, composite is certain and a prime is proven by Pocklington or refused; n below 2**2048",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy isprime": 60
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.is_square": {
+   "kind": "exact arithmetic",
+   "bound": "n up to 2,000,000 bits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 1,
+    "negative": 1,
+    "SymPy sqrt(Rational).is_Rational": 58
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.02
+  },
+  "numbers.is_squarefree": {
+   "kind": "primes",
+   "bound": "as factorint",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "zero": 1,
+    "SymPy factorint": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.is_sum_of_three_squares": {
+   "kind": "sums of squares",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "known": 2,
+    "4*7": 1,
+    "negative": 1,
+    "brute force over three squares": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.04
+  },
+  "numbers.is_sum_of_two_squares": {
+   "kind": "sums of squares",
+   "bound": "as factorint",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "brute": 2,
+    "convention": 1,
+    "negative": 1,
+    "brute force": 22,
+    "Jacobi 4(d1 - d3) from SymPy divisors": 34
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.isqrt": {
+   "kind": "exact arithmetic",
+   "bound": "n up to 2,000,000 bits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "negative n": 1,
+    "exact": 1,
+    "SymPy integer_nthroot": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.jacobi": {
+   "kind": "modular arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 1,
+    "even n": 1,
+    "n = 0": 1,
+    "SymPy jacobi_symbol": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.lcm": {
+   "kind": "modular arithmetic",
+   "bound": "result at most 2,000,000 bits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "no arguments": 1,
+    "SymPy": 2,
+    "SymPy igcd/ilcm": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.legendre": {
+   "kind": "modular arithmetic",
+   "bound": "p < 3.3e24 or a proven prime",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "not prime": 1,
+    "p = 2": 1,
+    "SymPy legendre_symbol": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.02
+  },
+  "numbers.lin_diophantine": {
+   "kind": "Diophantine",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 1,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "cert": 5,
+    "every pair": 1,
+    "certificate": 54
+   },
+   "expected_refusals_ok": 1,
+   "seconds": 0.0
+  },
+  "numbers.lin_diophantine_nonneg_count": {
+   "kind": "Diophantine",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "brute": 1,
+    "a = 0": 1,
+    "c < 0": 1,
+    "brute force over x": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.lincong": {
+   "kind": "modular arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "brute force": 60
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.lucas": {
+   "kind": "combinatorial numbers",
+   "bound": "|n| up to 2,000,000 exactly; any n below 2**100000 with a modulus",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 1,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 4,
+    "modulus 0": 1,
+    "past the exact bound": 1,
+    "2x2 matrix power written in the sim (L = 2F(n+1) - F(n))": 29,
+    "SymPy lucas": 25
+   },
+   "expected_refusals_ok": 1,
+   "seconds": 0.01
+  },
+  "numbers.modinv": {
+   "kind": "modular arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "x*a = 0 mod 1": 1,
+    "SymPy": 2,
+    "modulus 0": 1,
+    "SymPy mod_inverse": 34,
+    "SymPy: no inverse": 22
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.moebius": {
+   "kind": "number theory",
+   "bound": "as factorint",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "zero": 1,
+    "SymPy mobius": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.02
+  },
+  "numbers.mul": {
+   "kind": "exact arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy Rational": 56,
+    "float refused": 1,
+    "bool refused": 1,
+    "exponent string refused": 1,
+    "not a number": 1
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.multinomial": {
+   "kind": "combinatorial numbers",
+   "bound": "sum of parts up to 100,000",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 1,
+    "no parts": 1,
+    "negative part": 1,
+    "SymPy factorials": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.next_prime": {
+   "kind": "primes",
+   "bound": "at most 100,000 candidates",
+   "generated": 60,
+   "answered": 59,
+   "agree": 59,
+   "refused": 1,
+   "refused_expected": 0,
+   "refused_reasons": {
+    "probable prime above #.#e# that could not be proven": 1
+   },
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "SymPy nextprime/prevprime": 58
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.14
+  },
+  "numbers.nth_prime": {
+   "kind": "primes",
+   "bound": "k up to 600,000",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 1,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "k = 0": 1,
+    "past the bound": 1,
+    "SymPy prime": 56
+   },
+   "expected_refusals_ok": 1,
+   "seconds": 0.27
+  },
+  "numbers.num_digits": {
+   "kind": "digits and bases",
+   "bound": "n up to 200,000 bits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "convention": 1,
+    "known": 1,
+    "SymPy digits then len": 58
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.num_divisors": {
+   "kind": "number theory",
+   "bound": "as factorint",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 1,
+    "zero": 1,
+    "SymPy divisor_count": 58
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.02
+  },
+  "numbers.order": {
+   "kind": "number theory",
+   "bound": "as factorint, applied to n and to p-1 of its primes",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 1,
+    "order mod 1": 1,
+    "gcd": 1,
+    "gcd(a, n) > 1": 27,
+    "SymPy n_order": 30
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.partition_number": {
+   "kind": "combinatorial numbers",
+   "bound": "n up to 10,000",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 3,
+    "domain": 1,
+    "SymPy npartitions": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.07
+  },
+  "numbers.pell": {
+   "kind": "Diophantine",
+   "bound": "d up to 10**18; continued-fraction period up to 20,000",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 3,
+    "square": 1,
+    "d = 0": 1,
+    "SymPy diop_DN(d, 1)": 54,
+    "square d: no non-trivial solution": 1
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.pell_negative": {
+   "kind": "Diophantine",
+   "bound": "d up to 10**18; continued-fraction period up to 20,000",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 3,
+    "SymPy diop_DN(d, -1)": 54,
+    "square d": 3
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.pell_search": {
+   "kind": "Diophantine",
+   "bound": "y up to 10**6",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "known": 1,
+    "d = 0": 1,
+    "double loop over x and y in the sim": 58
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.03
+  },
+  "numbers.pell_solutions": {
+   "kind": "Diophantine",
+   "bound": "count up to 1000, as pell",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 1,
+    "square d": 1,
+    "count 0": 1,
+    "SymPy exact powers of the fundamental unit mod t^2 - d": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.14
+  },
+  "numbers.perfect_power": {
+   "kind": "exact arithmetic",
+   "bound": "|n| up to 20,000 bits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 3,
+    "SymPy perfect_power": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.pow_int": {
+   "kind": "exact arithmetic",
+   "bound": "result at most 2,000,000 bits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 1,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 4,
+    "past the 2,000,000-bit bound": 1,
+    "SymPy Rational ** int": 55
+   },
+   "expected_refusals_ok": 1,
+   "seconds": 0.01
+  },
+  "numbers.pow_rational": {
+   "kind": "exact arithmetic",
+   "bound": "result at most 2,000,000 bits; root index up to 10**6",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 30,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 5,
+    "0 to a negative power": 1,
+    "SymPy a**e is rational? else a refusal": 20,
+    "SymPy exact (base**s)**(r/s) = base**r": 22,
+    "negative base with fractional exponent is refused": 12
+   },
+   "expected_refusals_ok": 30,
+   "seconds": 0.0
+  },
+  "numbers.powmod": {
+   "kind": "modular arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "sim": 1,
+    "convention 0**0 = 1": 1,
+    "modulus 0": 1,
+    "square-and-multiply written in the sim": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.prev_prime": {
+   "kind": "primes",
+   "bound": "at most 100,000 candidates",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "no prime below 2": 1,
+    "SymPy nextprime/prevprime": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.04
+  },
+  "numbers.prime_pi": {
+   "kind": "primes",
+   "bound": "n up to 10**9 (Lucy-Hedgehog counting)",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 3,
+    "known table value pi(10^8)": 1,
+    "known pi(10^9)": 1,
+    "SymPy primepi": 55
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.35
+  },
+  "numbers.primes_upto": {
+   "kind": "primes",
+   "bound": "n up to 10**7",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 1,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "past the 10**7 bound": 1,
+    "SymPy primerange": 57
+   },
+   "expected_refusals_ok": 1,
+   "seconds": 0.05
+  },
+  "numbers.primitive_root": {
+   "kind": "number theory",
+   "bound": "as factorint",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "convention": 2,
+    "SymPy None": 1,
+    "SymPy": 1,
+    "SymPy primitive_root (None -> none)": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.pythagorean_triple_count": {
+   "kind": "Diophantine",
+   "bound": "hypotenuse up to 10**7",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "triple loop": 60
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 1.37
+  },
+  "numbers.pythagorean_triples": {
+   "kind": "Diophantine",
+   "bound": "hypotenuse up to 10**6, at most 100,000 triples",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "triple loop": 60
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 1.56
+  },
+  "numbers.r2": {
+   "kind": "sums of squares",
+   "bound": "as factorint",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "brute": 2,
+    "convention": 1,
+    "negative": 1,
+    "Jacobi 4(d1 - d3) from SymPy divisors": 35,
+    "brute force": 21
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.r4": {
+   "kind": "sums of squares",
+   "bound": "as factorint",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "known": 2,
+    "n = 0": 1,
+    "brute force: convolution of two-square counts": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.radical": {
+   "kind": "primes",
+   "bound": "as factorint",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "zero": 1,
+    "SymPy factorint": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.03
+  },
+  "numbers.rat_ceil": {
+   "kind": "exact arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 1,
+    "SymPy ceiling": 59
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.rat_floor": {
+   "kind": "exact arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 1,
+    "SymPy floor": 59
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.rat_mod": {
+   "kind": "exact arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "modulo zero": 1,
+    "SymPy": 2,
+    "SymPy Mod": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.rat_round": {
+   "kind": "exact arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "half away": 2,
+    "half even": 1,
+    "unknown mode": 1,
+    "SymPy floor with the half rule written in the sim": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.rat_trunc": {
+   "kind": "exact arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 1,
+    "SymPy floor/ceiling by sign": 59
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.repeating_decimal": {
+   "kind": "decimal expansion",
+   "bound": "period up to 1,000,000 digits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "known": 3,
+    "negative": 1,
+    "long division remainder cycle": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.03
+  },
+  "numbers.repeating_to_fraction": {
+   "kind": "decimal expansion",
+   "bound": "at most 100,000 digits",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "known": 1,
+    "0.999... = 1": 1,
+    "not digits": 1,
+    "integer": 1,
+    "round trip from the sim long division": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.rising_factorial": {
+   "kind": "combinatorial numbers",
+   "bound": "n up to 100,000",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "negative n": 1,
+    "SymPy rf/ff": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.sigma": {
+   "kind": "number theory",
+   "bound": "as factorint; k in 0..1000",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "zero": 1,
+    "SymPy divisor_sigma": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.smallest_prime_factor": {
+   "kind": "primes",
+   "bound": "as factorint",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "n < 2": 1,
+    "SymPy factorint": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.sqrt_mod": {
+   "kind": "modular arithmetic",
+   "bound": "p < 3.3e24 or a proven prime",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "p = 2": 1,
+    "not prime": 1,
+    "SymPy sqrt_mod all_roots": 56
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.02
+  },
+  "numbers.sqrt_mod_all": {
+   "kind": "modular arithmetic",
+   "bound": "n factors; prime powers up to 200,000 by search, odd ones with p not dividing a by Hensel; at most 10**6 roots",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "brute": 2,
+    "modulus 0": 1,
+    "SymPy sqrt_mod all_roots (composite)": 27,
+    "brute force over 0..n-1": 30
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.stirling1": {
+   "kind": "combinatorial numbers",
+   "bound": "n up to 1500",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "negative k": 1,
+    "SymPy stirling": 23,
+    "definition: zero for k > n": 34
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.stirling2": {
+   "kind": "combinatorial numbers",
+   "bound": "n, k up to 3000",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "negative k": 1,
+    "definition: zero for k > n": 26,
+    "SymPy stirling": 31
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.sub": {
+   "kind": "exact arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy Rational": 56,
+    "float refused": 1,
+    "bool refused": 1,
+    "exponent string refused": 1,
+    "not a number": 1
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.totient": {
+   "kind": "number theory",
+   "bound": "as factorint",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "SymPy": 2,
+    "zero": 1,
+    "SymPy totient": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.two_squares": {
+   "kind": "sums of squares",
+   "bound": "as factorint; at most 100,000 representations",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "brute": 2,
+    "convention": 1,
+    "negative": 1,
+    "brute force over a": 23,
+    "certificate": 33
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.01
+  },
+  "numbers.valuation": {
+   "kind": "number theory",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "valuation of zero": 1,
+    "SymPy": 1,
+    "p < 2": 1,
+    "SymPy multiplicity": 57
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  },
+  "numbers.xgcd": {
+   "kind": "modular arithmetic",
+   "bound": "any size",
+   "generated": 60,
+   "answered": 60,
+   "agree": 60,
+   "refused": 0,
+   "refused_expected": 0,
+   "refused_reasons": {},
+   "disagree": 0,
+   "disagree_examples": [],
+   "oracles": {
+    "certificate": 59,
+    "cert": 1
+   },
+   "expected_refusals_ok": 0,
+   "seconds": 0.0
+  }
+ },
+ "no_case": [],
+ "totals": {
+  "registered": 100,
+  "with_cases": 100,
+  "generated": 6000,
+  "answered": 5993,
+  "agree": 5993,
+  "refused": 7,
+  "disagree": 0
+ },
+ "not_covered": {
+  "factoring past the bound": "trial division, Pollard p-1 and Brent rho only; a number whose second-largest prime factor is above about 1e11 is refused (ECM, quadratic sieve and NFS would cover it)",
+  "primality proof of a large prime": "above 3.3e24 a prime is proven only by Pocklington with a completely factored part of n-1 above sqrt(n); else refused (the composite verdict is always certain)",
+  "general Pell x^2 - d*y^2 = N, all solution classes": "only a bounded search over y (pell_search) is given; the fundamental solutions of every class need the LMM algorithm",
+  "general quadratic Diophantine equations": "a*x^2 + b*x*y + c*y^2 + d*x + e*y + f = 0 is not done (needs the full conic classification)",
+  "linear Diophantine in more than two unknowns": "not done; reduce by hand with two-unknown steps",
+  "discrete logarithm past n = 1e12": "baby-step giant-step needs sqrt(n) memory; Pohlig-Hellman for smooth orders is not implemented",
+  "partition numbers past n = 10000, Bell past 1500, Stirling past 3000": "exact big-integer recurrences are quadratic; no Rademacher series",
+  "egyptian fractions, quadratic forms, p-adic and algebraic number fields": "not in the floor list; nothing registered"
+ }
+}
