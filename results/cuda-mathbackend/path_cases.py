@@ -7,7 +7,7 @@ The random corpora reach Knuth D only when a gcd is >= 2^32 and its add-back ste
   (limbs of 0, 1, 0x7FFFFFFF, 0x80000000, 0xFFFFFFFF) and keeping the (u, v) pairs where qhat was one too large; each becomes the
   string f'{u}/{v * m}' with m coprime to u / v, so rat_reduce divides u by the gcd v.
 Every case's expected output is Python's; `census` runs the DLL and counts the path bits it reports (1 register, 2 full, 4 Knuth D,
-8 add-back, 16 timed out).
+8 add-back, 16 timed out, 32 a Lehmer step, 64 a full Euclid step in Lehmer).
 python results/cuda-mathbackend/path_cases.py build      (writes corpus/numbers-paths-s3.jsonl)
 python results/cuda-mathbackend/path_cases.py census corpus/numbers-paths-s3.jsonl
 """
@@ -133,7 +133,8 @@ def census(corpus):
         p = int(v[6])
         ok = got == r['out'].encode()
         agree += ok
-        for b, name in ((1, 'register'), (2, 'full'), (4, 'Knuth D'), (8, 'add-back'), (16, 'timed out')):
+        for b, name in ((1, 'register'), (2, 'full'), (4, 'Knuth D'), (8, 'add-back'), (16, 'timed out'), (32, 'Lehmer step'),
+                        (64, 'Lehmer full step')):
             if p & b:
                 bits[name] += 1
                 by_path[(name, ok)] += 1

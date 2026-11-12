@@ -459,3 +459,28 @@ Against Python per call (`speed8-numbers-s1.txt`): 300 digits 123 us vs 5-11 us,
 quadratic and serial: decimal digits to limbs (9 digits at a time) and limbs to decimal (repeated division by 10^9, each pass a carry
 chain), plus the binary gcd for multi-limb fractions. A literal 10^9 divisor (so the compiler multiplies by its reciprocal) did not help:
 the passes are bound by the limb loads, not the divide.
+
+### Lehmer's gcd for multi-limb fractions (2026-11-12)
+
+The reduction's gcd is now Lehmer's algorithm (Knuth 4.5.2, Algorithm L): the top 29 bits of the larger part give a 2x2 matrix of
+cofactors (each below 2^29), and one pass over both numbers applies it, so one pass removes about as many bits as the binary gcd removed
+in ~29 passes. A step that finds no cofactors (one part much longer than the other) is one full Euclid step, x mod y by Knuth D; once
+the smaller part fits in two limbs the rest is 64-bit Euclid. New corpus `numbers-gcd-s4` (`gcd_cases.py`, 101 cases: consecutive
+Fibonacci numbers, where every quotient is 1; a long part over a short one; all-ones limbs; common factors of 20 to 1,200 digits).
+Path bits 32 (a Lehmer step) and 64 (a full step) in `path_cases.py census`: on `numbers-gcd-s4` 70 and 76 cases, on `numbers-paths-s3`
+63 and 190.
+
+Correctness, RTX 5060 Ti, modes 1 and 2: gcd 101 / 101, paths 220 / 220, fuzz 4,000 / 4,000, s1 1,816 / 1,816.
+
+Speed on `numbers-gcd-s4`, mode 2, median per call (`speed9-numbers-gcd-s4-binary.txt` before, `speed9-numbers-gcd-s4.txt` after):
+
+| Case | Binary gcd | Lehmer | Python |
+|---|---|---|---|
+| div, 3,070 digits | 75.1 ms | **5.7 ms** | 57 us |
+| div, 1,880 digits (Fibonacci) | 22.3 ms | **6.9 ms** | 79 us |
+| add, 1,200 digits | 18.2 ms | **2.4 ms** | 16 us |
+| mul, 1,520 digits | 10.2 ms | **1.2 ms** | 20 us |
+| div, 300 digits | 381 us | **195 us** | 12 us |
+| all 101 calls, median | 513 us | **274 us** | 13 us |
+
+Still one GPU thread for everything; what is left is the conversions and Knuth D (serial), next to be split across a block of threads.

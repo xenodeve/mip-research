@@ -60,7 +60,8 @@ struct Slot {
 __device__ long long g_deadline = 0x7fffffffffffffffLL;
 __device__ long long g_call_cycles = 0x7fffffffffffffffLL;   // set at open: MIP_CALL_SECONDS of the rated clock
 __device__ int g_timed_out = 0;
-__device__ unsigned g_path = 0;   // bits of the paths this call took: 1 register, 2 full, 4 Knuth D, 8 its add-back, 16 timed out
+__device__ unsigned g_path = 0;   // bits of the paths this call took: 1 register, 2 full, 4 Knuth D, 8 its add-back, 16 timed out,
+                                  // 32 a Lehmer step, 64 a full Euclid step inside Lehmer
 
 __device__ __forceinline__ int past_deadline() {
     if (clock64() > g_deadline) {
@@ -308,30 +309,113 @@ __device__ void mag_shl(Big &a, int k) {
     big_trim(a);
 }
 
-// g = gcd(|a|, |b|), binary gcd (Stein); g has room for max(a.n, b.n) + 1 limbs
+// r = |u| mod |v| (v nonzero; r distinct from u and v, room for u.n limbs); the quotient's scratch is given back to the arena
+__device__ void mag_mod(Ctx &c, Big &r, const Big &u, const Big &v) {
+    if (mag_cmp(u, v) < 0) { big_copy(r, u); r.neg = 0; return; }
+    if (v.n == 1) {
+        big_copy(r, u);
+        r.neg = 0;
+        uint32_t m = mag_divmod_small(r, v.w[0]);
+        r.w[0] = m;
+        r.n = m ? 1 : 0;
+        return;
+    }
+    int mark = c.used;
+    Big q = big_new(c, u.n - v.n + 2), p = big_new(c, u.n + 2);
+    if (c.fail) return;
+    mag_div(c, q, u, v);
+    if (c.fail) return;
+    big_mul(p, q, v);   // q * v <= u: at most u.n limbs
+    mag_sub(r, u, p);
+    c.used = mark;
+}
+
+// r = A x + B y with |A|, |B| < 2^29 (|x| >= |y|); returns 0 when the result is negative or has no room (never a value then)
+__device__ int mag_lin(Big &r, const Big &x, long long A, const Big &y, long long B) {
+    long long cy = 0;
+    int n = x.n;
+    for (int i = 0; i < n; i++) {
+        long long v = A * (long long)x.w[i] + B * (long long)(i < y.n ? y.w[i] : 0u) + cy;   // |v| < 2^62
+        r.w[i] = (uint32_t)v;
+        cy = v >> 32;   // arithmetic: the floor
+    }
+    while (cy > 0) {
+        if (n >= r.cap) return 0;
+        r.w[n++] = (uint32_t)cy;
+        cy >>= 32;
+    }
+    if (cy < 0) return 0;
+    r.n = n;
+    r.neg = 0;
+    big_trim(r);
+    return 1;
+}
+
+__device__ int mag_bits(const Big &a) { return a.n ? 32 * (a.n - 1) + 32 - __clz(a.w[a.n - 1]) : 0; }
+
+// the bits [k, k + 64) of a magnitude, k >= 0
+__device__ unsigned long long mag_bits_at(const Big &a, int k) {
+    int l = k / 32, s = k % 32;
+    unsigned long long lo = l < a.n ? a.w[l] : 0, mid = l + 1 < a.n ? a.w[l + 1] : 0, hi = l + 2 < a.n ? a.w[l + 2] : 0;
+    unsigned long long low64 = (mid << 32) | lo;
+    return s ? (low64 >> s) | (hi << (64 - s)) : low64;
+}
+
+// g = gcd(|a|, |b|): Lehmer's algorithm (Knuth 4.5.2, Algorithm L) on the top 29 bits, so each cofactor stays below 2^29 and a step
+// costs one pass over the numbers instead of the binary gcd's pass per bit; a step that finds no cofactors is one full Euclid step
+// (x mod y); once y fits in two limbs the rest is 64-bit Euclid. g has room for max(a.n, b.n) + 1 limbs.
 __device__ void mag_gcd(Ctx &c, Big &g, const Big &a, const Big &b) {
     if (a.n == 0) { big_copy(g, b); g.neg = 0; return; }
     if (b.n == 0) { big_copy(g, a); g.neg = 0; return; }
     int cap = (a.n > b.n ? a.n : b.n) + 2;
-    Big x = big_new(c, cap), y = big_new(c, cap);
+    Big x = big_new(c, cap), y = big_new(c, cap), t1 = big_new(c, cap), t2 = big_new(c, cap);
     if (c.fail) return;
-    big_copy(x, a); x.neg = 0;
-    big_copy(y, b); y.neg = 0;
-    int zx = mag_ctz(x), zy = mag_ctz(y), shift = zx < zy ? zx : zy;
-    mag_shr(x, zx);
-    mag_shr(y, zy);
+    if (mag_cmp(a, b) >= 0) { big_copy(x, a); big_copy(y, b); } else { big_copy(x, b); big_copy(y, a); }
+    x.neg = y.neg = 0;
     int turns = 0;
-    while (y.n) {
-        if ((++turns & 255) == 0 && past_deadline()) { c.fail = 1; return; }
-        int cmp = mag_cmp(x, y);
-        if (cmp > 0) { Big t = x; x = y; y = t; }
-        mag_sub(y, y, x);
-        if (y.n) mag_shr(y, mag_ctz(y));
+    while (y.n > 2) {   // x >= y here
+        if ((++turns & 15) == 0 && past_deadline()) { c.fail = 1; return; }
+        int k = mag_bits(x) - 29;   // y.n > 2: x has more than 64 bits, k > 35
+        long long uh = (long long)(mag_bits_at(x, k) & 0x1FFFFFFFull), vh = (long long)(mag_bits_at(y, k) & 0x1FFFFFFFull);
+        // y <= x, so y >> k < 2^29 as well: the masks only drop bits that are zero
+        long long A = 1, B = 0, C = 0, D = 1;
+        for (;;) {
+            if (vh + C == 0 || vh + D == 0) break;
+            long long q = (uh + A) / (vh + C);
+            if (q != (uh + B) / (vh + D)) break;
+            long long T = A - q * C; A = C; C = T;
+            T = B - q * D; B = D; D = T;
+            T = uh - q * vh; uh = vh; vh = T;
+        }
+        if (B == 0) {   // no cofactors: one full step, (x, y) = (y, x mod y)
+            g_path |= 64;
+            mag_mod(c, t1, x, y);
+            if (c.fail) return;
+            Big t = x; x = y; y = t1; t1 = t;
+        } else {
+            g_path |= 32;
+            if (!mag_lin(t1, x, A, y, B) || !mag_lin(t2, x, C, y, D)) { c.fail = 1; return; }
+            Big t = x; x = t1; t1 = t;
+            t = y; y = t2; t2 = t;
+            if (mag_cmp(x, y) < 0) { t = x; x = y; y = t; }
+        }
     }
-    big_copy(g, x);
-    for (int i = g.n; i < g.cap; i++) g.w[i] = 0;
-    if (g.n + shift / 32 + 2 > g.cap) { c.fail = 1; return; }
-    mag_shl(g, shift);
+    unsigned long long u0, v0;
+    if (y.n == 0) {
+        big_copy(g, x);
+        g.neg = 0;
+        return;
+    }
+    mag_mod(c, t1, x, y);   // y fits in 64 bits: so does x mod y
+    if (c.fail) return;
+    v0 = y.w[0] | (y.n > 1 ? (unsigned long long)y.w[1] << 32 : 0);
+    u0 = t1.n ? (t1.w[0] | (t1.n > 1 ? (unsigned long long)t1.w[1] << 32 : 0)) : 0;
+    while (u0) { unsigned long long m = v0 % u0; v0 = u0; u0 = m; }
+    g.w[0] = (uint32_t)v0;
+    g.w[1] = (uint32_t)(v0 >> 32);
+    g.n = 2;
+    g.neg = 0;
+    big_trim(g);
 }
 
 // ---- rationals: n / d, d > 0, reduced -------------------------------------------------------------------------------------------------
