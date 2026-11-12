@@ -222,6 +222,33 @@ tokens are asked one at a time with `logit_bias {token: +8}`, so the model write
 in 2,895 of 3,439 cases (84 %). Forcing a value's tokens through the sampler and inserting them as text gave the same 48-token greedy
 continuation at 25 of 30 points, the same rate as two identical insertions (bf16 noise). [^logit]
 
+## Token channel (`--channel`)
+
+**What it does** ([design](plans/2026-11-12-mip-token-channel-design.md)). A shim in llama.cpp (a sampler at the head of the chain,
+[`../third_party/llama.cpp/mip-channel.patch`](../third_party/llama.cpp/mip-channel.patch) on `1deefcca3`, `MIP_CHANNEL=host:port`)
+streams every token of a request to MIP's service (`../tools/igc/mip_channel.py`). At an `=` in the thinking whose expression MIP
+computes, the next tokens are masked to those that can still spell ` <value>`, in any tokenization the vocabulary has
+(`../tools/igc/token_trie.py`); the model picks among them, and nothing is inserted and no request stops. A question that is one fixed
+computation gets `<expr> = <value>` steered at the start of the thinking (answers counted apart). With `--think-only`, nothing is steered
+or put in the final answer. tir4b registers each request (`mip_id`) and the service plans from tir4b's own readers, so what is steered
+is what a text put would have put.
+
+**Gates** (4B NVFP4 W4A8 · llama.cpp · RTX 5060 Ti, 2026-11-12): the patched server with no `mip_id` gives the stock build's tokens, 6 / 6;
+replaying round 9's traces, the service plans 29,645 of 29,645 puts with the same text, 0 different; every steered value checked again
+independently (`../scripts/pc/gate3_values.py`: exact arithmetic, `q rem r` by its meaning, cut decimals, surds by sympy) is right.
+
+**On development rows** (same build; 10 DeepMind rows, 2 each of `div_big`, `mixed_longer`, `mul_div_longer`, `simplify_surd`,
+`swr_p_sequence`, x 2 seeds, T 0.6, full context; both arms `--think-only` on the same patched binary): the API reader scores 19 / 20
+in both arms, the same answer wrong in both (a rounded decimal boxed), so no pair where only one arm is right. 2,474 values were planned
+and all are right: 2,443 written as steered, 31 planned too late for the shim's 50 ms wait (the model wrote its own). Records:
+[`../results/token-channel/dev1/`](../results/token-channel/dev1/). [^channel]
+
+[^channel]: หมายเหตุ: 20 answers on development rows find bugs; they do not measure. Tokens: 262,540 with the channel against 324,229, but
+    the median of the 16 answers without a fixed-question line is 12,097 against 10,725 and the channel's answer is shorter on 9 of 20, so
+    the difference is noise. The 4 answers given the fixed-question line used 32,234 tokens against 65,058, all right in both arms. The run
+    was on commit `753b61d`, before the value DAG's character trie (`a831a82`, ~36 ms a value line to under 5 ms) and the request-base fix
+    (`055c05d`); 73 of 5,544 asks missed the 50 ms wait.
+
 ## Re-check hold-down
 
 **What it does** (`--suppress-recheck 60`, tir4b line 162). For 60 steps after a value software gave, 45 token ids of the re-check words

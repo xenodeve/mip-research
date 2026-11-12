@@ -33,6 +33,9 @@ bare `#N` written before 2026-11-08 means Strata-xeno #N; read it through the ma
   tokens that can still spell the right value, in any tokenization, the most probable. No inserted notes or invitations. The anti-loop
   may take the final answer out of the reasoning when it finds a loop with an answer written: the model's own value, right or wrong;
   a wrong value is fixed upstream or left wrong, never at extraction.
+- **The CUDAMathBackend is MIP's main computer, the Python MathBackend the reference and fallback, developed beside it** (the developer,
+  2026-11-12: so MIP's work does not take the CPU the developer uses). Runs set `MIP_EXPR_DEVICE=cuda`; a new operation is built in
+  Python first, as the reference the CUDA path must match byte for byte ([compute](docs/compute.md#cudamathbackend)).
 - **Software computes, the model reasons** (developer, 2026-11-06). Every calculation software can do in the model's place is
   covered, or software is extended until it can: decimals, pi, roots, mod residues, column digits, quotient and remainder. The
   model analyses the question and forms hypotheses.

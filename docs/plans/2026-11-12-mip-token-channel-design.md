@@ -188,6 +188,28 @@ premise) apply to a forced fence as they do today. Then the module interface for
 with a rule for conflicts between modules (a value being steered when the anti-loop wants to close). Then vLLM (a logits processor,
 in-process on the A100) and Strata-xeno through the same plan format.
 
+## Phase 1 results (2026-11-12, 4B NVFP4 W4A8 · llama.cpp · RTX 5060 Ti)
+
+- **Phase 0 probe** (`results/token-channel/rank_probe.txt`, stock server, 300 puts): the right value's first token is the model's rank 1
+  at 92.3 % of puts, rank 2-20 at 7.3 %, outside the top 50 at 0.3 %; the misses are mostly another form (`\frac`, a bracket, no leading
+  space), not another value.
+- **Gate 1:** the patched server with no `mip_id` reproduces the stock build's tokens, 6 / 6 (`gate1.txt`).
+- **Gate 2:** on round 9's traces, 29,645 of 29,645 puts planned with the same text, 0 different, none extra (`gate2.txt`).
+- **Gate 3 and the live comparison** (`results/token-channel/dev1/`, launcher `scripts/pc/channel_compare.sh`): 10 development rows x 2
+  seeds, arm A General text puts and arm B General through the channel, both `--think-only` and `MIP_EXPR_DEVICE=cuda` on the same
+  patched binary. API reader 19 / 20 in both arms, the same answer wrong in both (`div_big`, a rounded decimal boxed): 0 pairs where
+  only one arm is right, so 0 right -> wrong caused by a touch. Every touch: 2,474 planned values, on answers that finished right 2,387
+  right and 0 wrong, on the one that finished wrong 87 right and 0 wrong; 2,443 written as steered, 31 planned after the shim's 50 ms
+  wait (the model wrote its own value there). Needed: under the mask nothing shows what the model would have written; the probe above
+  is the estimate (the model's own first choice at 92.3 % of puts). Helped: no difference in right answers on 20 answers. Fixed-question
+  lines were steered on 4 answers (`mul_div_longer`), all right in both arms. Tokens are noise at this size (footnote in
+  `docs/inject.md`).
+- **Found and fixed while running it:** the value DAG cost ~36 ms a line against the 50 ms wait (a character trie: under 5 ms,
+  `a831a82`); an ask read after the driver took the reply double-counted the request and misplaced one event of 2,474 (the value itself
+  steered in the right place; `055c05d`); gate 3 now checks surds, powers and `P(n, k)` by sympy (426 values had been left unread).
+- **Not yet run:** the first experiment's variable (forcing against `--logit-value` +8 at the same positions), and a rerun on the fixed
+  code to see the misses fall.
+
 ## Coverage of every open item
 
 | Item | Where it is taken | Note |

@@ -131,8 +131,10 @@ saving any (design, "The pause of an inline put"; [mip-research#25](https://gith
 linger; beside llama-server decoding in another process ~175 us (as an empty kernel there), with decode unchanged (-0.1 to -0.2 %).
 
 **Where it lives / to use it:** mode 2 (`MIP_CUDA_RESIDENT=2`) beside an engine in another process; mode 1 only inside the engine's own
-process. Not used by tir4b yet: the model's text reaches these operations about once in 32 answers, while the text readers
-(`mathexpr`) are called tens of thousands of times; moving those is what would take MIP's work off the CPU during decode.
+process. **It is MIP's main computer; the Python MathBackend is the reference and the fallback, developed beside it** (the developer,
+2026-11-12). `MIP_EXPR_DEVICE=cuda` sends the text readers' `+ − × ÷` (`../tools/igc/mathexpr.py`, `_arith`) through it, which keeps
+that work off the CPU the developer uses; both arms of the token channel's development run used it, and every value they steered
+checked right ([inject](inject.md#token-channel---channel)).
 
 ## ABI1: integer `+ - ×` on CUDA
 

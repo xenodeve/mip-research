@@ -15,7 +15,8 @@ The rules agents miss most, all in full in `AGENTS.md`:
    measurement (PC layer and A100) draws a new frozen set. On the A100: a
    5-minute smoke run, then the rest; check the compute-unit balance before opening a VM and stop it when the round ends.
 2. **Software computes, the model reasons; never lower the model's ability.** A change that loses right answers fails, whatever it
-   saves.
+   saves. **The CUDAMathBackend is MIP's main computer**, the Python MathBackend the reference and fallback, developed beside it
+   (2026-11-12; runs set `MIP_EXPR_DEVICE=cuda`).
 3. **The General Style first, no tuning to the test.** A put is true under every reading of the `=`; rules come from mathematics or
    notation, never from a set's frequencies; development sets find bugs, the frozen set measures. The plain value for every model.
    **Never report software's answer as the model's** (2026-11-11): nothing writes the final answer for the model; `--exact-answer`
