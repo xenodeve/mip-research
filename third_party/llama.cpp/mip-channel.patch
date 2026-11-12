@@ -1,0 +1,513 @@
+diff --git a/common/CMakeLists.txt b/common/CMakeLists.txt
+index 54691da3f..e8cecfc27 100644
+--- a/common/CMakeLists.txt
++++ b/common/CMakeLists.txt
+@@ -96,6 +96,8 @@ add_library(${TARGET}
+     preset.h
+     reasoning-budget.cpp
+     reasoning-budget.h
++    mip-channel.cpp
++    mip-channel.h
+     sampling.cpp
+     sampling.h
+     speculative.cpp
+@@ -144,6 +146,10 @@ endif()
+ target_link_libraries(${TARGET} PUBLIC  llama-common-base)
+ target_link_libraries(${TARGET} PRIVATE cpp-httplib)
+ 
++if (WIN32)
++    target_link_libraries(${TARGET} PRIVATE ws2_32)   # the MIP token channel's socket (mip-channel.cpp)
++endif()
++
+ if (LLAMA_LLGUIDANCE)
+     include(ExternalProject)
+     set(LLGUIDANCE_SRC ${CMAKE_BINARY_DIR}/llguidance/source)
+diff --git a/common/common.h b/common/common.h
+index d8a16897b..ac7110389 100644
+--- a/common/common.h
++++ b/common/common.h
+@@ -221,6 +221,7 @@ inline bool common_grammar_needs_prefill(const common_grammar & g) {
+ 
+ // sampling parameters
+ struct common_params_sampling {
++    std::string mip_id; // MIP token channel: the request's id with the MIP service (empty: off; mip-channel.h)
+     uint32_t seed = LLAMA_DEFAULT_SEED; // the seed used to initialize llama_sampler
+ 
+     int32_t n_prev             = 64;     // number of previous tokens to remember
+diff --git a/common/mip-channel.cpp b/common/mip-channel.cpp
+new file mode 100644
+index 000000000..356d6974f
+--- /dev/null
++++ b/common/mip-channel.cpp
+@@ -0,0 +1,411 @@
++// MIP token channel shim: see mip-channel.h. One loopback connection per server process, one JSON object a line.
++//   service -> shim: {"t":"hello","triggers":[ids],"think_close":id}   {"t":"plan","slot":k,"seq":n,"dag":{"edges":[[[tok,node],..],..],"end":e}|null,"after_ban":[ids]}
++//   shim -> service: {"t":"open","mip_id":s,"slot":k,"prompt":[ids]}   {"t":"tok","slot":k,"id":tok}   {"t":"ask","slot":k,"seq":n}
++// A plan is applied by the shim alone: at each sample only the tokens on an edge out of the current node keep their logits (the rest are
++// set to -inf), so the model chooses among the tokenizations of the value; at the end the after_ban ids are banned for one sample.
++#include "mip-channel.h"
++
++#include "log.h"
++
++#include <nlohmann/json.hpp>
++
++#include <atomic>
++#include <chrono>
++#include <climits>
++#include <cmath>
++#include <condition_variable>
++#include <cstdlib>
++#include <map>
++#include <mutex>
++#include <string>
++#include <thread>
++#include <unordered_map>
++#include <unordered_set>
++#include <vector>
++
++#ifdef _WIN32
++#    ifndef NOMINMAX
++#        define NOMINMAX
++#    endif
++#    include <winsock2.h>
++#    include <ws2tcpip.h>
++using mip_socket = SOCKET;
++static const mip_socket MIP_BAD_SOCKET = INVALID_SOCKET;
++static void mip_close(mip_socket s) { closesocket(s); }
++#else
++#    include <arpa/inet.h>
++#    include <netinet/in.h>
++#    include <netinet/tcp.h>
++#    include <sys/socket.h>
++#    include <unistd.h>
++using mip_socket = int;
++static const mip_socket MIP_BAD_SOCKET = -1;
++static void mip_close(mip_socket s) { close(s); }
++#endif
++
++using json = nlohmann::ordered_json;
++
++namespace {
++
++struct mip_plan {
++    std::vector<std::unordered_map<llama_token, int>> edges;
++    int end = 0;
++    std::vector<llama_token> after_ban;
++};
++
++// the one connection of this process
++struct mip_conn {
++    std::mutex m;                       // the socket's writes and the state below
++    std::condition_variable cv;         // a plan arrived
++    mip_socket s = MIP_BAD_SOCKET;
++    bool ok = false;
++    bool hello = false;
++    std::unordered_set<llama_token> triggers;
++    llama_token think_close = LLAMA_TOKEN_NULL;
++    std::map<std::pair<int, int>, json> plans;   // (slot, seq) -> the plan message
++    std::chrono::steady_clock::time_point last_try{};
++    std::atomic<int> next_slot{0};
++    std::atomic<long> misses{0};
++    std::atomic<long> applied{0};
++    std::thread reader;
++};
++
++mip_conn & conn() {
++    static mip_conn c;
++    return c;
++}
++
++int wait_ms() {
++    const char * e = std::getenv("MIP_CHANNEL_MS");
++    return e ? std::max(1, atoi(e)) : 50;
++}
++
++std::string & last_line() {
++    static std::string l;
++    return l;
++}
++
++void read_loop_impl(mip_socket s) {
++    auto & c = conn();
++    std::string buf;
++    char tmp[65536];
++    for (;;) {
++        int n = recv(s, tmp, sizeof(tmp), 0);
++        if (n <= 0) {
++            break;
++        }
++        buf.append(tmp, n);
++        size_t at;
++        while ((at = buf.find('\n')) != std::string::npos) {
++            std::string line = buf.substr(0, at);
++            buf.erase(0, at + 1);
++            json m = json::parse(line, nullptr, false);
++            if (m.is_discarded()) {
++                continue;
++            }
++            last_line() = line;
++            std::lock_guard<std::mutex> lk(c.m);
++            if (m.value("t", "") == "hello") {
++                c.triggers.clear();
++                for (const auto & t : m["triggers"]) {
++                    c.triggers.insert(t.get<llama_token>());
++                }
++                c.think_close = m.value("think_close", LLAMA_TOKEN_NULL);
++                c.hello = true;
++            } else if (m.value("t", "") == "plan") {
++                // the key read first: the right side of `=` is sequenced before the left (C++17), and json's operator= takes its
++                // argument by value, so `plans[{m["slot"], ...}] = std::move(m)` read a moved-from m
++                const auto key = std::make_pair(m["slot"].get<int>(), m["seq"].get<int>());
++                c.plans[key] = std::move(m);
++            }
++            c.cv.notify_all();
++        }
++    }
++    std::lock_guard<std::mutex> lk(c.m);
++    c.ok = false;
++    c.cv.notify_all();
++    LOG_WRN("mip-channel: the service closed the connection; requests go on unsteered\n");
++}
++
++void read_loop(mip_socket s) {
++    try {
++        read_loop_impl(s);
++    } catch (const std::exception & e) {
++        auto & c = conn();
++        std::lock_guard<std::mutex> lk(c.m);
++        c.ok = false;
++        c.cv.notify_all();
++        LOG_ERR("mip-channel: the reader failed (%s) on line %s; requests go on unsteered\n", e.what(), last_line().c_str());
++    }
++}
++
++// connect once, and again at most once a second after a failure; true when the channel can be used
++bool ensure_connected() {
++    auto & c = conn();
++    std::unique_lock<std::mutex> lk(c.m);
++    if (c.ok) {
++        return true;
++    }
++    const auto now = std::chrono::steady_clock::now();
++    if (now - c.last_try < std::chrono::seconds(1)) {
++        return false;
++    }
++    c.last_try = now;
++    const char * where = std::getenv("MIP_CHANNEL");
++    if (!where) {
++        return false;
++    }
++    std::string hp(where);
++    const size_t colon = hp.rfind(':');
++    if (colon == std::string::npos) {
++        return false;
++    }
++#ifdef _WIN32
++    static bool wsa = false;
++    if (!wsa) {
++        WSADATA d;
++        wsa = WSAStartup(MAKEWORD(2, 2), &d) == 0;
++    }
++#endif
++    mip_socket s = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
++    if (s == MIP_BAD_SOCKET) {
++        return false;
++    }
++    sockaddr_in a{};
++    a.sin_family = AF_INET;
++    a.sin_port = htons((unsigned short) atoi(hp.c_str() + colon + 1));
++    inet_pton(AF_INET, hp.substr(0, colon).c_str(), &a.sin_addr);
++    if (connect(s, (sockaddr *) &a, sizeof(a)) != 0) {
++        mip_close(s);
++        LOG_WRN("mip-channel: cannot reach the service at %s; requests go on unsteered\n", where);
++        return false;
++    }
++    int one = 1;
++    setsockopt(s, IPPROTO_TCP, TCP_NODELAY, (const char *) &one, sizeof(one));
++    if (c.reader.joinable()) {
++        c.reader.join();
++    }
++    if (c.s != MIP_BAD_SOCKET) {
++        mip_close(c.s);
++    }
++    c.s = s;
++    c.ok = true;
++    c.hello = false;
++    c.plans.clear();
++    c.reader = std::thread(read_loop, s);
++    c.cv.wait_for(lk, std::chrono::seconds(2), [&] { return c.hello || !c.ok; });
++    if (!c.hello) {
++        c.ok = false;
++        return false;
++    }
++    LOG_INF("mip-channel: connected to %s, %zu trigger tokens\n", where, c.triggers.size());
++    return true;
++}
++
++void send_line(const json & m) {
++    auto & c = conn();
++    std::string line = m.dump() + "\n";
++    std::lock_guard<std::mutex> lk(c.m);
++    if (!c.ok) {
++        return;
++    }
++    size_t at = 0;
++    while (at < line.size()) {
++        int n = send(c.s, line.data() + at, (int) (line.size() - at), 0);
++        if (n <= 0) {
++            c.ok = false;
++            return;
++        }
++        at += (size_t) n;
++    }
++}
++
++struct mip_shim {
++    std::string mip_id;
++    int slot = 0;
++    bool live = false;        // connected and streaming (a clone or an offline shim is passive)
++    bool opened = false;
++    bool think_closed = false;
++    int seq = 0;
++    int pending = -1;         // the seq of the plan this shim waits for at the next sample
++    std::vector<llama_token> prompt;
++    bool active = false;
++    mip_plan plan;
++    int node = 0;
++    bool ban_now = false;
++};
++
++bool take_plan(mip_shim & sh) {
++    auto & c = conn();
++    std::unique_lock<std::mutex> lk(c.m);
++    const auto key = std::make_pair(sh.slot, sh.pending);
++    const bool got = c.cv.wait_for(lk, std::chrono::milliseconds(wait_ms()), [&] { return c.plans.count(key) || !c.ok; });
++    if (!got || !c.plans.count(key)) {
++        c.misses++;
++        LOG_WRN("mip-channel: no plan for slot %d seq %d in %d ms (%ld missed)\n", sh.slot, sh.pending, wait_ms(), c.misses.load());
++        return false;
++    }
++    json m = std::move(c.plans[key]);
++    c.plans.erase(key);
++    lk.unlock();
++    if (m["dag"].is_null()) {
++        return true;
++    }
++    sh.plan = mip_plan{};
++    for (const auto & e : m["dag"]["edges"]) {
++        std::unordered_map<llama_token, int> out;
++        for (const auto & tn : e) {
++            out[tn[0].get<llama_token>()] = tn[1].get<int>();
++        }
++        sh.plan.edges.push_back(std::move(out));
++    }
++    sh.plan.end = m["dag"]["end"].get<int>();
++    for (const auto & t : m["after_ban"]) {
++        sh.plan.after_ban.push_back(t.get<llama_token>());
++    }
++    sh.node = 0;
++    sh.active = !sh.plan.edges.empty() && !sh.plan.edges[0].empty();
++    if (sh.active) {
++        c.applied++;
++    }
++    return true;
++}
++
++const char * shim_name(const llama_sampler *) {
++    return "mip-channel";
++}
++
++void shim_accept_impl(llama_sampler * smpl, llama_token tok) {
++    auto & sh = *(mip_shim *) smpl->ctx;
++    if (!sh.live) {
++        return;
++    }
++    if (!sh.opened) {   // the prompt, fed through accept when the request's sampler is set up
++        sh.prompt.push_back(tok);
++        return;
++    }
++    send_line({ { "t", "tok" }, { "slot", sh.slot }, { "id", tok } });
++    auto & c = conn();
++    if (tok == c.think_close) {
++        sh.think_closed = true;
++        sh.active = false;
++    }
++    if (sh.active) {
++        auto it = sh.plan.edges[sh.node].find(tok);
++        if (it == sh.plan.edges[sh.node].end()) {
++            sh.active = false;
++        } else if (it->second == sh.plan.end) {
++            sh.active = false;
++            sh.ban_now = !sh.plan.after_ban.empty();
++        } else {
++            sh.node = it->second;
++        }
++        return;
++    }
++    if (!sh.think_closed && c.triggers.count(tok)) {
++        sh.pending = ++sh.seq;
++        send_line({ { "t", "ask" }, { "slot", sh.slot }, { "seq", sh.pending } });
++    }
++}
++
++void shim_apply_impl(llama_sampler * smpl, llama_token_data_array * cur_p) {
++    auto & sh = *(mip_shim *) smpl->ctx;
++    if (!sh.live) {
++        return;
++    }
++    if (!sh.opened) {
++        sh.opened = true;
++        send_line({ { "t", "open" }, { "mip_id", sh.mip_id }, { "slot", sh.slot }, { "prompt", sh.prompt } });
++        sh.prompt.clear();
++        sh.pending = 0;
++        send_line({ { "t", "ask" }, { "slot", sh.slot }, { "seq", 0 } });
++    }
++    if (sh.pending >= 0) {
++        take_plan(sh);
++        sh.pending = -1;
++    }
++    if (sh.ban_now) {
++        std::unordered_set<llama_token> ban(sh.plan.after_ban.begin(), sh.plan.after_ban.end());
++        for (size_t i = 0; i < cur_p->size; ++i) {
++            if (ban.count(cur_p->data[i].id)) {
++                cur_p->data[i].logit = -INFINITY;
++            }
++        }
++        sh.ban_now = false;
++    }
++    if (sh.active) {
++        const auto & allowed = sh.plan.edges[sh.node];
++        for (size_t i = 0; i < cur_p->size; ++i) {
++            if (!allowed.count(cur_p->data[i].id)) {
++                cur_p->data[i].logit = -INFINITY;
++            }
++        }
++        cur_p->sorted = false;
++    }
++}
++
++// a failure inside the channel turns this request's shim passive and is logged; the server goes on, unsteered
++void shim_accept(llama_sampler * smpl, llama_token tok) {
++    try {
++        shim_accept_impl(smpl, tok);
++    } catch (const std::exception & e) {
++        ((mip_shim *) smpl->ctx)->live = false;
++        LOG_ERR("mip-channel: accept failed (%s); this request goes on unsteered\n", e.what());
++    }
++}
++
++void shim_apply(llama_sampler * smpl, llama_token_data_array * cur_p) {
++    try {
++        shim_apply_impl(smpl, cur_p);
++    } catch (const std::exception & e) {
++        ((mip_shim *) smpl->ctx)->live = false;
++        LOG_ERR("mip-channel: apply failed (%s); this request goes on unsteered\n", e.what());
++    }
++}
++
++void shim_reset(llama_sampler * smpl) {
++    auto & sh = *(mip_shim *) smpl->ctx;
++    sh.active = false;
++    sh.ban_now = false;
++    sh.pending = -1;
++}
++
++llama_sampler * shim_clone(const llama_sampler * smpl);
++
++void shim_free(llama_sampler * smpl) {
++    delete (mip_shim *) smpl->ctx;
++}
++
++llama_sampler_i shim_iface = {
++    /* .name              = */ shim_name,
++    /* .accept            = */ shim_accept,
++    /* .apply             = */ shim_apply,
++    /* .reset             = */ shim_reset,
++    /* .clone             = */ shim_clone,
++    /* .free              = */ shim_free,
++    /* .backend_init      = */ nullptr,
++    /* .backend_accept    = */ nullptr,
++    /* .backend_apply     = */ nullptr,
++    /* .backend_set_input = */ nullptr,
++    /* .backend_reset     = */ nullptr,
++    /* .copy_state        = */ nullptr,
++};
++
++// a clone (the server saves a sampler for speculative decoding, out of scope) is passive: it never streams or steers
++llama_sampler * shim_clone(const llama_sampler *) {
++    auto * sh = new mip_shim();
++    return llama_sampler_init(&shim_iface, sh);
++}
++
++}  // namespace
++
++llama_sampler * mip_channel_init(const std::string & mip_id) {
++    if (mip_id.empty() || !std::getenv("MIP_CHANNEL")) {
++        return nullptr;
++    }
++    auto * sh = new mip_shim();
++    sh->mip_id = mip_id;
++    sh->live = ensure_connected();
++    sh->slot = conn().next_slot++;
++    return llama_sampler_init(&shim_iface, sh);
++}
+diff --git a/common/mip-channel.h b/common/mip-channel.h
+new file mode 100644
+index 000000000..e655c2823
+--- /dev/null
++++ b/common/mip-channel.h
+@@ -0,0 +1,11 @@
++// MIP token channel: a sampler at the head of the chain that streams every accepted token to the MIP service and applies the plans it
++// returns (mip-research docs/plans/2026-11-12-mip-token-channel-design.md). Off unless the request carries a `mip_id` and the server's
++// environment names the service (MIP_CHANNEL=host:port). MIP_CHANNEL_MS (default 50): the longest wait for a plan at a sample.
++#pragma once
++
++#include "llama.h"
++
++#include <string>
++
++// a new shim for one request, or nullptr when MIP_CHANNEL is unset or mip_id is empty
++struct llama_sampler * mip_channel_init(const std::string & mip_id);
+diff --git a/common/sampling.cpp b/common/sampling.cpp
+index da8bdc1b1..88f3057dc 100644
+--- a/common/sampling.cpp
++++ b/common/sampling.cpp
+@@ -3,6 +3,7 @@
+ #include "common.h"
+ #include "fit.h"
+ #include "log.h"
++#include "mip-channel.h"
+ #include "reasoning-budget.h"
+ #include "speculative.h"
+ 
+@@ -215,6 +216,13 @@ struct common_sampler * common_sampler_init(
+ 
+     std::vector<llama_sampler *> samplers;
+ 
++    // MIP token channel: first in the chain, so it sees every logit before any filter (mip-channel.h)
++    if (!params.mip_id.empty()) {
++        if (llama_sampler * mip = mip_channel_init(params.mip_id)) {
++            samplers.push_back(mip);
++        }
++    }
++
+     const std::string & grammar_str = common_grammar_value(params.grammar);
+     if (grammar_str.compare(0, 11, "%llguidance") == 0) {
+ #ifdef LLAMA_USE_LLGUIDANCE
+diff --git a/tools/server/server-schema.cpp b/tools/server/server-schema.cpp
+index 5d7fa6ae6..ee6c13d8c 100644
+--- a/tools/server/server-schema.cpp
++++ b/tools/server/server-schema.cpp
+@@ -303,6 +303,12 @@ std::vector<std::unique_ptr<field>> make_llama_cmpl_schema(const common_params &
+             ctx.params.chat_parser_params.reasoning_in_content = ctx.params.stream && (reasoning_format == COMMON_REASONING_FORMAT_DEEPSEEK_LEGACY);
+         }));
+ 
++    add((new field_str("mip_id"))
++        ->set_desc("MIP token channel: this request's id with the MIP service (needs MIP_CHANNEL in the server's environment)")
++        ->set_handler([&](field_eval_context & ctx, const json & data) {
++            ctx.params.sampling.mip_id = data.at("mip_id").get<std::string>();
++        }));
++
+     add((new field_str("generation_prompt"))
+         ->set_desc("Generation prompt appended to the chat template output")
+         ->set_handler([&](field_eval_context & ctx, const json & data) {

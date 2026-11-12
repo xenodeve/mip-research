@@ -36,6 +36,7 @@ class ChannelService:
         self.answers = {}   # id(rollout) -> _Answer
         self.counts = dict(asks=0, plans=0, steered=0, dropped=0)
         self.server = None
+        self.conns = []     # live connections: stop() closes them, as a service that dies does
 
     # ---- the driver's side ----------------------------------------------------------------------------------------------------------
     def register(self, mip_id, rollout, planner):
@@ -60,6 +61,13 @@ class ChannelService:
         if self.server is not None:
             self.server.close()
             self.server = None
+        for conn in self.conns:
+            try:
+                conn.shutdown(socket.SHUT_RDWR)
+                conn.close()
+            except OSError:
+                pass
+        self.conns = []
 
     # ---- the wire -------------------------------------------------------------------------------------------------------------------
     def _accept(self):
@@ -69,6 +77,7 @@ class ChannelService:
             except OSError:
                 return
             conn.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            self.conns.append(conn)
             threading.Thread(target=self._serve, args=(conn,), daemon=True).start()
 
     def _serve(self, conn):
