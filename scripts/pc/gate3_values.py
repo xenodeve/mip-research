@@ -129,6 +129,10 @@ def value_right(e, question):
     if re.search(r'\\(sqrt|pi|sin|cos|tan|pm)\b|\||^\s*P\(|^\s*\(.*,', e['expr']) or re.search(r'\\(sqrt|pi|pm)\b', value):
         return _surd_right(e)
     want = evaluate(e['expr'])
+    if want is None:   # a value too long to be a step (`1.01^{30}`), put cut: read in mathexpr's wide mode
+        from tools.igc.mathexpr import wide
+        with wide():
+            want = evaluate(e['expr'])
     if want is None:
         return None
     m = CUT.match(value)

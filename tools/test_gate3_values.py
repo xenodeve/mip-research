@@ -43,6 +43,13 @@ class SurdTests(unittest.TestCase):
         self.assertTrue(value_right(inline('\\gcd(84, 126)', '42'), ''))
         self.assertIs(value_right(inline('gcd(84, 126)', '21'), ''), False)
 
+    def test_a_long_value_cut(self):
+        # a value too long to be a step, put cut to 10 significant digits: checked against the exact value, not left unchecked
+        self.assertIs(value_right(inline('1.01^{30}', '1.347848915...'), ''), True)
+        self.assertIs(value_right(inline('0.99^{60}', '0.5471566423...'), ''), True)
+        self.assertIs(value_right(inline('0.99^{60}', '0.5471566424...'), ''), False)   # rounded, not cut
+        self.assertIs(value_right(inline('1.01^{30}', '1.3448888...'), ''), False)
+
     def test_a_wrong_surd(self):
         self.assertIs(value_right(inline('\\sqrt{1573}', '11\\sqrt{11}'), ''), False)
         self.assertIs(value_right(inline('-6(-2\\sqrt{204})', '-24\\sqrt{51}'), ''), False)

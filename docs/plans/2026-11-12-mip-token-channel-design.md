@@ -243,8 +243,17 @@ in-process on the A100) and Strata-xeno through the same plan format.
   token); tir4b still caps each answer at 262,144 (`CONTEXT`), and the server reports `n_ctx_slot = 262144`. The run went on with
   `--resume` (A kept 12 finished answers, B 10) at 3 answers per arm in flight. Gate 3 now reads pi, trig, `\pm` and tuples by sympy,
   leaves a trig function of a bare number unread, and counts values at or past a loop close as `cut`; dev1 and dev2 read as before.
+- **miss1's wrong answers, read in full** (B's 11; 2026-11-13): 3 copied the question's letter string wrong (`swr_p_sequence`), which
+  `--letter-count` reads right but was off, and under the channel it must be a steered start line like the question line, not
+  inserted text (not built); 1 wrote `1.01^{30} \approx 1.3448888` (`stdmath-45fa3ef2`), which `--approx-put` (off in miss1) and the
+  new cut put at `=` ([failures](../failures.md#p11-the-models-own-approx-value)) cover; 1 looped on a factor search of 12301 past
+  `</think>` (`div_big-1395#0`), anti-loop work; 2 boxed a rounded decimal or the integer part (final answer, out of reach by rule);
+  2 gave four roots where the gold takes `\cot^{-1}(y) = \tan^{-1}(1/y)` (right under the `(0, \pi)` range the model used) and 2 are
+  a MATH-500 question whose figure is in the solution, not the question. Scoring stays as it is: an equal value in another form is
+  right with a note, a rounded value or another root set is not (developer, 2026-11-13).
 - **Not yet run:** the first experiment's variable (forcing against `--logit-value` +8 at the same positions), an arm with the
-  fixed-question line as text (to tell the question line from the channel), and a frozen set.
+  fixed-question line as text (to tell the question line from the channel), and a frozen set. The next channel arm turns on
+  `--approx-put` and `--letter-count` as round 10's arm B planned, each counted apart.
 
 ## Coverage of every open item
 

@@ -1143,6 +1143,32 @@ class HeldOutInline(unittest.TestCase):
 
     def test_decimal_coefficients_keep_the_root(self):
         self.assertEqual(tir4b.inline_found('so 7√3 + 17.5√3', use_mathbackend=True)[1], '24.5√3')
+
+
+class LongExactValue(unittest.TestCase):
+    """An exact value too long to be written as a step (a decimal to a power: 1.01^30 is a 61-digit fraction) was refused at `=`, so the
+    model's own digits stood (`1.01^{30} = 1.3448888...` for 1.3478489...). It is put cut to 10 significant digits and marked `...`, the
+    precision of a value after `\\approx` (P11), true read as the value cut to its places."""
+    def test_a_long_power_is_put_cut(self):
+        for before, said in (('so $1.01^{30}', '1.347848915...'),
+                             ('Then (1.05)^{40}', '7.039988712...'),
+                             ('A = 24000 \\times 1.01^{30}', '32348.37396...'),
+                             ('Now $-1.01^{30}', '-1.347848915...'),
+                             ('p = 0.99^{60}', '0.5471566423...')):    # cut, not rounded: 0.54715664239...
+            with self.subTest(before=before):
+                self.assertEqual(tir4b.inline_found(before, use_mathbackend=True)[1], said)
+
+    def test_a_value_a_step_holds_is_put_as_before(self):
+        self.assertEqual(tir4b.inline_found('so $1.01^{16}', use_mathbackend=True)[1], '1.17257864492369852051862561201601')
+        self.assertEqual(tir4b.inline_found('so 1.1^{25}', use_mathbackend=True)[1], '10.8347059433883722041830251')
+
+    def test_what_has_no_cut_form_stays_refused(self):
+        for before in ('so $3^{100}',        # an integer: its digits are the value, no cut
+                       'so $1.5^{70}',       # ten digits do not reach its point
+                       'so $0.01^{30}',      # below 1e-4: its first digit is past ten places
+                       'so $x^{30}'):        # a symbol
+            with self.subTest(before=before):
+                self.assertIsNone(tir4b.inline_found(before, use_mathbackend=True))
         self.assertEqual(tir4b.inline_found('then $0.4 \\cdot 50 \\sqrt{10}', use_mathbackend=True)[1], '20\\sqrt{10}')
         self.assertIsNone(tir4b.inline_found('so $\\sqrt{310.9666}', use_mathbackend=True))   # a decimal under the root wants a decimal
 

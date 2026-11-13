@@ -372,7 +372,7 @@ def _inline_general(before, whole=False, use_mathbackend=False, custom_ops=(), s
     else:
         found = expression_before(before)
     if found is None:
-        return (_tuple_found(before) or _pm_found(before)) if use_mathbackend else None
+        return (_tuple_found(before) or _pm_found(before) or _long_found(before)) if use_mathbackend else None
     expr, value = found
     said = spelled(value)
     if whole:
@@ -508,6 +508,35 @@ def _general_quotient(expr, value, before):
     q = abs(value.numerator) * 10 ** 4 // value.denominator
     whole, frac = divmod(q, 10 ** 4)
     return f"{'-' if value < 0 else ''}{whole}.{frac:04d}..."
+
+
+LONG_DIGITS = 10   # the precision of a value after `\approx` (P11, tools/igc/approx_put.py)
+
+
+def _long_found(before):
+    """(expression, value cut to LONG_DIGITS significant digits and marked `...`) for exact arithmetic too long to be written as a step
+    (mathexpr's size limits: a decimal to a power, `1.01^{30}` a 61-digit fraction), or None. Read in mathexpr's wide mode, so only a
+    value the normal read refused for its size reaches here. Cut toward zero, true read as the value cut to its places. Not an integer
+    (its digits are the value, and a cut one is not a step), and only where ten digits reach the point and the first digit is within
+    them, with a place after the point: 1e-4 <= |value| < 1e9."""
+    from tools.igc.mathexpr import wide
+    from tools.igc.unified_detect import expression_before_with_mathbackend
+    with wide():
+        found = expression_before_with_mathbackend(before)
+    if found is None or not isinstance(found[1], Fraction) or found[1].denominator == 1:
+        return None
+    expr, value = found
+    a = abs(value)
+    if not Fraction(1, 10 ** 4) <= a < 10 ** 9:
+        return None
+    top = len(str(a.numerator // a.denominator)) - 1 if a >= 1 else -len(str(a.denominator // a.numerator))
+    places = LONG_DIGITS - 1 - top
+    digits = a.numerator * 10 ** places // a.denominator
+    whole, frac = divmod(digits, 10 ** places)
+    sign = '-' if value < 0 else ''
+    if Fraction(digits, 10 ** places) == a:
+        return None   # it ends within ten digits: a step holds it, and the normal read refused it for another reason
+    return expr, f'{sign}{whole}.{frac:0{places}d}...'
 
 
 def _lowest(expr):

@@ -76,7 +76,7 @@ PC layer**, General Style + closers), each read by hand (plan:
 | P8 | A convention chosen wrong, extra roots kept (arccot) | round 9: 2 (`e3263989`) | `--verify-gate` (Sandbox, PC box): an equation given and all its solutions asked, the first close opens a program in which the model checks each candidate; the model chooses the convention | reach: MATH-500 11 questions (all-solutions or sums of all solutions), GSM8K 0 of 1,319; box smoke: sympy runs, the repository path refused | built; live in round 10 arm C |
 | P9 | A hard maximum guessed after a very long search (71k tokens) | round 9: 2 (`97b18f58`) | `--loop-hint` (Sandbox, PC box): a thinking loop is cut and a program opens to test the idea, up to 3 times, then the close | built earlier (#12); never measured on the PC | live in round 10 arm C |
 | P10 | The setup is left open ("as shown"); the model lists layouts in a loop and never tests one | round 9: 2 (`370853d3`) | `--loop-hint` (Sandbox, arm C): a program tests the layouts against the stated tangency; `--answer-rewind` (arm B) only resamples. First labelled a ceiling, wrongly: the text gives r = 14/3 | not live yet | built; round 10 arm C |
-| P11 | The model's own value after `\approx` is wrong (`(1.01)^{30} \approx 1.3448888`) | round 9: 1; general (MATH 401, MedCalc audit) | `--approx-put` (`tools/igc/approx_put.py`): stop at `\approx`/`≈`, put X to 10 significant digits; mathexpr's wide mode reads large powers; one token after it may not carry `\times`/scale words on | replay of every stored `\approx`: round 9 3,242 read, model's own value agrees 2,648, a slip 336 (12 %), an expression next 167; A100 bf16 2,037 / 1,916 / 53 / 144; 34 possible cut pieces read by hand, 0 misreads | built, offline; live next round |
+| P11 | The model's own value after `\approx` is wrong (`(1.01)^{30} \approx 1.3448888`) | round 9: 1; general (MATH 401, MedCalc audit) | `--approx-put` (`tools/igc/approx_put.py`): stop at `\approx`/`≈`, put X to 10 significant digits; mathexpr's wide mode reads large powers; one token after it may not carry `\times`/scale words on | replay of every stored `\approx`: round 9 3,242 read, model's own value agrees 2,648, a slip 336 (12 %), an expression next 167; A100 bf16 2,037 / 1,916 / 53 / 144; 34 possible cut pieces read by hand, 0 misreads. At `=`, an exact value too long to be a step (`1.01^{30} =`) is put cut to the same 10 digits, `1.347848915...` (`tir4b._long_found`, `scripts/pc/long_gate.py`): 86 on 2 questions, agree 22, expression next 50, slip 14, 0 misreads | built, offline; live in the next channel run |
 | P12 | The answer close boxes an unfinished step (`72 - 14 = 58`, a cross-product component) | round 9: 1 (`fbf10ed4#1`); the 3 hurt L7 answers all after a forced cue | `--answer-rewind N`: an answer loop is cut out whole and resampled with another seed, up to N times, before the cue; nothing put (forced extraction fails, arXiv 2604.06613); not when the question is one computation | round 9 reach: 8 answers (5 questions): 1 hurt by the close, 5 wrong both arms, **2 the close helped (could be lost)** | built, offline; live next round |
 | P13 | The loop runs as long as before even when the closing value is fixed | targeted run: `2783#0` 70,772 tokens, `5070#1` 67,665 | earlier loop signals exist (arXiv 2601.05693, 2510.10103, 2509.26522) | not measured | measure where the tokens go first |
 | P14 | A put value read and not adopted: the model restarts the long division | A100 round 5 (`--loop-value`): 2 of 2 division rows | the box rule (`--exact-answer`) instead of a line before the close | P1 live run | replaced by P1's fix |
@@ -166,8 +166,16 @@ PC layer**, General Style + closers), each read by hand (plan:
 - **Measured** (`results/exact-answer-r9/approx_scan.py`): General wrote 3,391 `\approx` with a decimal; the computation before it is
   readable on 1,952, and the model's value is off on 316. The 316 mix real slips, scientific notation read as its mantissa, and
   deliberate estimates (`\approx 34000`). The `=` put's forms are wrong after `\approx`, and `(1.01)^{30}` is not read at all.
-- **Expected fix:** a put at `\approx` with its own design: decimal places from what the model writes next, `\times 10^{k}` read, a
-  rule for estimates. **Not built.**
+- **Fix:** `--approx-put` puts X to 10 significant digits after `\approx` (table above). **The same case at `=`** (2026-11-13): an exact
+  value too long to be written as a step (a decimal to a power: `1.01^{30}` is a 61-digit fraction, past mathexpr's power and size
+  limits) was refused at `=`, so the model's own digits stood (`1.01^{30} = 1.3448888213...`, miss1 B). `tir4b._long_found` reads it
+  in mathexpr's wide mode, only where every other reader found nothing, and puts it cut toward zero to the same 10 significant digits,
+  marked `...` (`1.01^{30} = 1.347848915...`), true read as the value cut to its places. Not an integer, and only for
+  1e-4 <= |value| < 1e9. Gate (`scripts/pc/long_gate.py`, every stored record, `results/token-channel/long-gate.txt`): 86 such `=`
+  on 2 distinct questions; the model's next number agrees 22, an expression next 50, a slip 14, all 14 read by hand as model slips
+  (`1.01^{25} = 1.28235` for 1.2824320, `24000(1.01)^{30} = 32277.33` for 32348.37), 0 misreads; the other question is a runaway
+  fraction chain (`dmx_div_big-3350`, pc9-handoff), read right. No existing put changes. Off in miss1 (both `--approx-put` and the
+  `=` put postdate dev2's flags); on in the next channel run.
 
 ### P12. The close boxed an unfinished step
 
@@ -430,7 +438,7 @@ Errors in how a result was measured; each one changed a number that was quoted. 
 | P8 | เลือกนิยามผิด เก็บรากเกินมา (arccot) | รอบ 9: 2 | `--verify-gate` เปิดโปรแกรมให้โมเดลตรวจคำตอบแต่ละตัวในสมการเดิมก่อนปิดการคิด | MATH-500 ทำงาน 11 ข้อ, GSM8K 0 | สร้างแล้ว รันในแขน C |
 | P9 | เดาค่าสูงสุดหลังค้นนานมาก | รอบ 9: 2 | `--loop-hint` ตัด loop แล้วเปิดโปรแกรมให้ทดสอบความคิด | ยังไม่เคยวัดบน PC | รันในแขน C |
 | P10 | โจทย์ไม่ระบุการจัดวาง ("as shown") โมเดลวนไล่ทีละแบบแต่ไม่คำนวณตรวจ | รอบ 9: 2 | `--loop-hint` (Sandbox แขน C) ให้โปรแกรมตรวจแต่ละการจัดวาง; เดิมติดป้ายว่าเพดาน ซึ่งผิด เพราะแก้จากข้อความได้ r = 14/3 | ยังไม่รันจริง | สร้างแล้ว รอบ 10 แขน C |
-| P11 | ค่าที่โมเดลเขียนหลัง `\approx` ผิด | รอบ 9: 1 | `--approx-put` ใส่ค่า 10 หลัก กันไม่ให้ `\times`/หน่วยต่อท้าย | replay: โมเดลพลาด 12%, อ่านผิด 0 | สร้างแล้ว รอรันจริง |
+| P11 | ค่าที่โมเดลเขียนหลัง `\approx` ผิด | รอบ 9: 1 | `--approx-put` ใส่ค่า 10 หลัก กันไม่ให้ `\times`/หน่วยต่อท้าย | replay: โมเดลพลาด 12%, อ่านผิด 0; ที่ `=` ค่าที่ยาวเกินจะเขียนเป็นขั้นได้ (`1.01^{30}`) ใส่แบบตัด 10 หลัก `1.347848915...`: 86 จุด 2 ข้อ โมเดลพลาด 14 อ่านผิด 0 | สร้างแล้ว เปิดใน channel run ถัดไป |
 | P12 | ตัวปิดเอาค่ากลางทางของงานที่ยังไม่เสร็จไปตอบ | รอบ 9: 1 | `--answer-rewind` ตัด loop ทั้งก้อนแล้วสุ่มเขียนต่อใหม่ก่อนจะบังคับคำตอบ | ทำงานกับ 8 คำตอบในรอบ 9 มี 2 ข้อที่อาจเสีย | สร้างแล้ว รอรันจริง |
 | P13 | loop ยังยาวเท่าเดิมแม้ค่าตอนปิดถูก | รอบรันเฉพาะข้อ: 70k token | มีสัญญาณจับ loop เร็วขึ้นในงานวิจัย | ยังไม่ได้วัด | วัดก่อนว่า token หายไปช่วงไหน |
 | P14 | โมเดลอ่านค่าที่ใส่ให้แต่ไม่ใช้ เริ่มหารยาวใหม่ | A100 รอบ 5 | ใช้กฎแก้กล่องแทน | ผลรันจริงของ P1 | ถูกแทนด้วย P1 |
