@@ -305,10 +305,11 @@ form needs its own detector from its own statement, never a put at every link wo
 many things work"); a channel arm is that base with its values through the channel, never a thinner flag set. miss1 broke this (dev2's
 flags: no `--approx-put`, `--letter-count`, `--question-quote`, `--answer-rewind`), so its result is the channel on a thin base only.
 
-The developer: "run it together with the new intervention system". *(my reading, confirmed 2026-11-13)* Round 10 waits and runs once phase 1
-passes its gates, with its arms on the patched binary: A (round 9's General, text puts), B (A + the round 9 fixes), and B with values
-through the channel; C (the Sandbox) as planned. Its acceptance rules stay those proposed in `2026-11-10-round9-fixes.md` ("What counts"),
-for the developer to set before the run.
+The developer: "run it together with the new intervention system". Round 10 runs on the patched binary with three arms: A (round 9's
+General exactly, the developer 2026-11-13: "ให้เทียบกับรอบ9ได้"), B (A + the round 9 fixes, put as text) and CH (B through the channel);
+the Sandbox arm is a separate decision. Config, arms and the short run's result: [round 10](2026-11-13-round10.md). In short: on 19
+rows picked for reach, CH 36 / 38 against A 27 / 38 by the API reader (pairs 9 / 0, p = 0.002) and B 35; the gain is on the questions
+that are one fixed computation; every one of 5,789 steered values right.
 
 ## Rules changed for this design (written into `AGENTS.md` and `CLAUDE.md`, 2026-11-12, the developer's go-ahead)
 

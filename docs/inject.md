@@ -248,6 +248,13 @@ and DeepMind), 5,699 values were steered and none checked wrong (5,697 right by 
 from its text, is true only in that unit); 34 sat in looping text the loop close later cut and are counted apart. Records:
 [`../results/token-channel/miss1/`](../results/token-channel/miss1/). [^channel]
 
+**Round 10, short run** (4B NVFP4 W4A8 · llama.cpp+MIP · PC layer, both cards, 2026-11-13; 19 development rows picked for reach x 2 seeds;
+[round 10](plans/2026-11-13-round10.md#short-run-result-2026-11-13-4b-nvfp4-w4a8--llamacppmip--pc-layer-both-cards)): round 9's General
+(A) against the round 9 fixes put as text (B) and steered through the channel (CH), nothing inserted under the channel. API reader
+27 / 35 / 36 of 38; pairs A vs CH 9 / 0 (p = 0.002), A vs B 10 / 2 (p = 0.019); on the 18 pairs the question line does not reach, no
+difference beyond noise (A vs CH 2 / 0, A vs B 3 / 2). 5,789 values steered, none wrong (gate 3). An exact value too long to be a step
+(`1.01^{30} =`) is put cut to 10 significant digits with `...` under its own flag, `--long-value` (off in A, so A is round 9's General).
+
 [^channel]: หมายเหตุ: 20 answers on development rows find bugs; they do not measure, and A was right on all 20, so a gain could not show.
     Tokens: 259,505 through the channel against 291,156; on the 12 answers with a fixed-question line 108,060 against 163,068 (median
     7,661 against 11,031, shorter on 8 of 12), on the other 8 151,445 against 128,088 (one 81,566-token answer; median 9,857 against

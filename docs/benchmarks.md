@@ -90,7 +90,9 @@ Round 9's timings ran with that default (2,068 of 2,293 slot picks by LRU in the
 not a guide to a round's length now.[^np4cpu]
 
 **Under `-kvu`, `-c` is one KV pool for every slot, not a window per answer** (2026-11-13). Every answer in flight has to fit in it
-together; when it fills, the server answers the requests in flight with "Context size has been exceeded" (HTTP 500) and tir4b stops.
+together; when it fills, the server answers the requests in flight with "Context size has been exceeded" (HTTP 500). tir4b waits 30 s
+and sends the request again, up to an hour (`post_waiting`, `3e4afee`); before that the arm's process ended (round 10's short run lost
+all three arms on the RTX 4070 SUPER, pool 196,608 with 9 answers in flight, and resumed them from their records).
 The token channel's `miss1` run hit it with 12 long answers in flight on 262,144 (one at 84k tokens, minute 47). Each answer keeps its
 full 262,144 tokens either way: tir4b caps an answer there (`CONTEXT`) and the server reports `n_ctx_slot = 262144` with a bigger pool.
 On the RTX 5060 Ti (4B NVFP4 W4A8, KV q8_0, np 13) a pool costs about 21.5 KB a token: 393,216 loads at 12.4 GB, 524,288 at 15.2 GB of
