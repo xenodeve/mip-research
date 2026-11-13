@@ -62,7 +62,7 @@ class Planner:
         if got is not None and isinstance(got[1], Fraction):
             expr, value = got[0], spelled(got[1])
             lines.append(f'{expr} = {value}\n')
-            kinds.append('question value')
+            kinds.append('question line')
             exprs.append(expr)
             values.append(value)
         if self.rollout.arm.letter_count:

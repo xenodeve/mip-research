@@ -1,1 +1,1 @@
-{'answers': 240, 'question quote': 4, 'question quote same': 4, 'letter count': 10, 'letter count same': 10}
+{'answers': 240, 'quote at a loop close': 41, 'quote at a loop close same': 41, 'question quote': 4, 'question quote same': 4, 'letter count': 10, 'letter count same': 10}

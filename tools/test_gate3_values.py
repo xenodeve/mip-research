@@ -59,6 +59,10 @@ class SurdTests(unittest.TestCase):
         self.assertIs(value_right(dict(what='question quote', expr=e, value=e), f'Calculate {e}.'), True)
         self.assertIs(value_right(dict(what='question quote', expr=e, value='(-25)/((-3025)/(-44)*1/(-4))'), f'Calculate {e}.'), False)
         self.assertIs(value_right(dict(what='long value', expr='1.01^{30}', value='1.347848915...'), ''), True)
+        # lines steered together are checked each by its kind: a wrong count fails the pair
+        self.assertIs(value_right(dict(what='question line + letter count', expr='2*240 | ab', value='480 | The string ab has 2 '
+                                       'letters: a 2, b 1.'), 'What is 2*240?'), False)
+        self.assertIs(value_right(dict(what='question line', expr='2*240', value='480'), 'What is 2*240?'), True)
 
     def test_a_wrong_surd(self):
         self.assertIs(value_right(inline('\\sqrt{1573}', '11\\sqrt{11}'), ''), False)

@@ -1632,7 +1632,7 @@ class ChannelSteersQuestionWords(unittest.TestCase):
         self.assertTrue(set(IDS.lines) <= stops)                    # one line: the quote
         r.take(TOK.encode(self.QUOTE))
         self.assertEqual(r.phase, 'answer')
-        self.assertTrue(r.text().endswith(self.QUOTE + '</think>\n\n'), r.text()[-60:])
+        self.assertTrue(r.text().endswith(self.QUOTE + '\n</think>\n\n'), r.text()[-60:])   # as the text arm
 
     def test_a_quote_not_written_still_closes(self):
         r = self.roll(QuestionQuote.Q, question_quote=True, loop_close=True)
@@ -1641,7 +1641,27 @@ class ChannelSteersQuestionWords(unittest.TestCase):
         r.take_pending()
         r.take(TOK.encode('Hmm, the brackets.\n'))
         self.assertEqual(r.phase, 'answer')
-        self.assertTrue(r.text().endswith('Hmm, the brackets.\n</think>\n\n'), r.text()[-60:])
+        self.assertTrue(r.text().endswith('Hmm, the brackets.\n\n</think>\n\n'), r.text()[-60:])
+
+    def test_the_model_closing_on_the_quote_line_is_not_closed_twice(self):
+        r = self.roll(QuestionQuote.Q, question_quote=True, loop_close=True)
+        r.take(TOK.encode('Let me count the brackets again.\n'))
+        r.on_loop()
+        r.take_pending()
+        self.assertIn(IDS.think_close, r.request()[1])   # the one-line request also stops at the model's own close
+        r.take(TOK.encode('Fine.\n</think>'))
+        self.assertEqual(r.phase, 'answer')
+        self.assertEqual(r.text().count('</think>'), 1)
+        self.assertFalse(r.close_after_quote)
+
+    def test_the_answer_ending_on_the_quote_line_is_not_closed_after(self):
+        r = self.roll(QuestionQuote.Q, question_quote=True, loop_close=True)
+        r.take(TOK.encode('Let me count the brackets again.\n'))
+        r.on_loop()
+        r.take_pending()
+        r.take(TOK.encode('Done.<|im_end|>'))
+        self.assertNotIn('</think>', r.text())
+        self.assertFalse(r.close_after_quote)
 
     def test_the_question_line_is_one_flag_for_both_arms(self):
         q = 'What is 2*240?'

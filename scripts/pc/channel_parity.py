@@ -87,6 +87,28 @@ def main():
                 c['question quote same' if a == b else 'QUOTE DIFFERS'] += 1
                 if a != b:
                     diff.append(f'QUOTE {name}: text {a!r} channel {b!r}')
+            # the quote at a loop's close, at round 9's own close positions: the text arm puts quote and close; the channel arm hands
+            # the quote over, the model is taken to write it as steered, and the close follows. Same text after the close
+            for e in rec.get('events', []):
+                if e.get('kind') != 'loop close':
+                    continue
+                texts = []
+                for channel in (False, True):
+                    r = tir4b.Rollout(row, 0, [1], tir4b.Arm(question_quote=True, think_only=True, loop_close=True, channel=channel),
+                                      ids, tok, seed=1)
+                    r.out = list(out_ids[:e['at']])
+                    r.on_loop()
+                    plan = r.take_pending()
+                    if plan is not None:
+                        r.take(tok.encode(plan[0], add_special_tokens=False))
+                    texts.append(tok.decode(r.out[e['at']:]) if r.quoted else None)
+                if texts[0] is None and texts[1] is None:
+                    break   # no quote for this question
+                c['quote at a loop close'] += 1
+                c['quote at a loop close same' if texts[0] == texts[1] else 'LOOP QUOTE DIFFERS'] += 1
+                if texts[0] != texts[1]:
+                    diff.append(f'LOOP QUOTE {name}: text {texts[0]!r} channel {texts[1]!r}')
+                break   # the first close only: the quote is put once an answer
     print(dict(c))
     for x in diff:
         print(x)

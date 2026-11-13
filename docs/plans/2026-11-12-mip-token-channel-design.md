@@ -284,6 +284,22 @@ below); `_long_found`'s puts are their own kind (`long value`); gate 3 reports e
 value, approx value, question value, letter count, question quote): plans, done / dropped / missed / cut, value right, written as
 steered, on right and wrong answers. The quote and the letter line are MIP's wording around the question's own text
 (`The question writes: $<expr>$.`, `The string <s> has <n> letters: <letter> <count>, ...`), the same wording the text arm puts.
+The fixed-question line is one flag for both arms, `--question-line` (put as text, steered under the channel; kind `question line`,
+apart from `--question-value`'s `question value`), so a text arm and a channel arm both carry it (miss1's channel arm had it and the
+text arm did not: its 4-0 on question-line answers is that confound). Parity on round 9's 240 General traces
+(`scripts/pc/channel_parity.py`, `results/token-channel/channel-parity.txt`, CPU): the channel's letter-count plan equals the text put
+on 10 of 10 answers; its quote at a wrong copy (cut and plan) equals the text quote on 4 of 4; its quote at a loop close (the quote
+steered, then the close) gives the same text as the text arm's on 41 of 41 of round 9's own close positions. A close or an end the model
+writes on the quote's line is its own (no second `</think>`).
+
+**Not limited to `=` (the developer, 2026-11-13: MIP reads the stream in real time, so values and other reasoning can be caught without
+`=`).** Open, not built. Found so far: (1) the shim takes a plan only for an ask it sent (a trigger token or a request's first sample;
+triggers go out once per server in `hello`), so a plan at a place with no trigger needs more triggers (each ask decodes the answer under
+one lock) or a shim change (a plan the service pushes, taken at the next sample), which reopens gates 1 and 2; (2) a survey of round 9's
+`<expression> is / -> / \to / gives <number>` (`scripts/pc/no_equals_survey.py`) shows those words carry other meanings in the model's
+work (a borrow `6-8 -> 16`, a quotient digit `209 \div 723 -> 0`, a place `Digit at 10^3 is 8`, an integer part `16/5 is 3`), so each
+form needs its own detector from its own statement, never a put at every link word; its remainder counts are not read by hand yet;
+(3) loop kinds read from the stream need no plan (the service already sees every token): the cheapest under today's protocol.
 
 **Confirmed (the developer, 2026-11-13):** round 9 and the fixes measured since are the base every arm builds on ("it has proven
 many things work"); a channel arm is that base with its values through the channel, never a thinner flag set. miss1 broke this (dev2's

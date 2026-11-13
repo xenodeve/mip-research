@@ -962,7 +962,7 @@ class Rollout:
             from tools.igc.question_read import read_exact
             got = read_exact(row['question'])
             if got is not None and isinstance(got[1], Fraction):
-                self.inject(f'{got[0]} = {spelled(got[1])}' + chr(10), 'question value')
+                self.inject(f'{got[0]} = {spelled(got[1])}' + chr(10), 'question line')
                 self.events[-1].update(expr=got[0][:200], value=spelled(got[1]))
         if arm.letter_count and row.get('question') and not arm.channel:   # under the channel the planner steers it (at_start)
             from tools.igc.letters import letter_case, letter_line
@@ -1097,7 +1097,7 @@ class Rollout:
         if self.plan is not None:
             return 1, stops   # --logit-value: one token a request, so each carries its own bias
         if self.close_after_quote:
-            return min(left, 256), stops | self.ids.lines   # one line, the steered quote, then the close (take)
+            return min(left, 256), stops | self.ids.lines | {self.ids.think_close}   # one line, the steered quote, then the close (take)
         if self.arm.channel:
             pass   # the shim streams every token to MIP and steers the value there: no stop at `=` or `\\approx`
         elif (self.arm.inline_calc or self.arm.logit_value) and self.phase in self.value_phases() or self.arm.hint_calc and self.phase == 'think':
@@ -1144,9 +1144,10 @@ class Rollout:
         last = new[-1] if new else None
         if self.close_after_quote:   # --channel: the quote's one line is written (or the model went elsewhere): the close it waited for
             self.close_after_quote = False
-            self.inject(('' if self.text().endswith('\n') else '\n') + LOOP_CLOSE.lstrip('\n'), 'loop close')
-            self.phase = 'answer'
-            return False
+            if last != self.ids.think_close and last not in self.ids.ends:   # the model's own close or end stands: handled below
+                self.inject(LOOP_CLOSE, 'loop close')   # as the text arm writes it after its quote
+                self.phase = 'answer'
+                return False
         if self.arm.question_quote and not self.quoted and self.phase in self.value_phases() and self.copy_cut():
             if self.left() <= 0:
                 self.done('length')

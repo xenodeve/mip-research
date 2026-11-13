@@ -117,7 +117,7 @@ def value_right(e, question):
     if kind == 'approx value':
         from analyze import approx_value_right
         return approx_value_right(e)
-    if kind == 'question value':
+    if kind in ('question value', 'question line'):   # the line's old name in records before 2026-11-13 is 'question value'
         from tools.igc.question_read import read_exact
         got = read_exact(question or '')
         return None if got is None else evaluate(e['value']) == Fraction(got[1])
@@ -171,7 +171,7 @@ def written_want(e):
     from tools.igc.question_quote import QUOTE
     out = []
     for k, x, v in zip(e['what'].split(' + '), e['expr'].split(' | '), e['value'].split(' | ')):
-        out.append(f'{x} = {v}\n' if k == 'question value' else v + '\n' if k == 'letter count'
+        out.append(f'{x} = {v}\n' if k in ('question value', 'question line') else v + '\n' if k == 'letter count'
                    else QUOTE.format(expr=x) if k == 'question quote' else ' ' + v)
     return ''.join(out).rstrip('\n')
 

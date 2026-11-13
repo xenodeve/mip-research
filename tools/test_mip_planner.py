@@ -59,7 +59,7 @@ class PlannerTests(unittest.TestCase):
     def test_fixed_question_line_at_the_start(self):
         r = roll('', question='What is 2*240?', question_line=True)
         p = Planner(r, PIECES).at_start(r.row['question'])
-        self.assertEqual((p.text, p.kind), ('2*240 = 480\n', 'question value'))
+        self.assertEqual((p.text, p.kind), ('2*240 = 480\n', 'question line'))
         r = roll('', question='What is 2*240?')
         self.assertIsNone(Planner(r, PIECES).at_start(r.row['question']))   # --question-line off
 
