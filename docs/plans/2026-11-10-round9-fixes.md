@@ -176,6 +176,23 @@ quotient."* The line makes the model doubt the form, and part of the class-C loo
   1-9 used our own line; no DeepMind number here is a leaderboard number, and the DeepMind numbers before and after frozen10 are not
   compared directly.
 
+## Round 10 as set on 2026-11-13 (`scripts/pc/pc_round10.sh`)
+
+The arms below (2026-11-11) are replaced, for the developer's approval before the run:
+
+- **One card.** Everything runs on the RTX 5060 Ti; the 4070 SUPER is the developer's and is not touched. Both halves, `r10-rows`
+  (73 rows = `r10a` + `r10b`), on the one card.
+- **One patched server** (`build-w4a8-mip`, sm_89, 4B NVFP4 W4A8 · llama.cpp+MIP · PC layer) for every arm: a request without `mip_id`
+  leaves the shim off (gate 1, 6 / 6 tokens as the stock build). `-c` is one KV pool shared by all slots under `-kvu`: `CTX` 524,288
+  (miss1 overflowed 262,144 with 12 answers in flight). `MIP_EXPR_DEVICE=cuda` on every arm.
+- **Arm A is round 9's General exactly** (the developer, 2026-11-13: "ให้เทียบกับรอบ9ได้"): no `--think-only`, and the long-value put
+  (an exact value too long to be a step, cut to 10 significant digits) is its own flag, `--long-value`, off in A.
+- **Arm B** = A + `--think-only --question-quote --approx-put --answer-rewind 2 --letter-count --question-line --long-value`, put as
+  text. **Arm CH** = B through the token channel (`--channel`): nothing inserted; gate 3 checks every steered value.
+- **The Sandbox arm (C) is not in this run:** it runs model code on the developer's PC, a separate decision.
+- A vs B is the fixes' effect against round 9 as it ran (and B's `--think-only`); B vs CH is put-as-text against steered, same
+  mechanisms. An all-on arm measures each mechanism only at its touches; its effect on answers alone needs an ablation arm.
+
 ## Round 10 as it runs (2026-11-11)
 
 **What it is.** A development run, not a measurement: the rows include the ones the fixes were built from, so a gain here says the

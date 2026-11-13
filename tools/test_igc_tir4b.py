@@ -1172,6 +1172,16 @@ class LongExactValue(unittest.TestCase):
         self.assertEqual(tir4b.inline_found('then $0.4 \\cdot 50 \\sqrt{10}', use_mathbackend=True)[1], '20\\sqrt{10}')
         self.assertIsNone(tir4b.inline_found('so $\\sqrt{310.9666}', use_mathbackend=True))   # a decimal under the root wants a decimal
 
+    def test_the_cut_put_is_its_own_flag(self):
+        # --long-value turns it on: an arm run without it puts what round 9 put (round 10's arm A is round 9's General, developer 2026-11-13)
+        def roll(**arm):
+            a = dict(inline_calc=True, inline_plain=True, mathbackend=True)
+            a.update(arm)
+            return tir4b.Rollout(dict(id='x', suite='arith', answer='1'), 0, [1], tir4b.Arm(**a), IDS, TOK, seed=1)
+        self.assertIsNone(roll().put_value('so $1.01^{30} ='))
+        self.assertEqual(roll(long_value=True).put_value('so $1.01^{30} =')[1], '1.347848915...')
+        self.assertEqual(roll().put_value('so $1.01^{16} =')[1], '1.17257864492369852051862561201601')   # a step's value, as before
+
     def test_pi_and_spaced_products(self):
         self.assertEqual(tir4b.inline_found('so E = π/2 - 5π/12', use_mathbackend=True)[1], 'π/12')
         self.assertEqual(tir4b.inline_found('Total area is $\\frac{\\pi}{2} - \\frac{\\pi}{3}', use_mathbackend=True)[1], '\\frac{\\pi}{6}')
@@ -1670,7 +1680,7 @@ class ChannelSteersQuestionWords(unittest.TestCase):
         self.assertEqual(self.roll(q, channel=False).out, [])                                            # off: round 9's arm
 
     def test_a_long_value_is_marked_in_the_text_arm(self):
-        r = self.roll('Compute it.', channel=False)
+        r = self.roll('Compute it.', channel=False, long_value=True)
         r.take(TOK.encode('so $1.01^{30} ='))
         ev = [e for e in r.events if e['kind'] == 'inline value']
         self.assertEqual(len(ev), 1)

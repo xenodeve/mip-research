@@ -83,7 +83,7 @@ class PlannerTests(unittest.TestCase):
         self.assertIsNone(Planner(r, PIECES).at_start(r.row['question']))
 
     def test_a_long_value_is_its_own_kind(self):
-        r = roll('so $1.01^{30} =')
+        r = roll('so $1.01^{30} =', long_value=True)
         p = Planner(r, PIECES).on_trigger(r.text(), 'think')
         self.assertEqual((p.text, p.kind), (' 1.347848915...', 'long value'))
 

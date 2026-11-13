@@ -166,7 +166,8 @@ class Arm:
                  trust='cort', logit_value=0.0, suppress_recheck=0, mathbackend=False, candidate_close=False, inline_style='general',
                  no_digit_join=False, guard_progress=False, answer_close=False, loop_value=False, early_cycle=False, shape_cap=0, cover_cap=0,
                  exact_answer=False, approx_put=False, answer_rewind=0, letter_count=False, verify_gate=False, question_quote=False,
-                 channel=False, think_only=False, question_line=False):
+                 channel=False, think_only=False, question_line=False, long_value=False):
+        self.long_value = long_value   # --long-value: an exact value too long to be a step, put cut to 10 significant digits (P11)
         self.channel = channel   # --channel: values reach the model through the token channel (tools/igc/mip_channel.py), not as text
         self.question_line = question_line   # --question-line: the fixed-question line at the start of the thinking (put as text; steered under --channel)
         self.think_only = think_only   # --think-only: values only in the thinking, none in the answer (the General Style, 2026-11-12)
@@ -1320,6 +1321,9 @@ class Rollout:
         expr, value = found
         # a value too long to be a step, put cut (_long_found): its own kind, so it is measured apart from the other inline values
         self.last_put_long = value.endswith('...') and not whole and self.arm.mathbackend and _long_found(before) == found
+        if self.last_put_long and not self.arm.long_value:   # off: refused at `=` as round 9 did
+            self.last_put_long = False
+            return None
         if self.echoing(re.sub(r'[\s()]', '', expr)):
             return None
         if whole:
@@ -2222,7 +2226,8 @@ def run(args):
               loop_value=args.loop_value, early_cycle=args.early_cycle, shape_cap=args.shape_cap, cover_cap=args.cover_cap,
               exact_answer=args.exact_answer, approx_put=args.approx_put, answer_rewind=args.answer_rewind,
               letter_count=args.letter_count, verify_gate=args.verify_gate, question_quote=args.question_quote,
-              channel=args.channel, think_only=args.think_only, question_line=args.question_line)
+              channel=args.channel, think_only=args.think_only, question_line=args.question_line,
+              long_value=args.long_value)
     if args.channel and not args.server:
         raise SystemExit('--channel needs --server: a llama-server built with the MIP channel (build-w4a8-mip), MIP_CHANNEL set to this run')
     if args.verify_gate and not args.execute:
@@ -2501,6 +2506,8 @@ def main(argv=None):
                         'streams every token to a MIP service in this process, which steers each value it computes in the thinking '
                         '(docs/plans/2026-11-12-mip-token-channel-design.md); no stop at `=` or `\\approx`')
     r.add_argument('--channel-port', type=int, default=8095, help='the MIP service port the server reaches (its MIP_CHANNEL)')
+    r.add_argument('--long-value', action='store_true', help='an exact value too long to be a step (a decimal to a power) is put cut to 10 '
+                   'significant digits with `...`, where it was refused at `=` (P11); off, the arm puts what round 9 put')
     r.add_argument('--question-line', action='store_true', help='a question that is one computation gets `expr = value` at the start '
                    'of the thinking: put as text, or steered through --channel (a fixed computation is computed by software, 2026-11-12)')
     r.add_argument('--think-only', action='store_true',

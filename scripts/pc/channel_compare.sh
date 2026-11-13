@@ -27,7 +27,7 @@ CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1 MIP_CHANNEL=127.0.0.1:$MIP_P
 SP=$!
 for i in $(seq 1 90); do curl -s -m 2 http://127.0.0.1:$PORT/health | grep -q ok && break; sleep 2; done
 curl -s -m 2 http://127.0.0.1:$PORT/health | grep -q ok || { echo "server did not start"; kill $SP; exit 2; }
-F="--inline-calc --mathbackend --inline-plain --inline-style general --no-digit-join --guard-progress --loop-close --answer-close --early-cycle --shape-cap 1024 --cover-cap 32768 --think-only"
+F="--inline-calc --mathbackend --inline-plain --inline-style general --no-digit-join --guard-progress --loop-close --answer-close --early-cycle --shape-cap 1024 --cover-cap 32768 --think-only --long-value"
 C="--model $G/q4b-hf --server http://127.0.0.1:$PORT --rows $ROWS --samples 2 --seed 1 --ids --live $LIVE $MORE"
 DEV="MIP_EXPR_DEVICE=cuda MIP_CUDA_RESIDENT=2 CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1 MIP_CUDA_DEVICE=0"
 env $DEV TIR4B_TIMING=$OUT/a.timing.jsonl python tools/igc/tir4b.py run $C --out $OUT/a $F > $OUT/a.log 2>&1 &
