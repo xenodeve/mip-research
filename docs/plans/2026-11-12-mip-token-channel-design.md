@@ -134,8 +134,8 @@ tests); a third driver joins vLLM's and `drive_http`. llama.cpp gets a thin samp
 | `--inline-calc --mathbackend --inline-plain` (a value after `=`) | force / bias the value's tokens | — |
 | `--no-digit-join` | bias (today's logit bias, per token) | — |
 | `--approx-put` (10 digits after `\approx`) | force the digits | — |
-| `--question-quote` (the question's words when the copy differs) | steer the quote's tokens (not a hint: the developer, 2026-11-12) | — |
-| `--letter-count` (counts at the start) | steer the counts' tokens (not a hint) | — |
+| `--question-quote` (the question's words when the copy differs) | steer the quote's tokens (not a hint: the developer, 2026-11-12). **Built 2026-11-13:** the driver finds the wrong copy line at a chunk's end and cuts after it, as the text arm; the quote is handed to the service and steered at the next request's first sample. At a thinking loop's close the close waits one line for the steered quote, then `</think>` (closed anyway if the model wrote something else) | the cut |
+| `--letter-count` (counts at the start) | steer the counts' tokens (not a hint). **Built 2026-11-13:** in the start plan with the fixed-question line, nothing inserted | — |
 | detectors: `--guard-progress`, `--early-cycle`, `--shape-cap`, `--cover-cap`, the repeat check | read the stream, no action of their own | — |
 | `--loop-close` (`</think>` on a thinking loop) | force `</think>` | the cut of the loop's text (`cut_tokens`) |
 | `--answer-close` (cut the answer loop, then the cue) | force the cue's tokens | the cut |
@@ -277,6 +277,13 @@ in-process on the A100) and Strata-xeno through the same plan format.
 | LF, T1-T9, D17 | not taken | the model's reasoning (LF); the latent path is paused (T, D17) |
 
 ## Round 10
+
+**Nothing inserted under the channel (the developer, 2026-11-13):** "convert at once, so the results are not contaminated by the old
+mechanism; measure separately how each mechanism is used". `--letter-count` and `--question-quote` are steered, not inserted (table
+below); `_long_found`'s puts are their own kind (`long value`); gate 3 reports every count per mechanism (`what`: inline value, long
+value, approx value, question value, letter count, question quote): plans, done / dropped / missed / cut, value right, written as
+steered, on right and wrong answers. The quote and the letter line are MIP's wording around the question's own text
+(`The question writes: $<expr>$.`, `The string <s> has <n> letters: <letter> <count>, ...`), the same wording the text arm puts.
 
 **Confirmed (the developer, 2026-11-13):** round 9 and the fixes measured since are the base every arm builds on ("it has proven
 many things work"); a channel arm is that base with its values through the channel, never a thinner flag set. miss1 broke this (dev2's

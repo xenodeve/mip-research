@@ -1588,5 +1588,68 @@ class QuestionQuote(unittest.TestCase):
         self.assertEqual(kinds(r), [])
 
 
+class ChannelSteersQuestionWords(unittest.TestCase):
+    """Under --channel nothing is inserted (developer, 2026-11-13: convert at once, so a channel arm is not mixed with the old way): the
+    letter counts and the question quote become plans the channel steers the model to write, each its own kind, measured apart."""
+    COPY = 'The expression is:\n$$ \\frac{18/4}{(11/(-264) \\cdot 6)} \\cdot \\frac{1}{(-25)/((-3025)/(-44) \\cdot 1/(-4))} $$\nLet us break'
+    QUOTE = 'The question writes: $(18/4)/(11/(-264)*6)*1/((-25)/((-3025)/(-44))*1/(-4))$.\n'
+
+    def roll(self, q, **arm):
+        a = dict(channel=True, think_only=True, inline_calc=True, inline_plain=True, mathbackend=True)
+        a.update(arm)
+        row = dict(id='x', suite='arith', answer='1', question=q)
+        return tir4b.Rollout(row, 0, [1, 2, 3], tir4b.Arm(**a), IDS, TOK, seed=1)
+
+    def test_letter_count_is_not_inserted_under_the_channel(self):
+        q = 'Two letters picked without replacement from vgcgplcggpgvp. Give prob of sequence vv.'
+        self.assertEqual(self.roll(q, letter_count=True).out, [])
+        self.assertEqual(kinds(self.roll(q, letter_count=True, channel=False)), ['letter count'])   # the text arm as before
+
+    def test_a_wrong_copy_is_cut_and_its_quote_handed_to_the_channel(self):
+        r = self.roll(QuestionQuote.Q, question_quote=True)
+        r.take(TOK.encode(self.COPY))
+        self.assertTrue(r.text().endswith('$$\n'), r.text()[-40:])   # cut after the copy line, as the text arm
+        self.assertEqual(kinds(r), ['quote cut'])                     # the cut recorded; nothing inserted
+        e = '(18/4)/(11/(-264)*6)*1/((-25)/((-3025)/(-44))*1/(-4))'
+        self.assertEqual(r.take_pending(), (self.QUOTE, 'question quote', e, e))
+        self.assertIsNone(r.take_pending())   # once
+
+    def test_no_quote_in_the_answer_under_think_only(self):
+        for channel in (True, False):
+            r = self.roll(QuestionQuote.Q, question_quote=True, channel=channel)
+            r.take(TOK.encode('ok\n</think>\n\n'))
+            r.phase = 'answer'
+            r.take(TOK.encode(self.COPY))
+            self.assertEqual((kinds(r), r.take_pending()), ([], None), channel)
+
+    def test_the_quote_at_a_loop_close_is_steered_before_the_close(self):
+        r = self.roll(QuestionQuote.Q, question_quote=True, loop_close=True)
+        r.take(TOK.encode('Let me count the brackets again.\n'))
+        r.on_loop()
+        self.assertEqual(r.phase, 'think')                          # the close waits for the quote
+        self.assertEqual(r.take_pending()[1], 'question quote')
+        most, stops = r.request()
+        self.assertTrue(set(IDS.lines) <= stops)                    # one line: the quote
+        r.take(TOK.encode(self.QUOTE))
+        self.assertEqual(r.phase, 'answer')
+        self.assertTrue(r.text().endswith(self.QUOTE + '</think>\n\n'), r.text()[-60:])
+
+    def test_a_quote_not_written_still_closes(self):
+        r = self.roll(QuestionQuote.Q, question_quote=True, loop_close=True)
+        r.take(TOK.encode('Let me count the brackets again.\n'))
+        r.on_loop()
+        r.take_pending()
+        r.take(TOK.encode('Hmm, the brackets.\n'))
+        self.assertEqual(r.phase, 'answer')
+        self.assertTrue(r.text().endswith('Hmm, the brackets.\n</think>\n\n'), r.text()[-60:])
+
+    def test_a_long_value_is_marked_in_the_text_arm(self):
+        r = self.roll('Compute it.', channel=False)
+        r.take(TOK.encode('so $1.01^{30} ='))
+        ev = [e for e in r.events if e['kind'] == 'inline value']
+        self.assertEqual(len(ev), 1)
+        self.assertTrue(ev[0].get('long'))
+
+
 if __name__ == '__main__':
     unittest.main()

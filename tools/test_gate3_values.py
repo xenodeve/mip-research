@@ -50,6 +50,16 @@ class SurdTests(unittest.TestCase):
         self.assertIs(value_right(inline('0.99^{60}', '0.5471566424...'), ''), False)   # rounded, not cut
         self.assertIs(value_right(inline('1.01^{30}', '1.3448888...'), ''), False)
 
+    def test_question_words(self):
+        q = 'Two letters picked without replacement from vgcgplcggpgvp. Give prob of sequence vv.'
+        line = 'The string vgcgplcggpgvp has 13 letters: v 2, g 5, c 2, p 3, l 1.'
+        self.assertIs(value_right(dict(what='letter count', expr='vgcgplcggpgvp', value=line), q), True)
+        self.assertIs(value_right(dict(what='letter count', expr='vgcgplcggpgvp', value=line.replace('g 5', 'g 4')), q), False)
+        e = '((-25)/((-3025)/(-44)))*1/(-4)'
+        self.assertIs(value_right(dict(what='question quote', expr=e, value=e), f'Calculate {e}.'), True)
+        self.assertIs(value_right(dict(what='question quote', expr=e, value='(-25)/((-3025)/(-44)*1/(-4))'), f'Calculate {e}.'), False)
+        self.assertIs(value_right(dict(what='long value', expr='1.01^{30}', value='1.347848915...'), ''), True)
+
     def test_a_wrong_surd(self):
         self.assertIs(value_right(inline('\\sqrt{1573}', '11\\sqrt{11}'), ''), False)
         self.assertIs(value_right(inline('-6(-2\\sqrt{204})', '-24\\sqrt{51}'), ''), False)

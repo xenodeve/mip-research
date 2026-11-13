@@ -1,3 +1,6 @@
-gate 3 (token channel): C:\Users\xenod\mip-work\a100\pc\channel-miss1\b
-right/cut: 1 right/done: 3517 right/unchecked: 1 right/value right: 3517 right/written as steered: 3517 wrong/cut: 33 wrong/done: 2148 wrong/unchecked: 1 wrong/value right: 2180 wrong/written as steered: 2148
+gate 3 (token channel): results\token-channel\miss1\b
+right/cut: 1 right/done: 3516 right/missed: 1 right/unchecked: 1 right/value right: 3517 right/written as steered: 3517 wrong/cut: 33 wrong/done: 2147 wrong/missed: 1 wrong/unchecked: 1 wrong/value right: 2180 wrong/written as steered: 2148
 PASS: every steered value right
+per mechanism:
+  inline value: cut 34, done 5647, missed 2, on right answers 3508, on wrong answers 2175, plans 5683, unchecked 2, value right 5681, written as steered 5649
+  question value: done 16, on right answers 10, on wrong answers 6, plans 16, value right 16, written as steered 16

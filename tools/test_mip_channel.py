@@ -173,6 +173,15 @@ class ChannelTests(unittest.TestCase):
         self.shim.open('b#0#1', 0, PROMPT + r.out)
         self.assertIsNone(self.shim.ask(0, 0)['dag'])
 
+    def test_a_pending_plan_is_steered_at_the_next_request(self):
+        r = roll(out='So x\n')
+        r.steer_queue.append(('The question writes: $2*240$.\n', 'question quote', '2*240', '2*240'))
+        self.svc.register('c#0#1', r, Planner(r, PIECES))
+        self.shim.open('c#0#1', 0, PROMPT + r.out)
+        self.assertEqual(spell(self.shim.ask(0, 0)['dag']), 'The question writes: $2*240$.\n')
+        ev = [e for e in r.events if e['kind'] == 'steered value']
+        self.assertEqual((ev[0]['what'], ev[0]['at']), ('question quote', len(r.out)))
+
     def test_nothing_after_the_thinking_closed(self):
         r = roll()
         self.svc.register('a#0#0', r, Planner(r, PIECES))

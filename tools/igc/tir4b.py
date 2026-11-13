@@ -955,7 +955,9 @@ class Rollout:
         self.quote_scan = 0   # --question-quote: model text read for copies up to here
         self.rewinds = 0   # --answer-rewind: answer loops cut out and resampled so far
         self.reseed = 0    # added to the request seed after a rewind, so the resampled text is not the same draw again
-        if arm.letter_count and row.get('question'):
+        self.steer_queue = []   # --channel: plans the driver hands the channel, steered at the next request's first sample (take_pending)
+        self.close_after_quote = False   # --channel: a loop close waits one line for the question quote steered before it
+        if arm.letter_count and row.get('question') and not arm.channel:   # under the channel the planner steers it (at_start)
             from tools.igc.letters import letter_case, letter_line
             got = letter_case(row['question'])
             if got is not None:
@@ -1087,6 +1089,8 @@ class Rollout:
         stops = set(self.ids.ends)
         if self.plan is not None:
             return 1, stops   # --logit-value: one token a request, so each carries its own bias
+        if self.close_after_quote:
+            return min(left, 256), stops | self.ids.lines   # one line, the steered quote, then the close (take)
         if self.arm.channel:
             pass   # the shim streams every token to MIP and steers the value there: no stop at `=` or `\\approx`
         elif (self.arm.inline_calc or self.arm.logit_value) and self.phase in self.value_phases() or self.arm.hint_calc and self.phase == 'think':
@@ -1131,7 +1135,12 @@ class Rollout:
         if self.phase != 'answer' and self.phase != 'block':
             self.thought += len(new)
         last = new[-1] if new else None
-        if self.arm.question_quote and not self.quoted and self.phase in ('think', 'answer') and self.copy_cut():
+        if self.close_after_quote:   # --channel: the quote's one line is written (or the model went elsewhere): the close it waited for
+            self.close_after_quote = False
+            self.inject(('' if self.text().endswith('\n') else '\n') + LOOP_CLOSE.lstrip('\n'), 'loop close')
+            self.phase = 'answer'
+            return False
+        if self.arm.question_quote and not self.quoted and self.phase in self.value_phases() and self.copy_cut():
             if self.left() <= 0:
                 self.done('length')
             return False
@@ -1175,6 +1184,8 @@ class Rollout:
                         self.join_guard = True   # `-5` then the model's own `75` read `-575` on the page (#307, 80 of 19,990 puts)
                         self.joins_held += 1
                     self.events[-1].update(expr=expr[:200], value=value, whole=whole)
+                    if self.last_put_long:
+                        self.events[-1].update(long=True)
                     if whole:
                         self.give(value)
             elif self.arm.logit_value:
@@ -1292,11 +1303,15 @@ class Rollout:
         echo guard may skip it, a whole value may be the question's; take() puts the text, the token channel (tools/igc/mip_planner.py) steers
         the model to write it."""
         whole = self.whole_pending
-        found = inline_found(text[:text.rstrip().rfind('=')], whole=whole, use_mathbackend=self.arm.mathbackend,
+        before = text[:text.rstrip().rfind('=')]
+        found = inline_found(before, whole=whole, use_mathbackend=self.arm.mathbackend,
                              custom_ops=self.custom_ops(text), style=self.arm.inline_style)
+        self.last_put_long = False
         if found is None:
             return None
         expr, value = found
+        # a value too long to be a step, put cut (_long_found): its own kind, so it is measured apart from the other inline values
+        self.last_put_long = value.endswith('...') and not whole and self.arm.mathbackend and _long_found(before) == found
         if self.echoing(re.sub(r'[\s()]', '', expr)):
             return None
         if whole:
@@ -1407,7 +1422,8 @@ class Rollout:
                     self.loop_floor = len(self.out)
                     return
             self.put_loop_value()
-            self.quote_at_loop()
+            if self.quote_at_loop():
+                return   # --channel: the close comes after the steered quote's line (take)
             self.inject(LOOP_CLOSE, 'loop close')
             self.phase = 'answer'
         elif self.phase == 'answer' and self.arm.answer_close and self.answer_closed_at is None:
@@ -1477,8 +1493,13 @@ class Rollout:
                 taken = len(self.out) - (i + 1)
                 del self.out[i + 1:]
                 self.quoted = True
-                self.inject(QUOTE.format(expr=q[0]), 'question quote')
-                self.events[-1].update(copy=line.strip()[:200], cut_tokens=taken)
+                if self.arm.channel:   # the channel steers the model to write it at the next request: nothing inserted
+                    self.steer_queue.append((QUOTE.format(expr=q[0]), 'question quote', q[0], q[0]))
+                    self.events.append(dict(kind='quote cut', at=len(self.out), model_tokens=self.model_tokens(),
+                                            copy=line.strip()[:200], cut_tokens=taken))
+                else:
+                    self.inject(QUOTE.format(expr=q[0]), 'question quote')
+                    self.events[-1].update(copy=line.strip()[:200], cut_tokens=taken)
                 self.quote_scan = len(self.out)
                 return True
         self.quote_scan = line_at
@@ -1486,17 +1507,29 @@ class Rollout:
 
     def quote_at_loop(self):
         """--question-quote at a thinking loop's close (round 9 P5: `simplify_surd` looped counting the question's brackets): the
-        question's words go before the close, settle and close at once (the settle probe: 32 of 49 against 31 for the close alone)."""
+        question's words go before the close, settle and close at once (the settle probe: 32 of 49 against 31 for the close alone).
+        Under --channel the quote is steered at the next request and the close waits for its line: True, the caller does not close."""
         if not self.arm.question_quote or self.quoted:
-            return
+            return False
         q = self.question_expr()
         if q is None:
-            return
+            return False
         from tools.igc.question_quote import QUOTE
         self.quoted = True
         lead = '' if self.text().endswith('\n') else '\n'
+        if self.arm.channel:
+            if lead:
+                self.inject(lead, 'line end')
+            self.steer_queue.append((QUOTE.format(expr=q[0]), 'question quote', q[0], q[0]))
+            self.close_after_quote = True
+            return True
         self.inject(lead + QUOTE.format(expr=q[0]), 'question quote')
         self.events[-1].update(at_loop=True)
+        return False
+
+    def take_pending(self):
+        """--channel: the next plan the driver handed the channel, (text, kind, expr, value), or None."""
+        return self.steer_queue.pop(0) if self.steer_queue else None
 
     def gate_due(self):
         """--verify-gate: once per answer, when the question gives an equation and asks for all its solutions."""

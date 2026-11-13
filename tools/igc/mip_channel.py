@@ -136,6 +136,11 @@ class ChannelService:
                 return None
             if seq == 0:
                 plan = self._resume(rollout, a)
+                if plan is None and rollout.phase == 'think' and rollout.steer_queue:
+                    plan = planner.pending()
+                    if plan is not None:
+                        self._begin(rollout, a, plan, list(rollout.out), s, 0)
+                        return plan
                 if plan is None and not rollout.out and rollout.phase == 'think':
                     plan = planner.at_start(rollout.row.get('question'))
                     if plan is not None:

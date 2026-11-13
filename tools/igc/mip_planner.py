@@ -38,7 +38,7 @@ class Planner:
             ban = set()
             if r.arm.no_digit_join and r.arm.inline_plain and not whole and value[-1:].isdigit():
                 ban = set(ids.digit_start) | set(ids.slash_start)
-            return self._plan(put, 'inline value', ban, expr, value)
+            return self._plan(put, 'long value' if r.last_put_long else 'inline value', ban, expr, value)
         if (bare.endswith('\\approx') or bare.endswith('≈')) and r.arm.approx_put:
             got = r.approx_put_value(text)
             if got is None:
@@ -51,12 +51,37 @@ class Planner:
         return None
 
     def at_start(self, question):
+        """The lines steered at the start of the thinking: the fixed-question line (the question is one computation) and, with
+        --letter-count, the letter counts of a string the question writes out. One plan; its kind names the lines in it."""
         if not question:
             return None
+        lines, kinds, exprs, values = [], [], [], []
         from tools.igc.question_read import read_exact
         from tools.igc.mathexpr import spelled
         got = read_exact(question)
-        if got is None or not isinstance(got[1], Fraction):
+        if got is not None and isinstance(got[1], Fraction):
+            expr, value = got[0], spelled(got[1])
+            lines.append(f'{expr} = {value}\n')
+            kinds.append('question value')
+            exprs.append(expr)
+            values.append(value)
+        if self.rollout.arm.letter_count:
+            from tools.igc.letters import letter_case, letter_line
+            got = letter_case(question)
+            if got is not None:
+                line = letter_line(*got)
+                lines.append(line + '\n')
+                kinds.append('letter count')
+                exprs.append(got[0])
+                values.append(line)
+        if not lines:
             return None
-        expr, value = got[0], spelled(got[1])
-        return self._plan(f'{expr} = {value}\n', 'question value', set(), expr, value)
+        return self._plan(''.join(lines), ' + '.join(kinds), set(), ' | '.join(exprs), ' | '.join(values))
+
+    def pending(self):
+        """A plan the driver handed the channel (a question quote), steered at the next request's first sample, or None."""
+        got = self.rollout.take_pending()
+        if got is None:
+            return None
+        text, kind, expr, value = got
+        return self._plan(text, kind, set(), expr, value)

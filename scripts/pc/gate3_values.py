@@ -106,6 +106,14 @@ def value_right(e, question):
     remainder (n = q d + r, 0 <= r < d); `x.dddd...` is the value cut to its places; anything else equal in value."""
     from tools.igc.mathexpr import evaluate
     kind = e.get('what')
+    if ' + ' in (kind or ''):   # lines steered together at the start: each by its own kind
+        parts = zip(kind.split(' + '), e['expr'].split(' | '), e['value'].split(' | '))
+        got = [value_right(dict(what=k, expr=x, value=v), question) for k, x, v in parts]
+        return False if False in got else None if None in got else True
+    if kind == 'letter count':
+        return letters_right(e['expr'], e['value'], question)
+    if kind == 'question quote':   # the question's own words: verbatim in the question, and the line is that text
+        return e['value'] == e['expr'] and re.sub(r'\s', '', e['expr']) in re.sub(r'\s', '', question or '')
     if kind == 'approx value':
         from analyze import approx_value_right
         return approx_value_right(e)
@@ -145,6 +153,29 @@ def value_right(e, question):
     return None if got is None else got == want
 
 
+LETTERS = re.compile(r'^The string (\S+) has (\d+) letters: (.*)\.$')
+
+
+def letters_right(string, line, question):
+    """A letter-count line counted again with str.count (not tools/igc/letters.py): the string is the question's, its length and
+    every letter's count right, every letter of it named."""
+    m = LETTERS.match(line.strip())
+    if not m or m.group(1) != string or string not in (question or ''):
+        return False
+    counts = dict(x.rsplit(' ', 1) for x in m.group(3).split(', '))
+    return int(m.group(2)) == len(string) and set(counts) == set(string) and all(int(n) == string.count(k) for k, n in counts.items())
+
+
+def written_want(e):
+    """The text the model should have written at the event's position."""
+    from tools.igc.question_quote import QUOTE
+    out = []
+    for k, x, v in zip(e['what'].split(' + '), e['expr'].split(' | '), e['value'].split(' | ')):
+        out.append(f'{x} = {v}\n' if k == 'question value' else v + '\n' if k == 'letter count'
+                   else QUOTE.format(expr=x) if k == 'question quote' else ' ' + v)
+    return ''.join(out).rstrip('\n')
+
+
 MISSED = re.compile(r'no plan for slot (\d+) seq (\d+) in')
 
 
@@ -181,7 +212,7 @@ def main():
         if line.strip():
             x = json.loads(line)
             ids[(x['id'], x.get('sample', 0))] = x['out_ids']
-    c, bad = Counter(), []
+    c, bad, per = Counter(), [], Counter()
     for rec in json.loads((out / 'records.json').read_text(encoding='utf-8')):
         final = 'right' if rec['right'] else 'wrong'
         out_ids = ids.get((rec['id'], rec.get('sample', 0)), [])
@@ -195,16 +226,26 @@ def main():
             c[(final, 'value right' if ok else 'unchecked' if ok is None else 'VALUE WRONG')] += 1
             # a question line can be long and written a digit a token: 200 tokens, not 40, so the check never cuts it short
             written = tok.decode(out_ids[e['at']:e['at'] + 200]) if out_ids else ''
-            want = (' ' + e['value']) if e.get('what') != 'question value' else e['expr']
-            wrote = written.startswith(want) or written.lstrip().startswith(e['value'])
+            want = written_want(e)
+            wrote = written.startswith(want) or written.lstrip().startswith(want.lstrip())
             if state != 'cut':   # past a close the text there is the close and the answer, not the looping text the value was in
                 c[(final, 'written as steered' if wrote else 'TEXT DIFFERS')] += 1
+            what = e.get('what') or '?'   # each mechanism apart (developer, 2026-11-13)
+            per[(what, 'plans')] += 1
+            per[(what, state)] += 1
+            per[(what, 'value right' if ok else 'unchecked' if ok is None else 'VALUE WRONG')] += 1
+            per[(what, f'on {final} answers')] += 1
+            if state != 'cut':
+                per[(what, 'written as steered' if wrote else 'TEXT DIFFERS')] += 1
             if ok is False or (state == 'done' and not wrote):
                 bad.append(f"{rec['id']}#{rec.get('sample', 0)} {final} {state} {e.get('what')}: {e['expr'][:60]!r} = {e['value']!r}; "
                            f"text {written[:40]!r}")
     lines = [f'gate 3 (token channel): {out}', ' '.join(f'{k[0]}/{k[1]}: {n}' for k, n in sorted(c.items()))]
     wrong = sum(n for k, n in c.items() if k[1] == 'VALUE WRONG')
     lines.append('PASS: every steered value right' if wrong == 0 else f'{wrong} VALUES WRONG (listed)')
+    lines.append('per mechanism:')
+    for what in sorted({k[0] for k in per}):
+        lines.append(f'  {what}: ' + ', '.join(f'{k[1]} {n}' for k, n in sorted(per.items()) if k[0] == what))
     lines += bad[:60]
     (out / 'gate3.txt').write_text('\n'.join(lines) + '\n', encoding='utf-8')
     print('\n'.join(lines[:3]))
