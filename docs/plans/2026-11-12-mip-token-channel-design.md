@@ -278,7 +278,11 @@ in-process on the A100) and Strata-xeno through the same plan format.
 
 ## Round 10
 
-The developer: "run it together with the new intervention system". *(my reading, to confirm)* Round 10 waits and runs once phase 1
+**Confirmed (the developer, 2026-11-13):** round 9 and the fixes measured since are the base every arm builds on ("it has proven
+many things work"); a channel arm is that base with its values through the channel, never a thinner flag set. miss1 broke this (dev2's
+flags: no `--approx-put`, `--letter-count`, `--question-quote`, `--answer-rewind`), so its result is the channel on a thin base only.
+
+The developer: "run it together with the new intervention system". *(my reading, confirmed 2026-11-13)* Round 10 waits and runs once phase 1
 passes its gates, with its arms on the patched binary: A (round 9's General, text puts), B (A + the round 9 fixes), and B with values
 through the channel; C (the Sandbox) as planned. Its acceptance rules stay those proposed in `2026-11-10-round9-fixes.md` ("What counts"),
 for the developer to set before the run.
@@ -309,5 +313,5 @@ MIP service's process model (one per server, slots as keys); the patch's tests i
 
 ## Open for the developer
 
-1. Round 10 as read above.
+1. ~~Round 10 as read above.~~ Confirmed 2026-11-13 (above).
 2. The phase 0 probe (a GPU run).
