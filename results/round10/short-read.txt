@@ -1,0 +1,84 @@
+19 rows, 38 (row, sample) keys; rows that are one fixed computation (the question line): 10
+
+== rule ==
+  a: 29 / 38
+  b: 34 / 38
+  ch: 36 / 38
+  every pair (38):
+    a vs b: b only right 8, a only right 3, p = 0.113
+      a right -> b wrong: dm_div_big-1395#0
+      a right -> b wrong: dm_swr_p_sequence-9951#0
+      a right -> b wrong: dm_swr_p_sequence-9951#1
+    a vs ch: ch only right 7, a only right 0, p = 0.00781
+    b vs ch: ch only right 4, b only right 2, p = 0.344
+      b right -> ch wrong: dm_div_big-9991#1
+      b right -> ch wrong: dm_simplify_surd-3480#0
+  pairs the question line does not reach (18):
+    a vs b: b only right 3, a only right 2, p = 0.5
+      a right -> b wrong: dm_swr_p_sequence-9951#0
+      a right -> b wrong: dm_swr_p_sequence-9951#1
+    a vs ch: ch only right 2, a only right 0, p = 0.25
+    b vs ch: ch only right 2, b only right 1, p = 0.5
+      b right -> ch wrong: dm_simplify_surd-3480#0
+
+== corrected ==
+  a: 27 / 38
+  b: 35 / 38
+  ch: 36 / 38
+  every pair (38):
+    a vs b: b only right 10, a only right 2, p = 0.0193
+      a right -> b wrong: dm_swr_p_sequence-9951#0
+      a right -> b wrong: dm_swr_p_sequence-9951#1
+    a vs ch: ch only right 9, a only right 0, p = 0.00195
+    b vs ch: ch only right 3, b only right 2, p = 0.5
+      b right -> ch wrong: dm_div_big-2783#1
+      b right -> ch wrong: dm_simplify_surd-3480#0
+  pairs the question line does not reach (18):
+    a vs b: b only right 3, a only right 2, p = 0.5
+      a right -> b wrong: dm_swr_p_sequence-9951#0
+      a right -> b wrong: dm_swr_p_sequence-9951#1
+    a vs ch: ch only right 2, a only right 0, p = 0.25
+    b vs ch: ch only right 2, b only right 1, p = 0.5
+      b right -> ch wrong: dm_simplify_surd-3480#0
+
+== per answer (rule / corrected, tokens) ==
+  dm_div_big-1395#0 QL | a Rw 19189 | b ww 14058 | ch RR 39642
+  dm_div_big-1395#1 QL | a Rw 16390 | b RR 22151 | ch RR 33604
+  dm_div_big-2783#0 QL | a Rw 61574 | b RR 11923 | ch RR 4870
+  dm_div_big-2783#1 QL | a Rw 35073 | b RR 12348 | ch Rw 18382
+  dm_div_big-928#0 QL | a RR 7803 | b RR 363 | ch RR 409
+  dm_div_big-928#1 QL | a RR 8079 | b RR 355 | ch RR 330
+  dm_div_big-9977#0 QL | a RR 10033 | b RR 307 | ch RR 310
+  dm_div_big-9977#1 QL | a RR 25820 | b RR 489 | ch RR 717
+  dm_div_big-9991#0 QL | a wR 8205 | b wR 10680 | ch RR 10510
+  dm_div_big-9991#1 QL | a wR 12232 | b RR 12674 | ch wR 11183
+  dm_mixed_longer-926#0 QL | a ww 1847 | b RR 2854 | ch RR 52656
+  dm_mixed_longer-926#1 QL | a RR 13632 | b RR 10181 | ch RR 11223
+  dm_mixed_longer-9951#0 QL | a RR 15149 | b RR 7888 | ch RR 17990
+  dm_mixed_longer-9951#1 QL | a ww 8605 | b RR 10085 | ch RR 16346
+  dm_mul_div_longer-1505#0 QL | a RR 18182 | b RR 13399 | ch RR 1540
+  dm_mul_div_longer-1505#1 QL | a RR 16735 | b RR 952 | ch RR 15088
+  dm_mul_div_longer-928#0 QL | a RR 10245 | b RR 3187 | ch RR 18008
+  dm_mul_div_longer-928#1 QL | a RR 6673 | b RR 11948 | ch RR 8334
+  dm_mul_div_longer-9991#0 QL | a ww 12091 | b RR 4111 | ch RR 2694
+  dm_mul_div_longer-9991#1 QL | a ww 4455 | b RR 755 | ch RR 804
+  dm_simplify_surd-3480#0 -- | a ww 12311 | b RR 24894 | ch ww 21425
+  dm_simplify_surd-3480#1 -- | a RR 21051 | b RR 18285 | ch RR 21367
+  dm_simplify_surd-926#0 -- | a RR 22529 | b RR 20183 | ch RR 29704
+  dm_simplify_surd-926#1 -- | a RR 30675 | b RR 27973 | ch RR 30326
+  dm_simplify_surd-9937#0 -- | a RR 17788 | b RR 18106 | ch RR 24674
+  dm_simplify_surd-9937#1 -- | a RR 24969 | b RR 12998 | ch RR 14108
+  dm_swr_p_sequence-3480#0 -- | a ww 10172 | b RR 6667 | ch RR 8689
+  dm_swr_p_sequence-3480#1 -- | a ww 8151 | b RR 3911 | ch RR 8637
+  dm_swr_p_sequence-926#0 -- | a RR 10214 | b RR 7030 | ch RR 5889
+  dm_swr_p_sequence-926#1 -- | a RR 5826 | b RR 5310 | ch RR 9501
+  dm_swr_p_sequence-9951#0 -- | a RR 9494 | b ww 11112 | ch RR 15132
+  dm_swr_p_sequence-9951#1 -- | a RR 14941 | b ww 10501 | ch RR 16685
+  stdmath-0b7036eb#0 -- | a RR 29707 | b RR 45899 | ch RR 38500
+  stdmath-0b7036eb#1 -- | a RR 34050 | b RR 36435 | ch RR 29162
+  stdmath-45fa3ef2#0 -- | a RR 12102 | b RR 5409 | ch RR 6690
+  stdmath-45fa3ef2#1 -- | a RR 7467 | b RR 5888 | ch RR 7800
+  stdmath-fbf10ed4#0 -- | a RR 11918 | b RR 6119 | ch RR 19798
+  stdmath-fbf10ed4#1 -- | a RR 11666 | b RR 20292 | ch RR 23007
+
+round 9 General on these rows (rule, totals): 22 / 38; round 10 A on the same keys: 29 / 38
