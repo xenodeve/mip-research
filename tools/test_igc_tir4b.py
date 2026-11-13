@@ -727,6 +727,44 @@ class CheckHand(unittest.TestCase):
         self.assertIn('247 so\n' + tir4b.CORRECTION.format(expr='123 \\times 2', right='246', wrote='247'), r.text())
 
 
+class PoolFull(unittest.TestCase):
+    """Under -kvu every answer in flight shares one KV pool; when it is full llama-server answers 500 `Context size has been exceeded`
+    and the arm's process died with it (round 10's short run, the 4070 SUPER, twice). The request waits for the pool and is sent again."""
+    def full(self):
+        import io
+        import urllib.error
+        return urllib.error.HTTPError('u', 500, 'Internal Server Error', {},
+                                      io.BytesIO(b'{"error":{"code":500,"message":"Context size has been exceeded."}}'))
+
+    def test_a_full_pool_waits_and_sends_again(self):
+        calls, slept = [], []
+
+        def send(body):
+            calls.append(body)
+            if len(calls) < 3:
+                raise self.full()
+            return {'content': 'ok'}
+        self.assertEqual(tir4b.post_waiting(send, {'n': 1}, sleep=slept.append), {'content': 'ok'})
+        self.assertEqual(len(calls), 3)
+        self.assertEqual(len(slept), 2)
+
+    def test_another_error_is_not_retried(self):
+        import io
+        import urllib.error
+
+        def send(body):
+            raise urllib.error.HTTPError('u', 500, 'x', {}, io.BytesIO(b'{"error":{"message":"something else"}}'))
+        with self.assertRaises(urllib.error.HTTPError):
+            tir4b.post_waiting(send, {}, sleep=lambda s: None)
+
+    def test_it_gives_up_after_its_tries(self):
+        def send(body):
+            raise self.full()
+        import urllib.error
+        with self.assertRaises(urllib.error.HTTPError):
+            tir4b.post_waiting(send, {}, sleep=lambda s: None, tries=4)
+
+
 class HttpDrive(unittest.TestCase):
     """drive_http: llama-server's /completion in place of vLLM, so the 5060 Ti on Windows runs the same rules."""
     def test_string_stops_and_the_stop_word_put_back(self):

@@ -2106,6 +2106,28 @@ def stop_words(stops, ids, tok):
     return sorted(words)
 
 
+def post_waiting(send, body, sleep=None, tries=120, wait=30):
+    """send(body), sent again while llama-server answers 500 `Context size has been exceeded`: under -kvu every answer in flight shares
+    one KV pool, and a full pool frees as other answers end (round 10's short run lost two arms' processes to it on the 4070 SUPER).
+    Any other error is raised at once; after `tries` waits (an hour at 30 s) the last one is."""
+    import urllib.error
+    sleep = sleep or time.sleep
+    for i in range(tries):
+        try:
+            return send(body)
+        except urllib.error.HTTPError as e:
+            if e.code != 500 or i == tries - 1:
+                raise
+            try:
+                said = e.read().decode('utf-8', 'replace')
+            except Exception:
+                said = ''
+            if 'Context size has been exceeded' not in said:
+                raise
+            print(f'the KV pool is full; the request waits {wait} s and is sent again ({i + 1})', flush=True)
+            sleep(wait)
+
+
 def drive_http(post, tok, ids, rollouts, kernel_factory, live_most=16, on_round=None, drain=None, extra=None):
     """drive() over llama-server's /completion, so the 5060 Ti runs the same rules on Windows, where vLLM does not (developer, 2026-11-04).
     Each answer runs on its own thread and the server batches its slots. The server stops on words and leaves the word out of the text, so
@@ -2327,11 +2349,14 @@ def run(args):
     if args.server:   # llama-server on this PC's 5060 Ti: vLLM does not run on Windows
         import urllib.request
 
-        def post(body):
+        def send(body):
             req = urllib.request.Request(args.server.rstrip('/') + '/completion', data=json.dumps(body).encode('utf-8'),
                                          headers={'Content-Type': 'application/json'})
             with urllib.request.urlopen(req, timeout=3600) as reply:
                 return json.loads(reply.read().decode('utf-8'))
+
+        def post(body):
+            return post_waiting(send, body)
         # `touch <out>/drain`: the answers in flight end, no new one starts, the run exits 3 without a report; --resume goes on
         flag = out / 'drain'
         flag.unlink(missing_ok=True)
