@@ -101,19 +101,30 @@ def _surd_right(e):
     return _one_right(expr, value)
 
 
-def value_right(e, question):
+def value_right(e, question, gold=None):
     """True / False / None (a form this check cannot read). Each General Style form by its own meaning: `q rem r` is a quotient and a
     remainder (n = q d + r, 0 <= r < d); `x.dddd...` is the value cut to its places; anything else equal in value."""
     from tools.igc.mathexpr import evaluate
     kind = e.get('what')
     if ' + ' in (kind or ''):   # lines steered together at the start: each by its own kind
         parts = zip(kind.split(' + '), e['expr'].split(' | '), e['value'].split(' | '))
-        got = [value_right(dict(what=k, expr=x, value=v), question) for k, x, v in parts]
+        got = [value_right(dict(what=k, expr=x, value=v), question, gold) for k, x, v in parts]
         return False if False in got else None if None in got else True
     if kind == 'letter count':
         return letters_right(e['expr'], e['value'], question)
     if kind == 'question quote':   # the question's own words: verbatim in the question, and the line is that text
-        return e['value'] == e['expr'] and re.sub(r'\s', '', e['expr']) in re.sub(r'\s', '', question or '')
+        if e['value'] != e['expr']:
+            return False
+        if re.sub(r'\s', '', e['expr']) in re.sub(r'\s', '', question or ''):
+            return True
+        if gold is None:
+            return False
+        # a worded question (`62838630 divided by -114`) is quoted as its computation: its exact value is the row's gold, by sympy
+        import sympy
+        try:
+            return bool(sympy.simplify(sympy.sympify(e['expr'].replace('^', '**')) - sympy.sympify(str(gold).replace('^', '**'))) == 0)
+        except Exception:
+            return None
     if kind == 'approx value':
         from analyze import approx_value_right
         return approx_value_right(e)
@@ -184,12 +195,24 @@ def missed_asks(log):
     return {(int(a), int(b)) for a, b in MISSED.findall(log)}
 
 
+def cut_points(events):
+    """Where each loop close cut the text: the close's own place, or where the question quote put just before it starts (the quote at
+    a loop's close goes in after the cut, then the close)."""
+    quotes = [e['at'] for e in events if e.get('what') == 'question quote' and 'at' in e]
+    cuts = []
+    for e in events:
+        if e.get('kind') == 'loop close':
+            before = [q for q in quotes if q < e['at'] and e['at'] - q <= 200]
+            cuts.append(max(before) if before else e['at'])
+    return cuts
+
+
 def steer_state(e, missed, closes):
     """missed / cut / done / dropped / open. `cut`: the value sits at or past a loop close of the driver, which cut the looping text
     there and wrote the close and the answer in its place; the event is kept, but nothing was steered at that place of the text."""
     if (e.get('slot'), e.get('seq')) in missed:
         return 'missed'
-    if any(e['at'] >= c for c in closes):
+    if any(e['at'] >= c for c in closes) and not (e.get('what') == 'question quote' and e['at'] in closes):
         return 'cut'
     return 'done' if e.get('done') else 'dropped' if e.get('dropped') else 'open'
 
@@ -216,13 +239,13 @@ def main():
     for rec in json.loads((out / 'records.json').read_text(encoding='utf-8')):
         final = 'right' if rec['right'] else 'wrong'
         out_ids = ids.get((rec['id'], rec.get('sample', 0)), [])
-        closes = [e['at'] for e in rec.get('events', []) if e.get('kind') == 'loop close']
+        closes = cut_points(rec.get('events', []))
         for e in rec.get('events', []):
             if e.get('kind') != 'steered value':
                 continue
             state = steer_state(e, missed, closes)
             c[(final, state)] += 1
-            ok = value_right(e, rows.get(rec['id'], {}).get('question'))
+            ok = value_right(e, rows.get(rec['id'], {}).get('question'), rows.get(rec['id'], {}).get('answer'))
             c[(final, 'value right' if ok else 'unchecked' if ok is None else 'VALUE WRONG')] += 1
             # a question line can be long and written a digit a token: 200 tokens, not 40, so the check never cuts it short
             written = tok.decode(out_ids[e['at']:e['at'] + 200]) if out_ids else ''

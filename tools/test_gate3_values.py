@@ -64,6 +64,15 @@ class SurdTests(unittest.TestCase):
                                        'letters: a 2, b 1.'), 'What is 2*240?'), False)
         self.assertIs(value_right(dict(what='question line', expr='2*240', value='480'), 'What is 2*240?'), True)
 
+    def test_a_quote_of_a_worded_question(self):
+        # round 10: `Calculate 62838630 divided by -114.` is quoted as its computation, `(62838630)/(-114)`: not verbatim, so it is
+        # checked by value against the row's gold, which MIP's reader never sees
+        q = 'Calculate 62838630 divided by -114.'
+        e = dict(what='question quote', expr='(62838630)/(-114)', value='(62838630)/(-114)')
+        self.assertIs(value_right(e, q, gold='-10473105/19'), True)
+        self.assertIs(value_right(e, q, gold='10473105/19'), False)
+        self.assertIs(value_right(e, q), False)   # no gold: only the verbatim check
+
     def test_a_wrong_surd(self):
         self.assertIs(value_right(inline('\\sqrt{1573}', '11\\sqrt{11}'), ''), False)
         self.assertIs(value_right(inline('-6(-2\\sqrt{204})', '-24\\sqrt{51}'), ''), False)
@@ -105,6 +114,21 @@ class StateTests(unittest.TestCase):
         self.assertEqual(steer_state(dict(at=5219, done=True), set(), closes), 'cut')
         self.assertEqual(steer_state(dict(at=10, done=True, slot=3, seq=1), {(3, 1)}, closes), 'missed')
         self.assertEqual(steer_state(dict(at=10, dropped=True), set(), []), 'dropped')
+
+    def test_a_quote_at_a_loop_close_cuts_where_it_starts(self):
+        # round 10 mul_div_longer-9991#0: the loop was cut back to 1979, the quote steered there and the close followed at 2022; values
+        # recorded at 1991 and 2002 sat in the text the cut removed
+        from gate3_values import cut_points, steer_state
+        events = [dict(kind='steered value', what='inline value', at=1960, done=True),
+                  dict(kind='steered value', what='inline value', at=1991, done=True),
+                  dict(kind='steered value', what='question quote', at=1979, done=True),
+                  dict(kind='loop close', at=2022)]
+        cuts = cut_points(events)
+        self.assertEqual(cuts, [1979])
+        self.assertEqual(steer_state(events[0], set(), cuts), 'done')
+        self.assertEqual(steer_state(events[1], set(), cuts), 'cut')
+        self.assertEqual(steer_state(events[2], set(), cuts), 'done')   # the quote itself is the text there
+        self.assertEqual(cut_points([dict(kind='loop close', at=5219)]), [5219])   # no quote: the close's own place
 
 
 if __name__ == '__main__':
