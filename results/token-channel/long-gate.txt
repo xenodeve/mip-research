@@ -1,3 +1,4 @@
+# raw counts over 112 record dirs; miss1 appears twice (C:/Users/xenod/mip-work/a100/pc/channel-miss1 and results/token-channel/miss1). Without the copy: put 86, agree 22, expression next 50, slip 14 (docs/failures.md P11).
 {'seen': 112716, 'put': 127, 'agree': 37, 'slip': 18, 'expression next': 72, 'in thinking': 127, 'distinct questions': 2}
 SLIP channel-miss1/a:stdmath-45fa3ef2#1 | read 1.01^{20} = 1.220190039... | model 1.22019004000511 |     $1.01^{20} = 1.22019004000511$ |     $1.01^{25} = 1.28
 SLIP channel-miss1/a:stdmath-45fa3ef2#1 | read 1.01^{25} = 1.282431995... | model 1.28235 |     $1.01^{25} = 1.28235$ |     $1.01^{30} = 1.3478$ |     C
