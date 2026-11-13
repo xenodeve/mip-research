@@ -195,7 +195,7 @@ A100). Build: **4B NVFP4 W4A8 · llama.cpp · PC layer**, `build-w4a8` (sm_89, `
 | C: B + `--execute --box --loop-hint --verify-gate` | `r10a-math-rows` 12 + `r10b-math-rows` 11 | 46 |
 
 Flags: `--inline-calc --mathbackend --inline-plain --inline-style general` put software's value at `=` as a plain number;
-`--no-digit-join` keeps the model from gluing digits to a put; `--guard-progress` puts nothing on a line already looping;
+`--no-digit-join` keeps the model from gluing digits to a put; `--guard-progress` lets a counting loop go on when its rounds are at least 7/8 new (work going on, not a loop; it does not stop puts);
 `--loop-close` closes a looping thinking with `</think>`; `--answer-close` cuts a looping answer and asks for the final answer;
 `--early-cycle` catches an exact cycle early; `--shape-cap 1024 --cover-cap 32768` bound the loop-shape detectors; `--question-quote`
 puts the question's own expression when the model's copy of it reads to another value, and at a thinking loop's close;

@@ -1,0 +1,79 @@
+== 1. tokens, B against CH ==
+  CH longer on 27 of 38 pairs; B 437,720 tokens, CH 595,734, A 607,043
+
+== 1b. a doubt in the 40 tokens after a value (put in A and B, steered in CH) ==
+  a: 1501 of 8622 values followed by a doubt word (17.4 %)
+  b: 1092 of 4117 values followed by a doubt word (26.5 %)
+  ch: 1161 of 5748 values followed by a doubt word (20.2 %)
+
+== 2. the fixed-question line: thinking tokens after it, a doubt after it, the result ==
+  b dm_div_big-1395#0: 12,526 thinking tokens after the line, doubt no, WRONG; next: 'Let me check if 73388 is divisible by '
+  b dm_div_big-1395#1: 22,532 thinking tokens after the line, doubt no, right; next: "Let's check if the fraction can be simplified.\n369"
+  b dm_div_big-2783#0: 11,419 thinking tokens after the line, doubt no, right; next: 'Simplify the fraction:\nGCD(171, '
+  b dm_div_big-2783#1: 13,720 thinking tokens after the line, doubt no, right; next: "This is a fraction that cannot be simplified easily.\nLet's check"
+  b dm_div_big-928#0: 0 thinking tokens after the line, doubt no, right; next: '</think>\n\nThe problem asks to calculate the division of $-22'
+  b dm_div_big-928#1: 114 thinking tokens after the line, doubt yes, right; next: 'Let me double-check this.\n1571688'
+  b dm_div_big-9977#0: 131 thinking tokens after the line, doubt yes, right; next: 'Wait, let me verify.\n59340 * '
+  b dm_div_big-9977#1: 0 thinking tokens after the line, doubt no, right; next: '</think>\n\nTo find the result of dividing $-4181'
+  b dm_div_big-9991#0: 6,831 thinking tokens after the line, doubt no, right; next: "Let's calculate 62838630 / "
+  b dm_div_big-9991#1: 4,205 thinking tokens after the line, doubt no, right; next: "Let's calculate this step by step.\nFirst, let's divide"
+  b dm_mixed_longer-926#0: 2,985 thinking tokens after the line, doubt no, right; next: "Let's check this.\n1/(-3) = -1"
+  b dm_mixed_longer-926#1: 10,690 thinking tokens after the line, doubt no, right; next: "Let's check the calculation.\nThe expression is:\n$\\frac"
+  b dm_mixed_longer-9951#0: 0 thinking tokens after the line, doubt no, right; next: '</think>\n\nTo solve the expression, we will break it down into two'
+  b dm_mixed_longer-9951#1: 10,399 thinking tokens after the line, doubt no, right; next: "Let's re-calculate.\nTerm 1: $A ="
+  b dm_mul_div_longer-1505#0: 13,709 thinking tokens after the line, doubt yes, right; next: "Wait, let's re-calculate carefully.\nThe expression is:"
+  b dm_mul_div_longer-1505#1: 0 thinking tokens after the line, doubt no, right; next: "</think>\n\nTo solve the expression, let's break it down into manageable"
+  b dm_mul_div_longer-928#0: 2,811 thinking tokens after the line, doubt yes, right; next: "Wait, that's not the calculation. Let me calculate it step by"
+  b dm_mul_div_longer-928#1: 12,383 thinking tokens after the line, doubt no, right; next: "The expression is a complex fraction. Let's break it down step by"
+  b dm_mul_div_longer-9991#0: 0 thinking tokens after the line, doubt no, right; next: "</think>\n\nLet's simplify the expression step by step. The expression is"
+  b dm_mul_div_longer-9991#1: 0 thinking tokens after the line, doubt no, right; next: '</think>\n\nTo find the value of the expression, we will simplify the'
+  b: {'answers': 20, 'closed within 1,000': 8, 'doubt after the line': 4, 'right (corrected)': 19}
+  ch dm_div_big-1395#0: 22,526 thinking tokens after the line, doubt no, right; next: "3\nWe need to simplify this fraction.\nFirst, let's"
+  ch dm_div_big-1395#1: 24,775 thinking tokens after the line, doubt no, right; next: "3\nLet's check if the fraction can be simplified.\nDiv"
+  ch dm_div_big-2783#0: 4,094 thinking tokens after the line, doubt no, right; next: "4\nFirst, let's simplify the fraction.\nThe numerator is"
+  ch dm_div_big-2783#1: 13,677 thinking tokens after the line, doubt no, WRONG; next: "4\nLet's check if 171 and 22"
+  ch dm_div_big-928#0: 2 thinking tokens after the line, doubt no, right; next: '4\n</think>\n\nTo calculate the division of $-220'
+  ch dm_div_big-928#1: 2 thinking tokens after the line, doubt no, right; next: '4\n</think>\n\nTo calculate the division of $-220'
+  ch dm_div_big-9977#0: 2 thinking tokens after the line, doubt no, right; next: '8\n</think>\n\nTo find the result of dividing $-4,'
+  ch dm_div_big-9977#1: 215 thinking tokens after the line, doubt no, right; next: "8\nLet's double check this.\n59340"
+  ch dm_div_big-9991#0: 5,476 thinking tokens after the line, doubt yes, right; next: '\nWait, 62838630/1'
+  ch dm_div_big-9991#1: 2,408 thinking tokens after the line, doubt no, right; next: '\nLet me calculate 62838630 /'
+  ch dm_mixed_longer-926#0: 1,396 thinking tokens after the line, doubt no, right; next: "Let's break this down step by step.\nThe expression is:"
+  ch dm_mixed_longer-926#1: 1,271 thinking tokens after the line, doubt yes, right; next: "Wait, no.\nLet's calculate it step by step.\n"
+  ch dm_mixed_longer-9951#0: 16,849 thinking tokens after the line, doubt no, right; next: "3\nLet's double-check the fraction simplification steps.\nFirst"
+  ch dm_mixed_longer-9951#1: 15,363 thinking tokens after the line, doubt no, right; next: '\nThe problem is to evaluate the expression $E = \\frac{'
+  ch dm_mul_div_longer-1505#0: 2 thinking tokens after the line, doubt no, right; next: '8\n</think>\n\nTo solve the expression, we will simplify it step'
+  ch dm_mul_div_longer-1505#1: 13,827 thinking tokens after the line, doubt no, right; next: "8\nLet's check the calculation.\n\nFirst, simplify the first"
+  ch dm_mul_div_longer-928#0: 17,117 thinking tokens after the line, doubt no, right; next: '2\nLet me check the calculation step by step.\nThe expression'
+  ch dm_mul_div_longer-928#1: 7,426 thinking tokens after the line, doubt no, right; next: '2\n1.  Simplify the numerator term (203'
+  ch dm_mul_div_longer-9991#0: 1,981 thinking tokens after the line, doubt no, right; next: '\nI will break down the expression step-by-step.\n\nLet the'
+  ch dm_mul_div_longer-9991#1: 1 thinking tokens after the line, doubt no, right; next: "\n</think>\n\nLet's simplify the expression step by step. The expression"
+  ch: {'answers': 20, 'closed within 1,000': 6, 'doubt after the line': 2, 'right (corrected)': 19}
+
+== 3. the rule and the API reader disagree ==
+  a dm_div_big-1395#0 gold -73388/36903: rule right, reader different (-1.9886)
+  a dm_div_big-1395#1 gold -73388/36903: rule right, reader different (-1.9887)
+  a dm_div_big-2783#0 gold -171/2221234: rule right, reader different (-0.0000769842)
+  a dm_div_big-2783#1 gold -171/2221234: rule right, reader different (-0.00007698423)
+  a dm_div_big-9991#0 gold -10473105/19: rule wrong, reader same (-10473105/19)
+  a dm_div_big-9991#1 gold -10473105/19: rule wrong, reader same (-551216.05263157894736842105263157894736)
+  b dm_div_big-9991#0 gold -10473105/19: rule wrong, reader same (-551216.052631578947...)
+  ch dm_div_big-2783#1 gold -171/2221234: rule right, reader different (-0.00007698423489)
+  ch dm_div_big-9991#1 gold -10473105/19: rule wrong, reader same (-551216 1/19)
+
+== 4. arm B's values, checked again by gate 3's checker ==
+  approx value: right 77
+  inline value: right 4031
+  inline value: unchecked 9
+  letter count: right 4
+  question line: right 20
+  question quote: right 14
+  dm_div_big-2783#1 inline value: 2+2+2+1+2+3+4 = 16 \equiv 1 -> None
+  stdmath-fbf10ed4#0 inline value: \begin{vmatrix} -8 & 5 \\ 2 & -2 \end{vmatrix} = 6 -> None
+  stdmath-fbf10ed4#0 inline value: \begin{vmatrix} -8 & 5 \\ 2 & -2 \end{vmatrix} = 6 -> None
+  stdmath-0b7036eb#0 inline value: 1 \times \sqrt{2} \times \sin(135) = 1 -> None
+  stdmath-0b7036eb#0 inline value: \sin(135) = \frac{\sqrt{2}}{2} -> None
+  stdmath-0b7036eb#1 inline value: \sqrt{2/4 + 0.25} = \frac{\sqrt{3}}{2} \approx 0.8660 -> None
+  stdmath-0b7036eb#1 inline value: \sqrt{0.5 + 0.25} = \frac{\sqrt{3}}{2} \approx 0.8660 -> None
+  stdmath-0b7036eb#1 inline value: \sqrt{0.5 + 0.25} = \frac{\sqrt{3}}{2} \approx 0.8660 -> None
+  stdmath-0b7036eb#1 inline value: \sqrt{0.75} = \frac{\sqrt{3}}{2} \approx 0.8660 -> None

@@ -106,8 +106,13 @@ The mechanisms most worth carrying over, with what each needs. Every one has its
 | Forced block + close after a print | [sandbox](sandbox.md#forced-block--close-after-a-print) | 0.508x tokens on 49 questions | engine `--igc-sandbox --igc-sandbox-after 512 --igc-sandbox-close`; off for coding |
 | Tool route (`run_python`) | [sandbox](sandbox.md#tool-route-the-models-own-run_python) | 0.71-0.81x tokens at equal right answers | engine or `external_bench --tool-loop` |
 | Predictive probes and router | [detect](detect.md#predictive-probes-and-the-moe-router) | 83-89 % seen 2 tokens ahead | wire `UnifiedDetector` into a runner; signals may only arm, the exact parse acts |
-| Token channel (llama.cpp shim + MIP service) | [inject](inject.md#token-channel---channel) | gates 1-3 pass; development rows 19 / 20 through the channel against 20 / 20 text puts (rule and API reader; the one differing pair is path noise), 2,911 steered values all right; on 16 missed rows 5,699 steered values, none wrong, no gain beyond noise (footnote); round 10 short run (19 rows picked for reach, both cards): round 9's General 27 / 38, the fixes as text 35, through the channel 36 by the API reader (pairs 9 / 0, p = 0.002), the gain on questions that are one fixed computation, 5,789 steered values none wrong ([round 10](plans/2026-11-13-round10.md)) | the patched llama.cpp (`third_party/llama.cpp/mip-channel.patch`), `MIP_CHANNEL`, tir4b `--channel --think-only`; phase 2 coverage next |
+| Token channel (llama.cpp shim + MIP service) | [inject](inject.md#token-channel---channel) | gates 1-3 pass; development rows 19 / 20 through the channel against 20 / 20 text puts (rule and API reader; the one differing pair is path noise), 2,911 steered values all right; on 16 missed rows 5,699 steered values, none wrong, no gain beyond noise (footnote); round 10 short run: 5,789 steered values, none wrong ([round 10](plans/2026-11-13-round10.md))[^r10short] | the patched llama.cpp (`third_party/llama.cpp/mip-channel.patch`), `MIP_CHANNEL`, tir4b `--channel --think-only`; phase 2 coverage next |
 | Engine closes (`in_cycle` 4,096, third-repeat close, repeat note) | [anti-loop](antiloop.md) | threshold scans of 7,000-12,000 stored runs | part of the engine build; not timed with the best-config closers |
+
+
+[^r10short]: หมายเหตุ: round 10's short run is 19 development rows picked for reach (round 9's misses a mechanism reaches), so its scores are no
+    measurement: API reader round 9's General 27 / 38, the fixes put as text 35, through the channel 36; the difference is on questions that
+    are one fixed computation, none beyond noise on the 18 pairs the question line does not reach (where A was right on 15).
 
 ## Notes
 
@@ -207,8 +212,7 @@ MIP รันอยู่สองที่ ใช้กฎชุดเดีย
 - **Token channel:** llama.cpp ที่ patch แล้วส่งทุก token ให้ MIP แล้ว MIP บังคับค่าที่คำนวณได้ในส่วนคิด ผ่าน gate 1-3 แล้ว บน development rows
   ผ่าน channel ได้ 19 / 20 ส่วน put ข้อความได้ 20 / 20 (ทั้งตามกฎและ API reader) คู่ที่ต่างกันคู่เดียวเป็น path noise และค่าที่บังคับลงไปถูกทั้ง 2,911 ค่า
   บน 16 ข้อที่โมเดลเคยพลาด บังคับไป 5,699 ค่า ไม่มีค่าไหนผิด ส่วนจำนวนข้อที่ตอบถูกยังไม่ต่างจาก put ข้อความเกินระดับ noise (อยู่ในหมายเหตุ)
-  รอบ 10 ชุดสั้น (19 ข้อที่คัดมาว่ากลไกเข้าถึงได้, 2 การ์ด): General ของรอบ 9 ถูก 27 / 38, การแก้แบบใส่ข้อความ 35, ผ่าน channel 36 ตาม API reader
-  ผลที่เพิ่มมาจากโจทย์คำนวณตายตัว ค่าที่ steer 5,789 ค่าไม่มีค่าไหนผิด ([รอบ 10](plans/2026-11-13-round10.md))
+  รอบ 10 ชุดสั้น: ค่าที่ steer 5,789 ค่าไม่มีค่าไหนผิด ([รอบ 10](plans/2026-11-13-round10.md)) คะแนนอยู่ในหมายเหตุ เพราะเป็นข้อที่คัดมาว่ากลไกเข้าถึงได้
 
 [^th-port]: หมายเหตุ: เกณฑ์ของตัวปิดตั้งจาก trace ของ Qwen3.5-4B บน vLLM ยังไม่เคยรันบน engine และ vLLM ไม่ให้ผลซ้ำแบบ token ต่อ token
     ข้ามรอบ (mip-research#21) ส่วน engine ของ Strata บน A100 ให้ผลซ้ำ 49/49 ตอนรันแบบ greedy (Strata-xeno#283) แต่ยังไม่ได้วัดว่ารันแบบ sampled
