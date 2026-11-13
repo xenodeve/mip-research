@@ -57,9 +57,11 @@ class PlannerTests(unittest.TestCase):
         self.assertIsNone(Planner(r, PIECES).on_trigger(r.text(), 'think'))
 
     def test_fixed_question_line_at_the_start(self):
-        r = roll('', question='What is 2*240?')
+        r = roll('', question='What is 2*240?', question_line=True)
         p = Planner(r, PIECES).at_start(r.row['question'])
         self.assertEqual((p.text, p.kind), ('2*240 = 480\n', 'question value'))
+        r = roll('', question='What is 2*240?')
+        self.assertIsNone(Planner(r, PIECES).at_start(r.row['question']))   # --question-line off
 
     def test_letter_counts_at_the_start(self):
         q = 'Two letters picked without replacement from vgcgplcggpgvp. Give prob of sequence vv.'

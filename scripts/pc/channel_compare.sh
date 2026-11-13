@@ -32,7 +32,7 @@ C="--model $G/q4b-hf --server http://127.0.0.1:$PORT --rows $ROWS --samples 2 --
 DEV="MIP_EXPR_DEVICE=cuda MIP_CUDA_RESIDENT=2 CUDA_DEVICE_ORDER=PCI_BUS_ID CUDA_VISIBLE_DEVICES=1 MIP_CUDA_DEVICE=0"
 env $DEV TIR4B_TIMING=$OUT/a.timing.jsonl python tools/igc/tir4b.py run $C --out $OUT/a $F > $OUT/a.log 2>&1 &
 P1=$!
-env $DEV TIR4B_TIMING=$OUT/b.timing.jsonl python tools/igc/tir4b.py run $C --out $OUT/b $F --channel --channel-port $MIP_PORT > $OUT/b.log 2>&1 &
+env $DEV TIR4B_TIMING=$OUT/b.timing.jsonl python tools/igc/tir4b.py run $C --out $OUT/b $F --channel --channel-port $MIP_PORT --question-line > $OUT/b.log 2>&1 &
 P2=$!
 wait $P1 $P2
 kill $SP

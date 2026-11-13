@@ -58,7 +58,7 @@ class Planner:
         lines, kinds, exprs, values = [], [], [], []
         from tools.igc.question_read import read_exact
         from tools.igc.mathexpr import spelled
-        got = read_exact(question)
+        got = read_exact(question) if self.rollout.arm.question_line else None
         if got is not None and isinstance(got[1], Fraction):
             expr, value = got[0], spelled(got[1])
             lines.append(f'{expr} = {value}\n')

@@ -13,7 +13,7 @@ PROMPT = [11, 1001, 1002]   # any prompt; the answer's text is what follows it
 
 
 def roll(question='Find x.', out=''):
-    a = tir4b.Arm(inline_calc=True, inline_plain=True, mathbackend=True, no_digit_join=True, approx_put=True)
+    a = tir4b.Arm(inline_calc=True, inline_plain=True, mathbackend=True, no_digit_join=True, approx_put=True, question_line=True)
     r = tir4b.Rollout(dict(id='q', suite='arith', question=question, answer='1'), 0, PROMPT, a, IDS, TOK, seed=1)
     r.out = TOK.encode(out)
     return r

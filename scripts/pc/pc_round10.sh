@@ -27,7 +27,7 @@ SP=$!
 for i in $(seq 1 90); do curl -s -m 2 http://127.0.0.1:$PORT/health | grep -q ok && break; sleep 2; done
 curl -s -m 2 http://127.0.0.1:$PORT/health | grep -q ok || { echo "server did not start"; kill $SP; exit 2; }
 F="--inline-calc --mathbackend --inline-plain --inline-style general --no-digit-join --guard-progress --loop-close --answer-close --early-cycle --shape-cap 1024 --cover-cap 32768"
-FIX="--question-quote --approx-put --answer-rewind 2 --letter-count"
+FIX="--question-quote --approx-put --answer-rewind 2 --letter-count --question-line"
 BOX="--execute --box --loop-hint --verify-gate"
 C="--model $G/q4b-hf --server http://127.0.0.1:$PORT --rows $W/$ROWS --samples 2 --seed 1 --ids --live $((N / 2)) ${RESUME:+--resume}"
 python tools/igc/tir4b.py run $C --out $W/pc/r10$TAG-a $F > $W/pc-r10$TAG-a.log 2>&1 &

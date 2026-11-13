@@ -1643,6 +1643,12 @@ class ChannelSteersQuestionWords(unittest.TestCase):
         self.assertEqual(r.phase, 'answer')
         self.assertTrue(r.text().endswith('Hmm, the brackets.\n</think>\n\n'), r.text()[-60:])
 
+    def test_the_question_line_is_one_flag_for_both_arms(self):
+        q = 'What is 2*240?'
+        self.assertEqual(TOK.decode(self.roll(q, question_line=True, channel=False).out), '2*240 = 480\n')   # text arm: put
+        self.assertEqual(self.roll(q, question_line=True).out, [])                                       # channel: steered
+        self.assertEqual(self.roll(q, channel=False).out, [])                                            # off: round 9's arm
+
     def test_a_long_value_is_marked_in_the_text_arm(self):
         r = self.roll('Compute it.', channel=False)
         r.take(TOK.encode('so $1.01^{30} ='))
